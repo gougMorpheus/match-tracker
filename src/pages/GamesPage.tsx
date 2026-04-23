@@ -35,15 +35,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
   };
 
   return (
-    <Layout
-      title="40K Match-Tracker"
-      subtitle="Alle Matches der Spielgruppe aus Supabase"
-      actions={
-        <button type="button" className="primary-button" onClick={onCreateGame}>
-          Neues Spiel
-        </button>
-      }
-    >
+    <Layout title="40K Match-Tracker">
       <section className="stack">
         <div className="button-row button-row--compact">
           <button
