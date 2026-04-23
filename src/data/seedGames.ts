@@ -49,7 +49,8 @@ export const seedGames: Game[] = [
             playerId: "player-2",
             timing: {
               startedAt: "2026-04-20T17:05:00.000Z",
-              endedAt: "2026-04-20T17:28:00.000Z"
+              endedAt: "2026-04-20T17:28:00.000Z",
+              pauses: []
             }
           },
           {
@@ -59,7 +60,8 @@ export const seedGames: Game[] = [
             playerId: "player-1",
             timing: {
               startedAt: "2026-04-20T17:31:00.000Z",
-              endedAt: "2026-04-20T18:10:00.000Z"
+              endedAt: "2026-04-20T18:10:00.000Z",
+              pauses: []
             }
           }
         ]
