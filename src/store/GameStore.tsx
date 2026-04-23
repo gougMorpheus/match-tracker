@@ -28,6 +28,7 @@ import {
   getPlayerTotalScore,
   isTurnActive
 } from "../utils/gameCalculations";
+import { normalizeSupabaseErrorMessage } from "../utils/supabaseErrors";
 import { getNowIso } from "../utils/time";
 
 interface EventPayload {
@@ -60,8 +61,10 @@ interface GameStoreValue {
 
 const GameStoreContext = createContext<GameStoreValue | null>(null);
 
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Unbekannter Fehler.";
+const getErrorMessage = (error: unknown): string => {
+  const rawMessage = error instanceof Error ? error.message : "Unbekannter Fehler.";
+  return normalizeSupabaseErrorMessage(rawMessage);
+};
 
 const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
   const playerOneScore = getPlayerTotalScore(game, game.players[0].id);
