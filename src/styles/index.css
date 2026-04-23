@@ -474,6 +474,124 @@ textarea {
   padding: 0.9rem 1rem;
 }
 
+.stats-hero {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stats-hero__feature,
+.record-card,
+.stats-row-card {
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(15, 23, 42, 0.95));
+  box-shadow: var(--shadow);
+}
+
+.stats-hero__feature {
+  padding: 1rem;
+}
+
+.stats-hero__feature span,
+.record-card__label,
+.stats-row-card span,
+.collapsible-section__head p {
+  color: var(--muted);
+}
+
+.stats-hero__feature strong,
+.record-card__value {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1.6rem;
+}
+
+.stats-hero__feature p,
+.record-card p {
+  margin: 0.3rem 0 0;
+}
+
+.collapsible-section {
+  gap: 0.8rem;
+}
+
+.collapsible-section__toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.collapsible-section__head,
+.collapsible-section__meta,
+.stats-group-card__head,
+.stats-row-card,
+.stats-row-card__metrics {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.collapsible-section__head,
+.stats-group-card__head,
+.stats-row-card {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.collapsible-section__head h2,
+.stats-group-card__head strong,
+.stats-row-card strong {
+  margin: 0;
+}
+
+.collapsible-section__head p,
+.stats-group-card__head p {
+  margin: 0.2rem 0 0;
+}
+
+.collapsible-section__meta {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stats-group-card {
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.stats-row-card {
+  padding: 0.95rem 1rem;
+}
+
+.stats-row-card__metrics {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stats-row-card__metrics div {
+  min-width: 88px;
+  text-align: right;
+}
+
+.stats-row-card__metrics strong {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.record-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.record-card {
+  padding: 1rem;
+}
+
+.record-card--accent {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.16), rgba(15, 23, 42, 0.95));
+}
+
 .event-editor {
   display: grid;
   gap: 0.75rem;
@@ -537,6 +655,11 @@ textarea {
 
   .stats-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .stats-hero,
+  .record-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .quick-controls__row {

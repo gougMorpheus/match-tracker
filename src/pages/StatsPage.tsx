@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CollapsibleSection } from "../components/CollapsibleSection";
 import { Layout } from "../components/Layout";
 import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
@@ -19,10 +20,22 @@ interface StatsPageProps {
   onBack: () => void;
 }
 
+type StatsSectionKey = "overview" | "players" | "armies" | "rounds" | "records" | "matchups";
+
+const defaultOpenSections: Record<StatsSectionKey, boolean> = {
+  overview: true,
+  players: true,
+  armies: false,
+  rounds: false,
+  records: true,
+  matchups: false
+};
+
 export const StatsPage = ({ onBack }: StatsPageProps) => {
   const { games, isLoading, errorMessage, clearError } = useGameStore();
   const [filters, setFilters] = useState(createInitialGameFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [openSections, setOpenSections] = useState(defaultOpenSections);
   const filteredGames = useMemo(() => filterGames(games, filters), [games, filters]);
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
   const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
@@ -39,8 +52,15 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
     }));
   };
 
+  const toggleSection = (section: StatsSectionKey) => {
+    setOpenSections((current) => ({
+      ...current,
+      [section]: !current[section]
+    }));
+  };
+
   return (
-    <Layout title="Statistik" subtitle="Filterbare Auswertung ueber alle synchronisierten Spiele" onBack={onBack}>
+    <Layout title="Statistik" subtitle="Kompakte Uebersicht mit aufklappbaren Auswertungen" onBack={onBack}>
       <section className="stack">
         {errorMessage ? (
           <article className="notice-card notice-card--error">
@@ -147,16 +167,6 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
           </section>
         ) : null}
 
-        <div className="stats-grid">
-          <StatCard label="Spiele" value={overview.games} />
-          <StatCard label="Spieler" value={overview.players} />
-          <StatCard label="Armeen" value={overview.armies} />
-          <StatCard label="Avg Dauer" value={formatDuration(overview.averageDurationMs)} />
-          <StatCard label="Avg Runden" value={overview.averageRounds.toFixed(1)} />
-          <StatCard label="Avg Score gesamt" value={overview.averageCombinedScore.toFixed(1)} />
-          <StatCard label="Avg CP spent" value={overview.averageSpentCp.toFixed(1)} />
-        </div>
-
         {isLoading ? (
           <article className="empty-state">
             <h2>Statistik wird geladen</h2>
@@ -164,135 +174,186 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
           </article>
         ) : filteredGames.length ? (
           <>
-            <section className="stack">
-              <div className="list-row">
-                <h2>Spieler</h2>
-                <span>{playerAggregates.length}</span>
-              </div>
-              {playerAggregates.map((player) => (
-                <article key={player.name} className="card stack">
-                  <div className="list-row">
-                    <strong>{player.name}</strong>
-                    <span>{player.games} Spiele</span>
-                  </div>
-                  <div className="stats-grid">
-                    <StatCard label="W / L / T" value={`${player.wins} / ${player.losses} / ${player.ties}`} />
-                    <StatCard label="Winrate" value={`${player.winRate.toFixed(0)}%`} />
-                    <StatCard label="Avg Primary" value={player.averagePrimary.toFixed(1)} />
-                    <StatCard label="Avg Secondary" value={player.averageSecondary.toFixed(1)} />
-                    <StatCard label="Avg Total" value={player.averageTotal.toFixed(1)} />
-                    <StatCard label="Avg Dauer" value={formatDuration(player.averageDurationMs)} />
-                    <StatCard label="Avg CP spent" value={player.averageSpentCp.toFixed(1)} />
-                  </div>
-                </article>
-              ))}
+            <section className="stats-hero">
+              <article className="stats-hero__feature">
+                <span>Gefilterte Spiele</span>
+                <strong>{overview.games}</strong>
+                <p>{overview.players} Spieler | {overview.armies} Armeen</p>
+              </article>
+              <article className="stats-hero__feature">
+                <span>Avg Dauer</span>
+                <strong>{formatDuration(overview.averageDurationMs)}</strong>
+                <p>{overview.averageRounds.toFixed(1)} Runden pro Spiel</p>
+              </article>
+              <article className="stats-hero__feature">
+                <span>Avg Score gesamt</span>
+                <strong>{overview.averageCombinedScore.toFixed(1)}</strong>
+                <p>{overview.averageSpentCp.toFixed(1)} CP spent je Spieler</p>
+              </article>
             </section>
 
-            <section className="stack">
-              <div className="list-row">
-                <h2>Armeen</h2>
-                <span>{armyAggregates.length}</span>
+            <CollapsibleSection
+              title="Uebersicht"
+              helper="Schneller Einstieg in die wichtigsten Kennzahlen"
+              count={overview.games}
+              open={openSections.overview}
+              onToggle={() => toggleSection("overview")}
+            >
+              <div className="stats-grid">
+                <StatCard label="Spiele" value={overview.games} />
+                <StatCard label="Spieler" value={overview.players} />
+                <StatCard label="Armeen" value={overview.armies} />
+                <StatCard label="Avg Dauer" value={formatDuration(overview.averageDurationMs)} />
+                <StatCard label="Avg Runden" value={overview.averageRounds.toFixed(1)} />
+                <StatCard label="Avg Score gesamt" value={overview.averageCombinedScore.toFixed(1)} />
+                <StatCard label="Avg CP spent" value={overview.averageSpentCp.toFixed(1)} />
               </div>
-              {armyAggregates.map((army) => (
-                <article key={army.armyName} className="card stack">
-                  <div className="list-row">
-                    <strong>{army.armyName}</strong>
-                    <span>{army.games} Spiele</span>
-                  </div>
-                  <div className="stats-grid">
-                    <StatCard label="W / L / T" value={`${army.wins} / ${army.losses} / ${army.ties}`} />
-                    <StatCard label="Winrate" value={`${army.winRate.toFixed(0)}%`} />
-                    <StatCard label="Avg Primary" value={army.averagePrimary.toFixed(1)} />
-                    <StatCard label="Avg Secondary" value={army.averageSecondary.toFixed(1)} />
-                    <StatCard label="Avg Total" value={army.averageTotal.toFixed(1)} />
-                  </div>
-                </article>
-              ))}
-            </section>
+            </CollapsibleSection>
 
-            <section className="stack">
-              <div className="list-row">
-                <h2>Rundenzeiten</h2>
-                <span>{roundDurationAggregates.length}</span>
+            <CollapsibleSection
+              title="Spieler"
+              helper="Winrate, Score und Tempo pro Spieler"
+              count={playerAggregates.length}
+              open={openSections.players}
+              onToggle={() => toggleSection("players")}
+            >
+              <div className="stack">
+                {playerAggregates.map((player) => (
+                  <article key={player.name} className="card stack stats-group-card">
+                    <div className="stats-group-card__head">
+                      <div>
+                        <strong>{player.name}</strong>
+                        <p>{player.games} Spiele</p>
+                      </div>
+                      <span className="meta-chip meta-chip--accent">{player.winRate.toFixed(0)}% Winrate</span>
+                    </div>
+                    <div className="stats-grid">
+                      <StatCard label="W / L / T" value={`${player.wins} / ${player.losses} / ${player.ties}`} />
+                      <StatCard label="Avg Primary" value={player.averagePrimary.toFixed(1)} />
+                      <StatCard label="Avg Secondary" value={player.averageSecondary.toFixed(1)} />
+                      <StatCard label="Avg Total" value={player.averageTotal.toFixed(1)} />
+                      <StatCard label="Avg Dauer" value={formatDuration(player.averageDurationMs)} />
+                      <StatCard label="Avg CP spent" value={player.averageSpentCp.toFixed(1)} />
+                    </div>
+                  </article>
+                ))}
               </div>
-              {roundDurationAggregates.map((round) => (
-                <article key={round.roundNumber} className="card stack">
-                  <div className="list-row">
-                    <strong>Runde {round.roundNumber}</strong>
-                    <span>{round.games} Spiele</span>
-                  </div>
-                  <div className="stats-grid">
-                    <StatCard label="Avg Runde" value={formatDuration(round.averageDurationMs)} />
-                    <StatCard label="Max Runde" value={formatDuration(round.maxDurationMs)} />
-                  </div>
-                </article>
-              ))}
-            </section>
+            </CollapsibleSection>
 
-            <section className="stack">
-              <div className="list-row">
-                <h2>Zugrekorde</h2>
-                <span>inkl. Datum</span>
+            <CollapsibleSection
+              title="Armeen"
+              helper="Performance nach Fraktion / Armee"
+              count={armyAggregates.length}
+              open={openSections.armies}
+              onToggle={() => toggleSection("armies")}
+            >
+              <div className="stack">
+                {armyAggregates.map((army) => (
+                  <article key={army.armyName} className="card stack stats-group-card">
+                    <div className="stats-group-card__head">
+                      <div>
+                        <strong>{army.armyName}</strong>
+                        <p>{army.games} Spiele</p>
+                      </div>
+                      <span className="meta-chip meta-chip--accent">{army.winRate.toFixed(0)}% Winrate</span>
+                    </div>
+                    <div className="stats-grid">
+                      <StatCard label="W / L / T" value={`${army.wins} / ${army.losses} / ${army.ties}`} />
+                      <StatCard label="Avg Primary" value={army.averagePrimary.toFixed(1)} />
+                      <StatCard label="Avg Secondary" value={army.averageSecondary.toFixed(1)} />
+                      <StatCard label="Avg Total" value={army.averageTotal.toFixed(1)} />
+                    </div>
+                  </article>
+                ))}
               </div>
-              {turnRecords.longestTurn ? (
-                <article className="card stack">
-                  <div className="list-row">
-                    <strong>Laengster Zug</strong>
-                    <span>{formatDuration(turnRecords.longestTurn.durationMs)}</span>
-                  </div>
-                  <div className="stats-grid">
-                    <StatCard label="Spieler" value={turnRecords.longestTurn.playerName} helper={turnRecords.longestTurn.armyName} />
-                    <StatCard
-                      label="Datum"
-                      value={formatDateLabel(turnRecords.longestTurn.scheduledDate, turnRecords.longestTurn.scheduledTime)}
-                    />
-                    <StatCard
-                      label="Runde / Zug"
-                      value={`R${turnRecords.longestTurn.roundNumber} / Z${turnRecords.longestTurn.turnNumber}`}
-                    />
-                  </div>
-                </article>
-              ) : null}
-              {turnRecords.fastestTurn ? (
-                <article className="card stack">
-                  <div className="list-row">
-                    <strong>Schnellster Zug</strong>
-                    <span>{formatDuration(turnRecords.fastestTurn.durationMs)}</span>
-                  </div>
-                  <div className="stats-grid">
-                    <StatCard label="Spieler" value={turnRecords.fastestTurn.playerName} helper={turnRecords.fastestTurn.armyName} />
-                    <StatCard
-                      label="Datum"
-                      value={formatDateLabel(turnRecords.fastestTurn.scheduledDate, turnRecords.fastestTurn.scheduledTime)}
-                    />
-                    <StatCard
-                      label="Runde / Zug"
-                      value={`R${turnRecords.fastestTurn.roundNumber} / Z${turnRecords.fastestTurn.turnNumber}`}
-                    />
-                  </div>
-                </article>
-              ) : null}
-            </section>
+            </CollapsibleSection>
 
-            <section className="stack">
-              <div className="list-row">
-                <h2>Matchups</h2>
-                <span>{matchupAggregates.length}</span>
+            <CollapsibleSection
+              title="Rundenzeiten"
+              helper="Durchschnitt und Maximum je Rundennummer"
+              count={roundDurationAggregates.length}
+              open={openSections.rounds}
+              onToggle={() => toggleSection("rounds")}
+            >
+              <div className="stack">
+                {roundDurationAggregates.map((round) => (
+                  <article key={round.roundNumber} className="stats-row-card">
+                    <div>
+                      <strong>Runde {round.roundNumber}</strong>
+                      <p>{round.games} Spiele</p>
+                    </div>
+                    <div className="stats-row-card__metrics">
+                      <div>
+                        <span>Avg</span>
+                        <strong>{formatDuration(round.averageDurationMs)}</strong>
+                      </div>
+                      <div>
+                        <span>Max</span>
+                        <strong>{formatDuration(round.maxDurationMs)}</strong>
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
-              {matchupAggregates.map((matchup) => (
-                <article key={matchup.label} className="card stack">
-                  <div className="list-row">
-                    <strong>{matchup.label}</strong>
-                    <span>{matchup.games} Spiele</span>
-                  </div>
-                  <div className="stats-grid">
-                    <StatCard label="Avg Dauer" value={formatDuration(matchup.averageDurationMs)} />
-                    <StatCard label="Avg Score gesamt" value={matchup.averageCombinedScore.toFixed(1)} />
-                    <StatCard label="Avg Score-Diff" value={matchup.averageScoreDifference.toFixed(1)} />
-                  </div>
-                </article>
-              ))}
-            </section>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Zugrekorde"
+              helper="Extremwerte ueber alle gefilterten Spiele"
+              open={openSections.records}
+              onToggle={() => toggleSection("records")}
+            >
+              <div className="record-grid">
+                {turnRecords.longestTurn ? (
+                  <article className="record-card">
+                    <span className="record-card__label">Laengster Zug</span>
+                    <strong className="record-card__value">
+                      {formatDuration(turnRecords.longestTurn.durationMs)}
+                    </strong>
+                    <p>{turnRecords.longestTurn.playerName} | {turnRecords.longestTurn.armyName}</p>
+                    <p>{formatDateLabel(turnRecords.longestTurn.scheduledDate, turnRecords.longestTurn.scheduledTime)}</p>
+                    <p>R{turnRecords.longestTurn.roundNumber} / Z{turnRecords.longestTurn.turnNumber}</p>
+                  </article>
+                ) : null}
+                {turnRecords.fastestTurn ? (
+                  <article className="record-card record-card--accent">
+                    <span className="record-card__label">Schnellster Zug</span>
+                    <strong className="record-card__value">
+                      {formatDuration(turnRecords.fastestTurn.durationMs)}
+                    </strong>
+                    <p>{turnRecords.fastestTurn.playerName} | {turnRecords.fastestTurn.armyName}</p>
+                    <p>{formatDateLabel(turnRecords.fastestTurn.scheduledDate, turnRecords.fastestTurn.scheduledTime)}</p>
+                    <p>R{turnRecords.fastestTurn.roundNumber} / Z{turnRecords.fastestTurn.turnNumber}</p>
+                  </article>
+                ) : null}
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Matchups"
+              helper="Paarungen, Spieldauer und Score-Differenz"
+              count={matchupAggregates.length}
+              open={openSections.matchups}
+              onToggle={() => toggleSection("matchups")}
+            >
+              <div className="stack">
+                {matchupAggregates.map((matchup) => (
+                  <article key={matchup.label} className="card stack stats-group-card">
+                    <div className="stats-group-card__head">
+                      <div>
+                        <strong>{matchup.label}</strong>
+                        <p>{matchup.games} Spiele</p>
+                      </div>
+                    </div>
+                    <div className="stats-grid">
+                      <StatCard label="Avg Dauer" value={formatDuration(matchup.averageDurationMs)} />
+                      <StatCard label="Avg Score gesamt" value={matchup.averageCombinedScore.toFixed(1)} />
+                      <StatCard label="Avg Score-Diff" value={matchup.averageScoreDifference.toFixed(1)} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </CollapsibleSection>
           </>
         ) : (
           <article className="empty-state">
