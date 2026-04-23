@@ -1,9 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "../types/supabase";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 
-let cachedClient: ReturnType<typeof createClient> | null = null;
+let cachedClient: SupabaseClient<Database> | null = null;
 
 export const getSupabaseConfigError = (): string | null => {
   if (!supabaseUrl || !supabasePublishableKey) {
@@ -13,14 +14,14 @@ export const getSupabaseConfigError = (): string | null => {
   return null;
 };
 
-export const getSupabaseClient = (): ReturnType<typeof createClient> => {
+export const getSupabaseClient = (): SupabaseClient<Database> => {
   const configError = getSupabaseConfigError();
   if (configError) {
     throw new Error(configError);
   }
 
   if (!cachedClient) {
-    cachedClient = createClient(supabaseUrl!, supabasePublishableKey!, {
+    cachedClient = createClient<Database>(supabaseUrl!, supabasePublishableKey!, {
       auth: {
         persistSession: false,
         autoRefreshToken: false

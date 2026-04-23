@@ -11,77 +11,16 @@ import type {
   Turn
 } from "../types/game";
 import { getSupabaseClient } from "../lib/supabase";
+import type { Database } from "../types/supabase";
 import { createId } from "../utils/id";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
 
-export interface SupabaseGameRecord {
-  id: string;
-  created_at: string;
-  started_at: string;
-  ended_at: string | null;
-  game_date: string | null;
-  player1_name: string;
-  player1_army: string;
-  player1_max_points: number;
-  player2_name: string;
-  player2_army: string;
-  player2_max_points: number;
-  defender_player: 1 | 2 | null;
-  starting_player: 1 | 2 | null;
-  winner_player: 1 | 2 | null;
-  notes: string | null;
-}
-
-export interface SupabaseEventRecord {
-  id: string;
-  created_at: string;
-  game_id: string;
-  round_number: number | null;
-  turn_number: number | null;
-  player_slot: 1 | 2;
-  event_type: string;
-  value_number: number | null;
-  note: string | null;
-  occurred_at: string;
-}
-
-export interface CreateSupabaseGamePayload {
-  started_at?: string;
-  ended_at?: string | null;
-  game_date?: string | null;
-  player1_name: string;
-  player1_army: string;
-  player1_max_points: number;
-  player2_name: string;
-  player2_army: string;
-  player2_max_points: number;
-  defender_player?: 1 | 2 | null;
-  starting_player?: 1 | 2 | null;
-  winner_player?: 1 | 2 | null;
-  notes?: string | null;
-}
-
-export interface UpdateSupabaseGamePayload {
-  started_at?: string;
-  ended_at?: string | null;
-  game_date?: string | null;
-  defender_player?: 1 | 2 | null;
-  starting_player?: 1 | 2 | null;
-  winner_player?: 1 | 2 | null;
-  notes?: string | null;
-}
-
-export interface CreateSupabaseEventPayload {
-  game_id: string;
-  round_number?: number | null;
-  turn_number?: number | null;
-  player_slot: 1 | 2;
-  event_type: string;
-  value_number?: number | null;
-  note?: string | null;
-  occurred_at?: string;
-}
+export type SupabaseGameRecord = Database["public"]["Tables"]["games"]["Row"];
+export type SupabaseEventRecord = Database["public"]["Tables"]["events"]["Row"];
+export type CreateSupabaseGamePayload = Database["public"]["Tables"]["games"]["Insert"];
+export type UpdateSupabaseGamePayload = Database["public"]["Tables"]["games"]["Update"];
+export type CreateSupabaseEventPayload = Database["public"]["Tables"]["events"]["Insert"];
 
 const scoreTypeByEventType = {
   "score-primary": "primary",
@@ -592,7 +531,8 @@ export const gamesRepository = {
 
   async createGame(payload: CreateGameInput | CreateSupabaseGamePayload): Promise<Game> {
     const supabase = getSupabaseClient();
-    const insertPayload = "playerOneName" in payload ? mapGameInputToInsert(payload) : payload;
+    const insertPayload: CreateSupabaseGamePayload =
+      "playerOneName" in payload ? mapGameInputToInsert(payload) : payload;
 
     const { data, error } = await supabase
       .from("games")
@@ -609,9 +549,10 @@ export const gamesRepository = {
 
   async updateGame(gameId: string, patch: UpdateSupabaseGamePayload): Promise<Game> {
     const supabase = getSupabaseClient();
+    const updatePayload: UpdateSupabaseGamePayload = patch;
     const { data, error } = await supabase
       .from("games")
-      .update(patch)
+      .update(updatePayload)
       .eq("id", gameId)
       .select("*")
       .single();
@@ -639,12 +580,13 @@ export const gamesRepository = {
 
   async addEvent(payload: CreateSupabaseEventPayload): Promise<SupabaseEventRecord> {
     const supabase = getSupabaseClient();
+    const insertPayload: CreateSupabaseEventPayload = {
+      ...payload,
+      occurred_at: payload.occurred_at ?? getNowIso()
+    };
     const { data, error } = await supabase
       .from("events")
-      .insert({
-        ...payload,
-        occurred_at: payload.occurred_at ?? getNowIso()
-      })
+      .insert(insertPayload)
       .select("*")
       .single();
 
@@ -661,14 +603,13 @@ export const gamesRepository = {
     }
 
     const supabase = getSupabaseClient();
+    const insertPayloads: CreateSupabaseEventPayload[] = payloads.map((payload) => ({
+      ...payload,
+      occurred_at: payload.occurred_at ?? getNowIso()
+    }));
     const { data, error } = await supabase
       .from("events")
-      .insert(
-        payloads.map((payload) => ({
-          ...payload,
-          occurred_at: payload.occurred_at ?? getNowIso()
-        }))
-      )
+      .insert(insertPayloads)
       .select("*");
 
     if (error) {
