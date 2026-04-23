@@ -22,6 +22,10 @@ interface GamePageProps {
 export const GamePage = ({ gameId }: GamePageProps) => {
   const {
     getGame,
+    isLoading,
+    isMutating,
+    errorMessage,
+    clearError,
     startRound,
     endRound,
     startTurn,
@@ -49,9 +53,16 @@ export const GamePage = ({ gameId }: GamePageProps) => {
     return () => window.clearInterval(interval);
   }, [game]);
 
+  if (!game && isLoading) {
+    return <Layout title="Live Tracker" subtitle="Spiel wird geladen" />;
+  }
+
   if (!game) {
     return (
-      <Layout title="Spiel nicht gefunden" subtitle="Das lokale Match ist nicht mehr verfuegbar." />
+      <Layout
+        title="Spiel nicht gefunden"
+        subtitle={errorMessage ?? "Das Match ist nicht verfuegbar oder konnte nicht geladen werden."}
+      />
     );
   }
 
@@ -60,7 +71,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
   const activePlayerId = latestTurn && turnActive ? latestTurn.playerId : game.currentPlayerId;
   const latestRound = game.rounds[game.rounds.length - 1];
 
-  const handleActionSubmit = ({
+  const handleActionSubmit = async ({
     playerId,
     value,
     note
@@ -74,7 +85,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
     }
 
     if (action === "primary" || action === "secondary") {
-      addScoreEvent({
+      await addScoreEvent({
         gameId,
         playerId,
         value,
@@ -84,7 +95,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
     }
 
     if (action === "cp-gained" || action === "cp-spent") {
-      addCommandPointEvent({
+      await addCommandPointEvent({
         gameId,
         playerId,
         value,
@@ -94,7 +105,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
     }
 
     if (action === "note") {
-      addNoteEvent({
+      await addNoteEvent({
         gameId,
         playerId,
         note
@@ -113,6 +124,20 @@ export const GamePage = ({ gameId }: GamePageProps) => {
       }
     >
       <section className="stack">
+        {errorMessage ? (
+          <article className="notice-card notice-card--error">
+            <div className="stack">
+              <div>
+                <h2>Aktion fehlgeschlagen</h2>
+                <p>{errorMessage}</p>
+              </div>
+              <button type="button" className="ghost-button" onClick={clearError}>
+                Meldung ausblenden
+              </button>
+            </div>
+          </article>
+        ) : null}
+
         <article className="tracker-summary">
           <div>
             <span>Runde</span>
@@ -158,55 +183,80 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             <button
               type="button"
               className="secondary-button"
-              onClick={() => startRound(game.id)}
-              disabled={roundActive || game.status === "completed"}
+              onClick={() => void startRound(game.id)}
+              disabled={roundActive || game.status === "completed" || isMutating}
             >
               Runde starten
             </button>
             <button
               type="button"
               className="secondary-button"
-              onClick={() => endRound(game.id)}
-              disabled={!roundActive || game.status === "completed"}
+              onClick={() => void endRound(game.id)}
+              disabled={!roundActive || game.status === "completed" || isMutating}
             >
               Runde beenden
             </button>
             <button
               type="button"
               className="secondary-button"
-              onClick={() => startTurn(game.id)}
-              disabled={!roundActive || turnActive || game.status === "completed"}
+              onClick={() => void startTurn(game.id)}
+              disabled={!roundActive || turnActive || game.status === "completed" || isMutating}
             >
               Zug starten
             </button>
             <button
               type="button"
               className="secondary-button"
-              onClick={() => endTurn(game.id)}
-              disabled={!turnActive || game.status === "completed"}
+              onClick={() => void endTurn(game.id)}
+              disabled={!turnActive || game.status === "completed" || isMutating}
             >
               Zug beenden
             </button>
-            <button type="button" className="secondary-button" onClick={() => setAction("cp-gained")}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setAction("cp-gained")}
+              disabled={isMutating}
+            >
               CP erhalten
             </button>
-            <button type="button" className="secondary-button" onClick={() => setAction("cp-spent")}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setAction("cp-spent")}
+              disabled={isMutating}
+            >
               CP ausgeben
             </button>
-            <button type="button" className="secondary-button" onClick={() => setAction("primary")}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setAction("primary")}
+              disabled={isMutating}
+            >
               Primary
             </button>
-            <button type="button" className="secondary-button" onClick={() => setAction("secondary")}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setAction("secondary")}
+              disabled={isMutating}
+            >
               Secondary
             </button>
-            <button type="button" className="secondary-button" onClick={() => setAction("note")}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setAction("note")}
+              disabled={isMutating}
+            >
               Notiz
             </button>
             <button
               type="button"
               className="danger-button"
-              onClick={() => finishGame(game.id)}
-              disabled={game.status === "completed"}
+              onClick={() => void finishGame(game.id)}
+              disabled={game.status === "completed" || isMutating}
             >
               Spiel beenden
             </button>
@@ -217,6 +267,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
           players={game.players}
           action={action}
           onCancel={() => setAction(null)}
+          isSubmitting={isMutating}
           onSubmit={handleActionSubmit}
         />
 

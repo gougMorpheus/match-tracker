@@ -12,7 +12,8 @@ interface GamesPageProps {
 
 export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { games, importGames } = useGameStore();
+  const { games, importGames, isLoading, isMutating, errorMessage, clearError, refreshGames } =
+    useGameStore();
 
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -23,7 +24,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
     try {
       const content = await file.text();
       const payload = parseImportedGames(content);
-      importGames(payload.games);
+      await importGames(payload.games);
       window.alert(`${payload.games.length} Spiele importiert.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Import fehlgeschlagen.";
@@ -36,7 +37,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
   return (
     <Layout
       title="Spiele"
-      subtitle="Alle lokalen Matches im Browser"
+      subtitle="Alle Matches der Spielgruppe aus Supabase"
       actions={
         <button type="button" className="primary-button" onClick={onCreateGame}>
           Neues Spiel
@@ -49,6 +50,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
             type="button"
             className="secondary-button"
             onClick={() => fileInputRef.current?.click()}
+            disabled={isMutating}
           >
             Import
           </button>
@@ -56,9 +58,17 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
             type="button"
             className="secondary-button"
             onClick={() => exportGamesAsJson(games)}
-            disabled={!games.length}
+            disabled={!games.length || isLoading}
           >
             Export all
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void refreshGames()}
+            disabled={isLoading || isMutating}
+          >
+            Aktualisieren
           </button>
         </div>
 
@@ -70,7 +80,26 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
           onChange={handleImport}
         />
 
-        {games.length ? (
+        {errorMessage ? (
+          <article className="notice-card notice-card--error">
+            <div className="stack">
+              <div>
+                <h2>Verbindung fehlgeschlagen</h2>
+                <p>{errorMessage}</p>
+              </div>
+              <button type="button" className="ghost-button" onClick={clearError}>
+                Meldung ausblenden
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {isLoading ? (
+          <article className="empty-state">
+            <h2>Spiele werden geladen</h2>
+            <p>Die Daten kommen direkt aus Supabase.</p>
+          </article>
+        ) : games.length ? (
           <div className="stack">
             {games.map((game) => (
               <GameCard key={game.id} game={game} onOpen={() => onOpenGame(game.id)} />
@@ -83,7 +112,8 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
             <button
               type="button"
               className="secondary-button"
-              onClick={() => importGames(seedGames)}
+              onClick={() => void importGames(seedGames)}
+              disabled={isMutating}
             >
               Demo laden
             </button>

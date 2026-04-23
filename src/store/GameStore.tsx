@@ -7,18 +7,27 @@ import {
   useState,
   type PropsWithChildren
 } from "react";
-import { localGameRepository } from "../data/gameRepository";
+import { getSupabaseConfigError } from "../lib/supabase";
+import {
+  createEventPayload,
+  createImportedEventPayloads,
+  createImportedGamePayload,
+  gamesRepository
+} from "../services/gamesRepository";
+import type { CreateSupabaseEventPayload } from "../services/gamesRepository";
 import type {
   CommandPointType,
   CreateGameInput,
   Game,
-  NoteEvent,
   PlayerId,
-  ScoreType,
-  TimeEvent
+  ScoreType
 } from "../types/game";
-import { createId } from "../utils/id";
-import { getLatestRound, getLatestTurn, isTurnActive } from "../utils/gameCalculations";
+import {
+  getLatestRound,
+  getLatestTurn,
+  getPlayerTotalScore,
+  isTurnActive
+} from "../utils/gameCalculations";
 import { getNowIso } from "../utils/time";
 
 interface EventPayload {
@@ -30,408 +39,422 @@ interface EventPayload {
 
 interface GameStoreValue {
   games: Game[];
-  importError: string | null;
-  createGame: (input: CreateGameInput) => Game;
+  isLoading: boolean;
+  isMutating: boolean;
+  errorMessage: string | null;
+  createGame: (input: CreateGameInput) => Promise<Game>;
   getGame: (gameId: string) => Game | undefined;
-  startRound: (gameId: string) => void;
-  endRound: (gameId: string) => void;
-  startTurn: (gameId: string) => void;
-  endTurn: (gameId: string) => void;
-  addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => void;
-  addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => void;
-  addNoteEvent: (payload: EventPayload) => void;
-  finishGame: (gameId: string) => void;
-  importGames: (games: Game[]) => void;
+  refreshGames: () => Promise<void>;
+  startRound: (gameId: string) => Promise<void>;
+  endRound: (gameId: string) => Promise<void>;
+  startTurn: (gameId: string) => Promise<void>;
+  endTurn: (gameId: string) => Promise<void>;
+  addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
+  addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
+  addNoteEvent: (payload: EventPayload) => Promise<void>;
+  finishGame: (gameId: string) => Promise<void>;
+  importGames: (games: Game[]) => Promise<void>;
   exportGames: () => Game[];
-  clearImportError: () => void;
+  clearError: () => void;
 }
 
 const GameStoreContext = createContext<GameStoreValue | null>(null);
 
-const updateGameCollection = (games: Game[], gameId: string, updater: (game: Game) => Game): Game[] =>
-  games.map((game) => (game.id === gameId ? updater(game) : game));
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Unbekannter Fehler.";
 
-const createTimeEvent = (gameId: string, action: TimeEvent["action"], timestamp: string): TimeEvent => ({
-  id: createId(`time-${gameId}`),
-  type: "time",
-  action,
-  createdAt: timestamp
-});
+const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
+  const playerOneScore = getPlayerTotalScore(game, game.players[0].id);
+  const playerTwoScore = getPlayerTotalScore(game, game.players[1].id);
+
+  if (playerOneScore > playerTwoScore) {
+    return 1;
+  }
+
+  if (playerTwoScore > playerOneScore) {
+    return 2;
+  }
+
+  return null;
+};
 
 export const GameStoreProvider = ({ children }: PropsWithChildren) => {
-  const [games, setGames] = useState<Game[]>(() => localGameRepository.load());
-  const [importError, setImportError] = useState<string | null>(null);
+  const [games, setGames] = useState<Game[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMutating, setIsMutating] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(getSupabaseConfigError());
+
+  const refreshGames = useCallback(async () => {
+    const configError = getSupabaseConfigError();
+    if (configError) {
+      setGames([]);
+      setErrorMessage(configError);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const nextGames = await gamesRepository.listGames();
+      setGames(nextGames);
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    localGameRepository.save(games);
-  }, [games]);
+    void refreshGames();
+  }, [refreshGames]);
 
   const getGame = useCallback(
     (gameId: string) => games.find((game) => game.id === gameId),
     [games]
   );
 
-  const createGame = useCallback((input: CreateGameInput): Game => {
-    const createdAt = getNowIso();
-    const playerOneId = createId("player");
-    const playerTwoId = createId("player");
-    const players: Game["players"] = [
-      {
-        id: playerOneId,
-        name: input.playerOneName.trim(),
-        army: {
-          name: input.playerOneArmy.trim(),
-          maxPoints: input.playerOneMaxPoints
-        }
-      },
-      {
-        id: playerTwoId,
-        name: input.playerTwoName.trim(),
-        army: {
-          name: input.playerTwoArmy.trim(),
-          maxPoints: input.playerTwoMaxPoints
-        }
-      }
-    ];
-    const defenderPlayerId = input.defenderSlot === "player1" ? playerOneId : playerTwoId;
-    const startingPlayerId = input.startingSlot === "player1" ? playerOneId : playerTwoId;
-
-    const nextGame: Game = {
-      id: createId("game"),
-      createdAt,
-      updatedAt: createdAt,
-      status: "active",
-      scheduledDate: input.scheduledDate,
-      scheduledTime: input.scheduledTime,
-      defenderPlayerId,
-      startingPlayerId,
-      currentPlayerId: startingPlayerId,
-      players,
-      rounds: [],
-      scoreEvents: [],
-      commandPointEvents: [],
-      noteEvents: [],
-      timeEvents: []
-    };
-
-    setGames((currentGames) => [nextGame, ...currentGames]);
-    return nextGame;
+  const refreshSingleGame = useCallback(async (gameId: string) => {
+    const freshGame = await gamesRepository.getGameById(gameId);
+    setGames((currentGames) => {
+      const withoutTarget = currentGames.filter((game) => game.id !== gameId);
+      return [freshGame, ...withoutTarget].sort(
+        (left, right) => right.createdAt.localeCompare(left.createdAt)
+      );
+    });
   }, []);
 
-  const startRound = useCallback((gameId: string) => {
-    setGames((currentGames) =>
-      updateGameCollection(currentGames, gameId, (game) => {
-        const now = getNowIso();
+  const runMutation = useCallback(
+    async function executeMutation<T>(operation: () => Promise<T>): Promise<T> {
+      const configError = getSupabaseConfigError();
+      if (configError) {
+        setErrorMessage(configError);
+        throw new Error(configError);
+      }
+
+      setIsMutating(true);
+      setErrorMessage(null);
+      try {
+        return await operation();
+      } catch (error) {
+        const message = getErrorMessage(error);
+        setErrorMessage(message);
+        throw error instanceof Error ? error : new Error(message);
+      } finally {
+        setIsMutating(false);
+      }
+    },
+    []
+  );
+
+  const createGame = useCallback(
+    async (input: CreateGameInput): Promise<Game> =>
+      runMutation(async () => {
+        const createdGame = await gamesRepository.createGame(input);
+        setGames((currentGames) => [createdGame, ...currentGames]);
+        return createdGame;
+      }),
+    [runMutation]
+  );
+
+  const startRound = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
         const latestRound = getLatestRound(game);
         if (latestRound && !latestRound.endedAt) {
-          return game;
-        }
-
-        const roundNumber = (latestRound?.roundNumber ?? 0) + 1;
-        return {
-          ...game,
-          startedAt: game.startedAt ?? now,
-          updatedAt: now,
-          rounds: [
-            ...game.rounds,
-            {
-              id: createId("round"),
-              roundNumber,
-              startedAt: now,
-              turns: []
-            }
-          ],
-          timeEvents: [
-            ...game.timeEvents,
-            ...(game.startedAt
-              ? []
-              : [
-                  {
-                    ...createTimeEvent(gameId, "game-start", now)
-                  }
-                ]),
-            {
-              ...createTimeEvent(gameId, "round-start", now),
-              roundNumber
-            }
-          ]
-        };
-      })
-    );
-  }, []);
-
-  const endTurn = useCallback((gameId: string) => {
-    setGames((currentGames) =>
-      updateGameCollection(currentGames, gameId, (game) => {
-        const latestRound = getLatestRound(game);
-        const latestTurn = getLatestTurn(game);
-        if (!latestRound || !latestTurn || latestTurn.timing.endedAt) {
-          return game;
+          return;
         }
 
         const now = getNowIso();
-        const rounds = game.rounds.map((round) => {
-          if (round.id !== latestRound.id) {
-            return round;
-          }
+        const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
+        const payloads: CreateSupabaseEventPayload[] = [];
 
-          return {
-            ...round,
-            turns: round.turns.map((turn) =>
-              turn.id === latestTurn.id
-                ? {
-                    ...turn,
-                    timing: {
-                      ...turn.timing,
-                      endedAt: now
-                    }
-                  }
-                : turn
-            )
-          };
-        });
-
-        const nextPlayerId =
-          game.players.find((player) => player.id !== latestTurn.playerId)?.id ?? game.currentPlayerId;
-
-        return {
-          ...game,
-          updatedAt: now,
-          currentPlayerId: nextPlayerId,
-          rounds,
-          timeEvents: [
-            ...game.timeEvents,
-            {
-              ...createTimeEvent(gameId, "turn-end", now),
-              playerId: latestTurn.playerId,
-              roundNumber: latestTurn.roundNumber,
-              turnNumber: latestTurn.turnNumber
-            }
-          ]
-        };
-      })
-    );
-  }, []);
-
-  const startTurn = useCallback((gameId: string) => {
-    setGames((currentGames) =>
-      updateGameCollection(currentGames, gameId, (game) => {
-        const latestRound = getLatestRound(game);
-        if (!latestRound || latestRound.endedAt || isTurnActive(game)) {
-          return game;
+        if (!game.timeEvents.some((event) => event.action === "game-start")) {
+          payloads.push(
+            createEventPayload(game, {
+              playerId: game.currentPlayerId,
+              eventType: "game-start",
+              occurredAt: now
+            })
+          );
         }
 
-        const now = getNowIso();
-        const nextTurnNumber = latestRound.turns.length + 1;
-        const playerId = game.currentPlayerId;
-        const rounds = game.rounds.map((round) =>
-          round.id === latestRound.id
-            ? {
-                ...round,
-                turns: [
-                  ...round.turns,
-                  {
-                    id: createId("turn"),
-                    roundNumber: latestRound.roundNumber,
-                    turnNumber: nextTurnNumber,
-                    playerId,
-                    timing: {
-                      startedAt: now
-                    }
-                  }
-                ]
-              }
-            : round
+        payloads.push(
+          createEventPayload(game, {
+            playerId: game.currentPlayerId,
+            roundNumber: nextRoundNumber,
+            eventType: "round-start",
+            occurredAt: now
+          })
         );
 
-        return {
-          ...game,
-          updatedAt: now,
-          rounds,
-          timeEvents: [
-            ...game.timeEvents,
-            {
-              ...createTimeEvent(gameId, "turn-start", now),
-              playerId,
-              roundNumber: latestRound.roundNumber,
-              turnNumber: nextTurnNumber
-            }
-          ]
-        };
-      })
-    );
-  }, []);
+        await gamesRepository.addEvents(payloads);
+        await gamesRepository.updateGame(gameId, {
+          started_at: now
+        });
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
+  const endTurn = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const latestTurn = getLatestTurn(game);
+        if (!latestTurn || latestTurn.timing.endedAt) {
+          return;
+        }
+
+        await gamesRepository.addEvent(
+          createEventPayload(game, {
+            playerId: latestTurn.playerId,
+            roundNumber: latestTurn.roundNumber,
+            turnNumber: latestTurn.turnNumber,
+            eventType: "turn-end"
+          })
+        );
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
+  const startTurn = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const latestRound = getLatestRound(game);
+        if (!latestRound || latestRound.endedAt || isTurnActive(game)) {
+          return;
+        }
+
+        await gamesRepository.addEvent(
+          createEventPayload(game, {
+            playerId: game.currentPlayerId,
+            roundNumber: latestRound.roundNumber,
+            turnNumber: latestRound.turns.length + 1,
+            eventType: "turn-start"
+          })
+        );
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
 
   const endRound = useCallback(
-    (gameId: string) => {
-      endTurn(gameId);
-      setGames((currentGames) =>
-        updateGameCollection(currentGames, gameId, (game) => {
-          const latestRound = getLatestRound(game);
-          if (!latestRound || latestRound.endedAt) {
-            return game;
-          }
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
 
-          const now = getNowIso();
-          return {
-            ...game,
-            updatedAt: now,
-            rounds: game.rounds.map((round) =>
-              round.id === latestRound.id
-                ? {
-                    ...round,
-                    endedAt: now
-                  }
-                : round
-            ),
-            currentPlayerId: game.startingPlayerId,
-            timeEvents: [
-              ...game.timeEvents,
-              {
-                ...createTimeEvent(gameId, "round-end", now),
-                roundNumber: latestRound.roundNumber
-              }
-            ]
-          };
-        })
-      );
-    },
-    [endTurn]
+        const latestRound = getLatestRound(game);
+        if (!latestRound || latestRound.endedAt) {
+          return;
+        }
+
+        const latestTurn = getLatestTurn(game);
+        const payloads: CreateSupabaseEventPayload[] = [];
+        if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
+          payloads.push(
+            createEventPayload(game, {
+              playerId: latestTurn.playerId,
+              roundNumber: latestTurn.roundNumber,
+              turnNumber: latestTurn.turnNumber,
+              eventType: "turn-end"
+            })
+          );
+        }
+
+        payloads.push(
+          createEventPayload(game, {
+            playerId: game.currentPlayerId,
+            roundNumber: latestRound.roundNumber,
+            eventType: "round-end"
+          })
+        );
+
+        await gamesRepository.addEvents(payloads);
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
   );
 
   const addScoreEvent = useCallback(
-    ({ gameId, playerId, value = 0, note, scoreType }: EventPayload & { scoreType: ScoreType }) => {
-      setGames((currentGames) =>
-        updateGameCollection(currentGames, gameId, (game) => {
-          const now = getNowIso();
-          const latestRound = getLatestRound(game);
-          const latestTurn = getLatestTurn(game);
-          return {
-            ...game,
-            updatedAt: now,
-            scoreEvents: [
-              ...game.scoreEvents,
-              {
-                id: createId("score"),
-                type: "score",
-                playerId,
-                scoreType,
-                value,
-                note: note?.trim() || undefined,
-                roundNumber: latestRound?.roundNumber,
-                turnNumber: latestTurn?.turnNumber,
-                createdAt: now
-              }
-            ]
-          };
-        })
-      );
-    },
-    []
+    async ({ gameId, playerId, value = 0, note, scoreType }: EventPayload & { scoreType: ScoreType }) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+        await gamesRepository.addEvent(
+          createEventPayload(game, {
+            playerId,
+            roundNumber: latestRound?.roundNumber,
+            turnNumber: latestTurn?.turnNumber,
+            eventType: scoreType === "primary" ? "score-primary" : "score-secondary",
+            value,
+            note
+          })
+        );
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
   );
 
   const addCommandPointEvent = useCallback(
-    ({ gameId, playerId, value = 0, note, cpType }: EventPayload & { cpType: CommandPointType }) => {
-      setGames((currentGames) =>
-        updateGameCollection(currentGames, gameId, (game) => {
-          const now = getNowIso();
-          const latestRound = getLatestRound(game);
-          const latestTurn = getLatestTurn(game);
-          return {
-            ...game,
-            updatedAt: now,
-            commandPointEvents: [
-              ...game.commandPointEvents,
-              {
-                id: createId("cp"),
-                type: "command-point",
-                playerId,
-                cpType,
-                value,
-                note: note?.trim() || undefined,
-                roundNumber: latestRound?.roundNumber,
-                turnNumber: latestTurn?.turnNumber,
-                createdAt: now
-              }
-            ]
-          };
-        })
-      );
-    },
-    []
-  );
+    async ({ gameId, playerId, value = 0, note, cpType }: EventPayload & { cpType: CommandPointType }) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
 
-  const addNoteEvent = useCallback(({ gameId, playerId, note }: EventPayload) => {
-    const trimmedNote = note?.trim();
-    if (!trimmedNote) {
-      return;
-    }
-
-    setGames((currentGames) =>
-      updateGameCollection(currentGames, gameId, (game) => {
-        const now = getNowIso();
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
-        const nextNoteEvent: NoteEvent = {
-          id: createId("note"),
-          type: "note",
-          playerId,
-          note: trimmedNote,
-          roundNumber: latestRound?.roundNumber,
-          turnNumber: latestTurn?.turnNumber,
-          createdAt: now
-        };
-
-        return {
-          ...game,
-          updatedAt: now,
-          noteEvents: [...game.noteEvents, nextNoteEvent]
-        };
-      })
-    );
-  }, []);
-
-  const finishGame = useCallback(
-    (gameId: string) => {
-      endRound(gameId);
-      setGames((currentGames) =>
-        updateGameCollection(currentGames, gameId, (game) => {
-          if (game.status === "completed") {
-            return game;
-          }
-
-          const now = getNowIso();
-          return {
-            ...game,
-            status: "completed",
-            updatedAt: now,
-            endedAt: game.endedAt ?? now,
-            timeEvents: [
-              ...game.timeEvents,
-              ...(game.endedAt ? [] : [{ ...createTimeEvent(gameId, "game-end", now) }])
-            ]
-          };
-        })
-      );
-    },
-    [endRound]
+        await gamesRepository.addEvent(
+          createEventPayload(game, {
+            playerId,
+            roundNumber: latestRound?.roundNumber,
+            turnNumber: latestTurn?.turnNumber,
+            eventType: cpType === "gained" ? "cp-gained" : "cp-spent",
+            value,
+            note
+          })
+        );
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
   );
 
-  const importGames = useCallback((nextGames: Game[]) => {
-    setImportError(null);
-    setGames(nextGames);
-  }, []);
+  const addNoteEvent = useCallback(
+    async ({ gameId, playerId, note }: EventPayload) =>
+      runMutation(async () => {
+        const trimmedNote = note?.trim();
+        if (!trimmedNote) {
+          return;
+        }
+
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+        await gamesRepository.addEvent(
+          createEventPayload(game, {
+            playerId,
+            roundNumber: latestRound?.roundNumber,
+            turnNumber: latestTurn?.turnNumber,
+            eventType: "note",
+            note: trimmedNote
+          })
+        );
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
+  const finishGame = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+        const payloads: CreateSupabaseEventPayload[] = [];
+        if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
+          payloads.push(
+            createEventPayload(game, {
+              playerId: latestTurn.playerId,
+              roundNumber: latestTurn.roundNumber,
+              turnNumber: latestTurn.turnNumber,
+              eventType: "turn-end"
+            })
+          );
+        }
+
+        if (latestRound && latestRound.startedAt && !latestRound.endedAt) {
+          payloads.push(
+            createEventPayload(game, {
+              playerId: game.currentPlayerId,
+              roundNumber: latestRound.roundNumber,
+              eventType: "round-end"
+            })
+          );
+        }
+
+        payloads.push(
+          createEventPayload(game, {
+            playerId: game.currentPlayerId,
+            eventType: "game-end"
+          })
+        );
+
+        await gamesRepository.addEvents(payloads);
+        await gamesRepository.updateGame(gameId, {
+          ended_at: getNowIso(),
+          winner_player: getWinnerPlayerSlot(game)
+        });
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
+  const importGames = useCallback(
+    async (importedGames: Game[]) =>
+      runMutation(async () => {
+        for (const importedGame of importedGames) {
+          const createdGame = await gamesRepository.createGame(createImportedGamePayload(importedGame));
+          const eventPayloads = createImportedEventPayloads(createdGame, importedGame);
+          if (eventPayloads.length) {
+            await gamesRepository.addEvents(eventPayloads);
+          }
+          await gamesRepository.updateGame(createdGame.id, {
+            started_at: importedGame.startedAt ?? createdGame.createdAt,
+            ended_at: importedGame.endedAt ?? null,
+            winner_player: importedGame.endedAt ? getWinnerPlayerSlot(importedGame) : null
+          });
+        }
+
+        await refreshGames();
+      }),
+    [refreshGames, runMutation]
+  );
 
   const exportGames = useCallback(() => games, [games]);
-
-  const clearImportError = useCallback(() => setImportError(null), []);
+  const clearError = useCallback(() => setErrorMessage(null), []);
 
   const value = useMemo<GameStoreValue>(
     () => ({
       games,
-      importError,
+      isLoading,
+      isMutating,
+      errorMessage,
       createGame,
       getGame,
+      refreshGames,
       startRound,
       endRound,
       startTurn,
@@ -442,22 +465,25 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       finishGame,
       importGames,
       exportGames,
-      clearImportError
+      clearError
     }),
     [
       addCommandPointEvent,
       addNoteEvent,
       addScoreEvent,
-      clearImportError,
+      clearError,
       createGame,
       endRound,
       endTurn,
+      errorMessage,
       exportGames,
       finishGame,
       games,
       getGame,
-      importError,
       importGames,
+      isLoading,
+      isMutating,
+      refreshGames,
       startRound,
       startTurn
     ]

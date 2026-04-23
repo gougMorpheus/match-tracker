@@ -6,8 +6,9 @@ export type ActionKind = "cp-gained" | "cp-spent" | "primary" | "secondary" | "n
 interface ActionPanelProps {
   players: [Player, Player];
   action: ActionKind | null;
+  isSubmitting?: boolean;
   onCancel: () => void;
-  onSubmit: (payload: { playerId: string; value?: number; note?: string }) => void;
+  onSubmit: (payload: { playerId: string; value?: number; note?: string }) => Promise<void> | void;
 }
 
 const ACTION_LABELS: Record<ActionKind, string> = {
@@ -18,7 +19,13 @@ const ACTION_LABELS: Record<ActionKind, string> = {
   note: "Notiz"
 };
 
-export const ActionPanel = ({ players, action, onCancel, onSubmit }: ActionPanelProps) => {
+export const ActionPanel = ({
+  players,
+  action,
+  isSubmitting = false,
+  onCancel,
+  onSubmit
+}: ActionPanelProps) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(players[0].id);
   const [value, setValue] = useState(1);
   const [note, setNote] = useState("");
@@ -51,6 +58,7 @@ export const ActionPanel = ({ players, action, onCancel, onSubmit }: ActionPanel
             type="button"
             className={selectedPlayerId === player.id ? "is-selected" : ""}
             onClick={() => setSelectedPlayerId(player.id)}
+            disabled={isSubmitting}
           >
             {player.name}
           </button>
@@ -66,6 +74,7 @@ export const ActionPanel = ({ players, action, onCancel, onSubmit }: ActionPanel
             inputMode="numeric"
             value={value}
             onChange={(event) => setValue(Number(event.target.value))}
+            disabled={isSubmitting}
           />
         </label>
       ) : null}
@@ -77,14 +86,16 @@ export const ActionPanel = ({ players, action, onCancel, onSubmit }: ActionPanel
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Optional"
+          disabled={isSubmitting}
         />
       </label>
 
       <button
         type="button"
         className="primary-button"
-        onClick={() => {
-          onSubmit({
+        disabled={isSubmitting}
+        onClick={async () => {
+          await onSubmit({
             playerId: selectedPlayerId,
             value: isNoteOnly ? undefined : value,
             note

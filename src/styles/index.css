@@ -121,6 +121,19 @@ textarea {
   padding: 1rem;
 }
 
+.notice-card {
+  padding: 1rem;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+}
+
+.notice-card--error {
+  border-color: rgba(251, 113, 133, 0.35);
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.32), rgba(15, 23, 42, 0.94));
+}
+
 .game-card {
   width: 100%;
   text-align: left;

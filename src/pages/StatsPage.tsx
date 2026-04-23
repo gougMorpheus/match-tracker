@@ -5,12 +5,26 @@ import { createPlayerAggregates } from "../utils/gameCalculations";
 import { formatDuration } from "../utils/time";
 
 export const StatsPage = () => {
-  const { games } = useGameStore();
+  const { games, isLoading, errorMessage, clearError } = useGameStore();
   const aggregates = createPlayerAggregates(games);
 
   return (
-    <Layout title="Statistik" subtitle="Einfacher MVP-Ueberblick ueber lokale Spiele">
+    <Layout title="Statistik" subtitle="Einfacher MVP-Ueberblick ueber synchronisierte Spiele">
       <section className="stack">
+        {errorMessage ? (
+          <article className="notice-card notice-card--error">
+            <div className="stack">
+              <div>
+                <h2>Statistik nicht verfuegbar</h2>
+                <p>{errorMessage}</p>
+              </div>
+              <button type="button" className="ghost-button" onClick={clearError}>
+                Meldung ausblenden
+              </button>
+            </div>
+          </article>
+        ) : null}
+
         <div className="stats-grid">
           <StatCard label="Anzahl Spiele" value={games.length} />
           <StatCard
@@ -20,7 +34,12 @@ export const StatsPage = () => {
           />
         </div>
 
-        {aggregates.length ? (
+        {isLoading ? (
+          <article className="empty-state">
+            <h2>Statistik wird geladen</h2>
+            <p>Spiele und Events werden aus Supabase gelesen.</p>
+          </article>
+        ) : aggregates.length ? (
           <div className="stack">
             {aggregates.map((player) => (
               <article key={player.name} className="card stack">

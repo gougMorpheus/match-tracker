@@ -22,7 +22,7 @@ const defaultFormState: CreateGameInput = {
 };
 
 export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
-  const { createGame } = useGameStore();
+  const { createGame, isMutating, errorMessage, clearError } = useGameStore();
   const [formState, setFormState] = useState<CreateGameInput>(defaultFormState);
 
   function updateField<K extends keyof CreateGameInput>(key: K, value: CreateGameInput[K]) {
@@ -32,15 +32,33 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
     }));
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const game = createGame(formState);
-    onCreated(game.id);
+    try {
+      const game = await createGame(formState);
+      onCreated(game.id);
+    } catch {
+      return;
+    }
   };
 
   return (
     <Layout title="Neues Spiel" subtitle="Metadaten und beide Armeen direkt anlegen">
       <form className="stack" onSubmit={handleSubmit}>
+        {errorMessage ? (
+          <article className="notice-card notice-card--error">
+            <div className="stack">
+              <div>
+                <h2>Speichern fehlgeschlagen</h2>
+                <p>{errorMessage}</p>
+              </div>
+              <button type="button" className="ghost-button" onClick={clearError}>
+                Meldung ausblenden
+              </button>
+            </div>
+          </article>
+        ) : null}
+
         <section className="card stack">
           <h2>Spieler 1</h2>
           <label className="field">
@@ -49,6 +67,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
               required
               value={formState.playerOneName}
               onChange={(event) => updateField("playerOneName", event.target.value)}
+              disabled={isMutating}
             />
           </label>
           <label className="field">
@@ -57,6 +76,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
               required
               value={formState.playerOneArmy}
               onChange={(event) => updateField("playerOneArmy", event.target.value)}
+              disabled={isMutating}
             />
           </label>
           <label className="field">
@@ -68,6 +88,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
               inputMode="numeric"
               value={formState.playerOneMaxPoints}
               onChange={(event) => updateField("playerOneMaxPoints", Number(event.target.value))}
+              disabled={isMutating}
             />
           </label>
         </section>
@@ -80,6 +101,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
               required
               value={formState.playerTwoName}
               onChange={(event) => updateField("playerTwoName", event.target.value)}
+              disabled={isMutating}
             />
           </label>
           <label className="field">
@@ -88,6 +110,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
               required
               value={formState.playerTwoArmy}
               onChange={(event) => updateField("playerTwoArmy", event.target.value)}
+              disabled={isMutating}
             />
           </label>
           <label className="field">
@@ -99,6 +122,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
               inputMode="numeric"
               value={formState.playerTwoMaxPoints}
               onChange={(event) => updateField("playerTwoMaxPoints", Number(event.target.value))}
+              disabled={isMutating}
             />
           </label>
         </section>
@@ -113,6 +137,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
                 type="date"
                 value={formState.scheduledDate}
                 onChange={(event) => updateField("scheduledDate", event.target.value)}
+                disabled={isMutating}
               />
             </label>
             <label className="field">
@@ -122,6 +147,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
                 type="time"
                 value={formState.scheduledTime}
                 onChange={(event) => updateField("scheduledTime", event.target.value)}
+                disabled={isMutating}
               />
             </label>
           </div>
@@ -133,6 +159,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
                 type="button"
                 className={formState.defenderSlot === "player1" ? "is-selected" : ""}
                 onClick={() => updateField("defenderSlot", "player1")}
+                disabled={isMutating}
               >
                 Spieler 1
               </button>
@@ -140,6 +167,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
                 type="button"
                 className={formState.defenderSlot === "player2" ? "is-selected" : ""}
                 onClick={() => updateField("defenderSlot", "player2")}
+                disabled={isMutating}
               >
                 Spieler 2
               </button>
@@ -153,6 +181,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
                 type="button"
                 className={formState.startingSlot === "player1" ? "is-selected" : ""}
                 onClick={() => updateField("startingSlot", "player1")}
+                disabled={isMutating}
               >
                 Spieler 1
               </button>
@@ -160,6 +189,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
                 type="button"
                 className={formState.startingSlot === "player2" ? "is-selected" : ""}
                 onClick={() => updateField("startingSlot", "player2")}
+                disabled={isMutating}
               >
                 Spieler 2
               </button>
@@ -167,8 +197,8 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
           </div>
         </section>
 
-        <button type="submit" className="primary-button primary-button--large">
-          Spiel anlegen
+        <button type="submit" className="primary-button primary-button--large" disabled={isMutating}>
+          {isMutating ? "Speichere..." : "Spiel anlegen"}
         </button>
       </form>
     </Layout>
