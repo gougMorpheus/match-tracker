@@ -1,45 +1,132 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActionPanel, type ActionKind } from "../components/ActionPanel";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Layout } from "../components/Layout";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
+import { QuickAdjustControls } from "../components/QuickAdjustControls";
+import { ARMY_OPTIONS } from "../data/armies";
 import { useGameStore } from "../store/GameStore";
+import type { CreateGameInput, Game } from "../types/game";
 import {
   getCurrentRoundNumber,
   getCurrentTurnNumber,
   getGameDurationMs,
   getLatestTurn,
   getRoundDurationMs,
-  getTurnDurationMs,
-  isRoundActive,
-  isTurnActive
+  getTurnDurationMs
 } from "../utils/gameCalculations";
+import { loadRememberedPlayerNames } from "../utils/presets";
 import { formatClockTime, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
   gameId: string;
+  onBack: () => void;
 }
 
-export const GamePage = ({ gameId }: GamePageProps) => {
+interface EditableEventItem {
+  id: string;
+  playerId: string;
+  playerName: string;
+  kind: "cp" | "score" | "note";
+  label: string;
+  value?: number;
+  note?: string;
+  roundNumber?: number;
+  turnNumber?: number;
+  createdAt: string;
+}
+
+const createGameFormState = (game: Game): CreateGameInput => ({
+  playerOneName: game.players[0].name,
+  playerOneArmy: game.players[0].army.name,
+  playerTwoName: game.players[1].name,
+  playerTwoArmy: game.players[1].army.name,
+  gamePoints: game.gamePoints,
+  scheduledDate: game.scheduledDate,
+  scheduledTime: game.scheduledTime,
+  defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : "player2",
+  startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
+});
+
+export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const {
+    games,
     getGame,
     isLoading,
     isMutating,
     errorMessage,
     clearError,
-    startRound,
-    endRound,
-    startTurn,
-    endTurn,
+    advanceGame,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
+    updateGameEvent,
+    updateGameDetails,
     finishGame
   } = useGameStore();
-  const [action, setAction] = useState<ActionKind | null>(null);
   const [, setTick] = useState(0);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [editingNote, setEditingNote] = useState("");
+  const [isEditingGame, setIsEditingGame] = useState(false);
   const game = getGame(gameId);
+  const [gameForm, setGameForm] = useState<CreateGameInput | null>(
+    game ? createGameFormState(game) : null
+  );
 
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
+  const playerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...loadRememberedPlayerNames(),
+          ...games.flatMap((item) => item.players.map((player) => player.name))
+        ])
+      ).sort((left, right) => left.localeCompare(right)),
+    [games]
+  );
+  const editableEvents = useMemo<EditableEventItem[]>(
+    () =>
+      game
+        ? [
+            ...game.commandPointEvents.map((event) => ({
+              id: event.id,
+              playerId: event.playerId,
+              playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
+              kind: "cp" as const,
+              label: event.cpType === "gained" ? "CP +" : "CP -",
+              value: event.value,
+              note: event.note,
+              roundNumber: event.roundNumber,
+              turnNumber: event.turnNumber,
+              createdAt: event.createdAt
+            })),
+            ...game.scoreEvents.map((event) => ({
+              id: event.id,
+              playerId: event.playerId,
+              playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
+              kind: "score" as const,
+              label: event.scoreType === "primary" ? "Primary" : "Secondary",
+              value: event.value,
+              note: event.note,
+              roundNumber: event.roundNumber,
+              turnNumber: event.turnNumber,
+              createdAt: event.createdAt
+            })),
+            ...game.noteEvents.map((event) => ({
+              id: event.id,
+              playerId: event.playerId,
+              playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
+              kind: "note" as const,
+              label: "Notiz",
+              note: event.note,
+              roundNumber: event.roundNumber,
+              turnNumber: event.turnNumber,
+              createdAt: event.createdAt
+            }))
+          ]
+            .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        : [],
+    [game]
+  );
 
   useEffect(() => {
     if (!game || game.status === "completed" || !game.startedAt) {
@@ -53,75 +140,88 @@ export const GamePage = ({ gameId }: GamePageProps) => {
     return () => window.clearInterval(interval);
   }, [game]);
 
+  useEffect(() => {
+    if (!game) {
+      setGameForm(null);
+      return;
+    }
+
+    setGameForm(createGameFormState(game));
+  }, [game]);
+
   if (!game && isLoading) {
-    return <Layout title="Live Tracker" subtitle="Spiel wird geladen" />;
+    return <Layout title="Live Tracker" subtitle="Spiel wird geladen" onBack={onBack} />;
   }
 
-  if (!game) {
+  if (!game || !gameForm) {
     return (
       <Layout
         title="Spiel nicht gefunden"
         subtitle={errorMessage ?? "Das Match ist nicht verfuegbar oder konnte nicht geladen werden."}
+        onBack={onBack}
       />
     );
   }
 
-  const roundActive = isRoundActive(game);
-  const turnActive = isTurnActive(game);
-  const activePlayerId = latestTurn && turnActive ? latestTurn.playerId : game.currentPlayerId;
+  const activePlayerId =
+    latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt
+      ? latestTurn.playerId
+      : game.currentPlayerId;
   const latestRound = game.rounds[game.rounds.length - 1];
 
-  const handleActionSubmit = async ({
-    playerId,
-    value,
-    note
-  }: {
-    playerId: string;
-    value?: number;
-    note?: string;
-  }) => {
-    if (!action) {
-      return;
-    }
+  const updateGameField = <K extends keyof CreateGameInput,>(
+    key: K,
+    value: CreateGameInput[K]
+  ) => {
+    setGameForm((current) =>
+      current
+        ? {
+            ...current,
+            [key]: value
+          }
+        : current
+    );
+  };
 
-    if (action === "primary" || action === "secondary") {
-      await addScoreEvent({
-        gameId,
-        playerId,
-        value,
-        note,
-        scoreType: action
-      });
-    }
+  const openEditor = (event: EditableEventItem) => {
+    setEditingEventId(event.id);
+    setEditingValue(typeof event.value === "number" ? String(event.value) : "");
+    setEditingNote(event.note ?? "");
+  };
 
-    if (action === "cp-gained" || action === "cp-spent") {
-      await addCommandPointEvent({
-        gameId,
-        playerId,
-        value,
-        note,
-        cpType: action === "cp-gained" ? "gained" : "spent"
-      });
-    }
+  const closeEditor = () => {
+    setEditingEventId(null);
+    setEditingValue("");
+    setEditingNote("");
+  };
 
-    if (action === "note") {
-      await addNoteEvent({
-        gameId,
-        playerId,
-        note
-      });
-    }
+  const saveEditedEvent = async (event: EditableEventItem) => {
+    const parsedValue = event.kind === "note" ? undefined : Number(editingValue);
 
-    setAction(null);
+    await updateGameEvent(game.id, event.id, {
+      value_number:
+        event.kind === "note"
+          ? undefined
+          : Number.isFinite(parsedValue)
+            ? parsedValue
+            : event.value ?? 0,
+      note: editingNote.trim() || null
+    });
+    closeEditor();
+  };
+
+  const handleGameSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await updateGameDetails(game.id, gameForm);
+    setIsEditingGame(false);
   };
 
   return (
     <Layout
       title="Live Tracker"
       subtitle={formatDateLabel(game.scheduledDate, game.scheduledTime)}
-      actions={
-        <span className={`status-pill status-pill--${game.status}`}>{game.status}</span>
-      }
+      onBack={onBack}
+      actions={<span className={`status-pill status-pill--${game.status}`}>{game.status}</span>}
     >
       <section className="stack">
         {errorMessage ? (
@@ -152,6 +252,10 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             <strong>{formatClockTime(game.startedAt)}</strong>
           </div>
           <div>
+            <span>Spielpunkte</span>
+            <strong>{game.gamePoints}</strong>
+          </div>
+          <div>
             <span>Gesamtzeit</span>
             <strong>{formatDuration(getGameDurationMs(game))}</strong>
           </div>
@@ -165,6 +269,206 @@ export const GamePage = ({ gameId }: GamePageProps) => {
           </div>
         </article>
 
+        <section className="card stack">
+          <div className="list-row">
+            <h2>Spieldetails</h2>
+            {!isEditingGame ? (
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() => setIsEditingGame(true)}
+                disabled={isMutating}
+              >
+                Bearbeiten
+              </button>
+            ) : null}
+          </div>
+
+          {isEditingGame ? (
+            <form className="stack" onSubmit={handleGameSave}>
+              <section className="stack">
+                <label className="field">
+                  <span>Spieler 1</span>
+                  <input
+                    required
+                    list={`player-options-${game.id}`}
+                    value={gameForm.playerOneName}
+                    onChange={(editEvent) => updateGameField("playerOneName", editEvent.target.value)}
+                    disabled={isMutating}
+                  />
+                </label>
+                <label className="field">
+                  <span>Armee 1</span>
+                  <select
+                    required
+                    value={gameForm.playerOneArmy}
+                    onChange={(editEvent) => updateGameField("playerOneArmy", editEvent.target.value)}
+                    disabled={isMutating}
+                  >
+                    <option value="">Armee waehlen</option>
+                    {ARMY_OPTIONS.map((army) => (
+                      <option key={army} value={army}>
+                        {army}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Spieler 2</span>
+                  <input
+                    required
+                    list={`player-options-${game.id}`}
+                    value={gameForm.playerTwoName}
+                    onChange={(editEvent) => updateGameField("playerTwoName", editEvent.target.value)}
+                    disabled={isMutating}
+                  />
+                </label>
+                <label className="field">
+                  <span>Armee 2</span>
+                  <select
+                    required
+                    value={gameForm.playerTwoArmy}
+                    onChange={(editEvent) => updateGameField("playerTwoArmy", editEvent.target.value)}
+                    disabled={isMutating}
+                  >
+                    <option value="">Armee waehlen</option>
+                    {ARMY_OPTIONS.map((army) => (
+                      <option key={army} value={army}>
+                        {army}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </section>
+
+              <div className="two-column-grid">
+                <label className="field">
+                  <span>Spielpunkte</span>
+                  <input
+                    required
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={gameForm.gamePoints}
+                    onChange={(editEvent) =>
+                      updateGameField("gamePoints", Number(editEvent.target.value) || 0)
+                    }
+                    disabled={isMutating}
+                  />
+                </label>
+                <label className="field">
+                  <span>Datum</span>
+                  <input
+                    required
+                    type="date"
+                    value={gameForm.scheduledDate}
+                    onChange={(editEvent) => updateGameField("scheduledDate", editEvent.target.value)}
+                    disabled={isMutating}
+                  />
+                </label>
+                <label className="field">
+                  <span>Uhrzeit</span>
+                  <input
+                    required
+                    type="time"
+                    value={gameForm.scheduledTime}
+                    onChange={(editEvent) => updateGameField("scheduledTime", editEvent.target.value)}
+                    disabled={isMutating}
+                  />
+                </label>
+              </div>
+
+              <div className="field">
+                <span>Defender</span>
+                <div className="segmented-control">
+                  <button
+                    type="button"
+                    className={gameForm.defenderSlot === "player1" ? "is-selected" : ""}
+                    onClick={() => updateGameField("defenderSlot", "player1")}
+                    disabled={isMutating}
+                  >
+                    Spieler 1
+                  </button>
+                  <button
+                    type="button"
+                    className={gameForm.defenderSlot === "player2" ? "is-selected" : ""}
+                    onClick={() => updateGameField("defenderSlot", "player2")}
+                    disabled={isMutating}
+                  >
+                    Spieler 2
+                  </button>
+                </div>
+              </div>
+
+              <div className="field">
+                <span>Startspieler</span>
+                <div className="segmented-control">
+                  <button
+                    type="button"
+                    className={gameForm.startingSlot === "player1" ? "is-selected" : ""}
+                    onClick={() => updateGameField("startingSlot", "player1")}
+                    disabled={isMutating}
+                  >
+                    Spieler 1
+                  </button>
+                  <button
+                    type="button"
+                    className={gameForm.startingSlot === "player2" ? "is-selected" : ""}
+                    onClick={() => updateGameField("startingSlot", "player2")}
+                    disabled={isMutating}
+                  >
+                    Spieler 2
+                  </button>
+                </div>
+              </div>
+
+              <div className="button-row button-row--compact">
+                <button type="submit" className="primary-button compact-button" disabled={isMutating}>
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => {
+                    setGameForm(createGameFormState(game));
+                    setIsEditingGame(false);
+                  }}
+                >
+                  Abbrechen
+                </button>
+              </div>
+
+              <datalist id={`player-options-${game.id}`}>
+                {playerOptions.map((playerName) => (
+                  <option key={playerName} value={playerName} />
+                ))}
+              </datalist>
+            </form>
+          ) : (
+            <div className="scoreboard__grid">
+              <div>
+                <span>Spieler 1</span>
+                <strong>{game.players[0].name}</strong>
+                <p>{game.players[0].army.name}</p>
+              </div>
+              <div>
+                <span>Spieler 2</span>
+                <strong>{game.players[1].name}</strong>
+                <p>{game.players[1].army.name}</p>
+              </div>
+              <div>
+                <span>Defender</span>
+                <strong>{game.defenderPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}</strong>
+              </div>
+              <div>
+                <span>Startspieler</span>
+                <strong>{game.startingPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}</strong>
+              </div>
+            </div>
+          )}
+        </section>
+
         <div className="stack">
           {game.players.map((player) => (
             <PlayerScoreboard
@@ -173,84 +477,49 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               player={player}
               emphasized={activePlayerId === player.id}
               defender={game.defenderPlayerId === player.id}
+              controls={
+                <QuickAdjustControls
+                  player={player}
+                  isSubmitting={isMutating}
+                  onCommandPointChange={async (playerId, direction, amount) => {
+                    await addCommandPointEvent({
+                      gameId,
+                      playerId,
+                      value: amount,
+                      cpType: direction === "plus" ? "gained" : "spent"
+                    });
+                  }}
+                  onScoreChange={async (playerId, scoreType, direction, amount) => {
+                    await addScoreEvent({
+                      gameId,
+                      playerId,
+                      value: direction === "plus" ? amount : amount * -1,
+                      scoreType
+                    });
+                  }}
+                  onSaveNote={async (playerId, note) => {
+                    await addNoteEvent({
+                      gameId,
+                      playerId,
+                      note
+                    });
+                  }}
+                />
+              }
             />
           ))}
         </div>
 
         <section className="card stack">
           <h2>Spielsteuerung</h2>
-          <div className="button-grid">
+          <div className="button-grid button-grid--tracker">
             <button
               type="button"
-              className="secondary-button"
-              onClick={() => void startRound(game.id)}
-              disabled={roundActive || game.status === "completed" || isMutating}
+              className="primary-button primary-button--large"
+              onClick={() => void advanceGame(game.id)}
+              disabled={game.status === "completed" || isMutating}
             >
-              Runde starten
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void endRound(game.id)}
-              disabled={!roundActive || game.status === "completed" || isMutating}
-            >
-              Runde beenden
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void startTurn(game.id)}
-              disabled={!roundActive || turnActive || game.status === "completed" || isMutating}
-            >
-              Zug starten
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void endTurn(game.id)}
-              disabled={!turnActive || game.status === "completed" || isMutating}
-            >
-              Zug beenden
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAction("cp-gained")}
-              disabled={isMutating}
-            >
-              CP erhalten
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAction("cp-spent")}
-              disabled={isMutating}
-            >
-              CP ausgeben
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAction("primary")}
-              disabled={isMutating}
-            >
-              Primary
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAction("secondary")}
-              disabled={isMutating}
-            >
-              Secondary
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAction("note")}
-              disabled={isMutating}
-            >
-              Notiz
+              Weiter
             </button>
             <button
               type="button"
@@ -262,14 +531,6 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             </button>
           </div>
         </section>
-
-        <ActionPanel
-          players={game.players}
-          action={action}
-          onCancel={() => setAction(null)}
-          isSubmitting={isMutating}
-          onSubmit={handleActionSubmit}
-        />
 
         <section className="card stack">
           <h2>Letzte Notizen</h2>
@@ -293,6 +554,80 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               })
           ) : (
             <p className="muted-copy">Noch keine Notizen.</p>
+          )}
+        </section>
+
+        <section className="card stack">
+          <div className="list-row">
+            <h2>Eintraege</h2>
+            <span>editierbar</span>
+          </div>
+          {editableEvents.length ? (
+            editableEvents.map((event) => (
+              <article key={event.id} className="event-editor">
+                <div className="event-editor__meta">
+                  <div>
+                    <strong>{event.playerName}</strong>
+                    <p>
+                      {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    disabled={isMutating}
+                    onClick={() => openEditor(event)}
+                  >
+                    Bearbeiten
+                  </button>
+                </div>
+
+                {editingEventId === event.id ? (
+                  <div className="event-editor__form">
+                    {event.kind !== "note" ? (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={editingValue}
+                        disabled={isMutating}
+                        onChange={(editEvent) => setEditingValue(editEvent.target.value)}
+                      />
+                    ) : null}
+                    <textarea
+                      rows={2}
+                      value={editingNote}
+                      disabled={isMutating}
+                      onChange={(editEvent) => setEditingNote(editEvent.target.value)}
+                    />
+                    <div className="button-row button-row--compact">
+                      <button
+                        type="button"
+                        className="primary-button compact-button"
+                        disabled={isMutating}
+                        onClick={() => void saveEditedEvent(event)}
+                      >
+                        Speichern
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button compact-button"
+                        disabled={isMutating}
+                        onClick={closeEditor}
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted-copy">
+                    {typeof event.value === "number" ? `${event.value}` : event.note || "Keine Notiz"}
+                    {event.note && typeof event.value === "number" ? ` | ${event.note}` : ""}
+                  </p>
+                )}
+              </article>
+            ))
+          ) : (
+            <p className="muted-copy">Noch keine editierbaren Eintraege.</p>
           )}
         </section>
       </section>

@@ -9,6 +9,7 @@ export const seedGames: Game[] = [
     createdAt,
     updatedAt: createdAt,
     status: "completed",
+    gamePoints: 2000,
     scheduledDate: "2026-04-20",
     scheduledTime: "19:00",
     defenderPlayerId: "player-1",

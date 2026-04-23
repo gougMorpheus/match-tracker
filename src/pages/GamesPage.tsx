@@ -36,7 +36,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
 
   return (
     <Layout
-      title="Spiele"
+      title="40K Match-Tracker"
       subtitle="Alle Matches der Spielgruppe aus Supabase"
       actions={
         <button type="button" className="primary-button" onClick={onCreateGame}>
@@ -45,10 +45,10 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
       }
     >
       <section className="stack">
-        <div className="button-row">
+        <div className="button-row button-row--compact">
           <button
             type="button"
-            className="secondary-button"
+            className="secondary-button compact-button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isMutating}
           >
@@ -56,19 +56,19 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
           </button>
           <button
             type="button"
-            className="secondary-button"
+            className="secondary-button compact-button"
             onClick={() => exportGamesAsJson(games)}
             disabled={!games.length || isLoading}
           >
-            Export all
+            Export
           </button>
           <button
             type="button"
-            className="secondary-button"
+            className="secondary-button compact-button"
             onClick={() => void refreshGames()}
             disabled={isLoading || isMutating}
           >
-            Aktualisieren
+            Update
           </button>
         </div>
 

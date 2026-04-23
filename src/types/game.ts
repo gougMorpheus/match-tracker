@@ -84,6 +84,7 @@ export interface Game {
   createdAt: string;
   updatedAt: string;
   status: GameStatus;
+  gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;
   defenderPlayerId: PlayerId;
@@ -125,10 +126,9 @@ export interface GameSummary {
 export interface CreateGameInput {
   playerOneName: string;
   playerOneArmy: string;
-  playerOneMaxPoints: number;
   playerTwoName: string;
   playerTwoArmy: string;
-  playerTwoMaxPoints: number;
+  gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;
   defenderSlot: "player1" | "player2";

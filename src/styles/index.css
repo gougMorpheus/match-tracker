@@ -35,7 +35,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -44,7 +45,8 @@ button {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--border);
   background: rgba(15, 23, 42, 0.8);
@@ -64,11 +66,21 @@ textarea {
 }
 
 .app-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 1rem;
-  align-items: flex-start;
   padding: 1rem 0 1.25rem;
+}
+
+.header-content {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.header-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .app-header h1 {
@@ -226,6 +238,11 @@ textarea {
   font-size: 1.25rem;
 }
 
+.scoreboard__grid p {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+}
+
 .button-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -239,12 +256,27 @@ textarea {
   flex-wrap: wrap;
 }
 
+.header-actions .primary-button,
+.header-actions .secondary-button,
+.header-actions .danger-button,
+.header-actions .ghost-button {
+  width: auto;
+}
+
+.button-row--compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 0.5rem;
+}
+
 .primary-button,
 .secondary-button,
 .danger-button,
 .ghost-button,
 .segmented-control button,
-.bottom-nav__item {
+.bottom-nav__item,
+.back-button,
+.mini-button {
   border: 0;
   border-radius: 18px;
   padding: 1rem;
@@ -271,10 +303,33 @@ textarea {
 
 .secondary-button,
 .ghost-button,
-.segmented-control button {
+.segmented-control button,
+.back-button,
+.mini-button {
   background: rgba(30, 41, 59, 0.95);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+.compact-button,
+.back-button,
+.mini-button {
+  min-height: 42px;
+  padding: 0.7rem 0.9rem;
+}
+
+.back-button {
+  width: auto;
+}
+
+.mini-button {
+  width: auto;
+}
+
+.mini-button--accent {
+  background: var(--accent-soft);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #d8f3ff;
 }
 
 .danger-button {
@@ -345,6 +400,57 @@ textarea {
   padding: 1rem;
 }
 
+.button-grid--tracker {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.scoreboard__controls {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.quick-controls {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.quick-controls__row,
+.quick-controls__actions,
+.event-editor__meta {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.quick-controls__row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.quick-controls__actions {
+  flex: 1;
+  width: 100%;
+  justify-content: stretch;
+}
+
+.quick-controls__actions .mini-button {
+  flex: 1;
+}
+
+.quick-controls__note {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.step-input {
+  width: 4.5rem;
+  flex: 0 0 4.5rem;
+  padding-left: 0.7rem;
+  padding-right: 0.7rem;
+  text-align: center;
+}
+
 .action-panel__head {
   display: flex;
   justify-content: space-between;
@@ -366,6 +472,23 @@ textarea {
 
 .stat-card {
   padding: 0.9rem 1rem;
+}
+
+.event-editor {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.event-editor:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.event-editor__form {
+  display: grid;
+  gap: 0.6rem;
 }
 
 .bottom-nav {
@@ -405,12 +528,31 @@ textarea {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
+  .button-grid--tracker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
   .two-column-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stats-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .quick-controls__row {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .quick-controls__actions {
+    width: auto;
+    justify-content: flex-end;
   }
 
   .bottom-nav {

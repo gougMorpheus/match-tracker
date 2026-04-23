@@ -1,29 +1,41 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { ARMY_OPTIONS } from "../data/armies";
 import type { CreateGameInput } from "../types/game";
 import { Layout } from "../components/Layout";
 import { useGameStore } from "../store/GameStore";
+import { loadRememberedPlayerNames } from "../utils/presets";
 import { toLocalDateInput, toLocalTimeInput } from "../utils/time";
 
 interface NewGamePageProps {
   onCreated: (gameId: string) => void;
+  onBack: () => void;
 }
 
 const defaultFormState: CreateGameInput = {
   playerOneName: "",
   playerOneArmy: "",
-  playerOneMaxPoints: 2000,
   playerTwoName: "",
   playerTwoArmy: "",
-  playerTwoMaxPoints: 2000,
+  gamePoints: 2000,
   scheduledDate: toLocalDateInput(),
   scheduledTime: toLocalTimeInput(),
   defenderSlot: "player1",
   startingSlot: "player1"
 };
 
-export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
-  const { createGame, isMutating, errorMessage, clearError } = useGameStore();
+export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
+  const { createGame, games, isMutating, errorMessage, clearError } = useGameStore();
   const [formState, setFormState] = useState<CreateGameInput>(defaultFormState);
+  const playerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...loadRememberedPlayerNames(),
+          ...games.flatMap((game) => game.players.map((player) => player.name))
+        ])
+      ).sort((left, right) => left.localeCompare(right)),
+    [games]
+  );
 
   function updateField<K extends keyof CreateGameInput>(key: K, value: CreateGameInput[K]) {
     setFormState((current) => ({
@@ -43,7 +55,11 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
   };
 
   return (
-    <Layout title="Neues Spiel" subtitle="Metadaten und beide Armeen direkt anlegen">
+    <Layout
+      title="Neues Spiel"
+      subtitle="Spieler waehlen, Armeen auswaehlen, Punkte einmal setzen"
+      onBack={onBack}
+    >
       <form className="stack" onSubmit={handleSubmit}>
         {errorMessage ? (
           <article className="notice-card notice-card--error">
@@ -65,6 +81,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
             <span>Name</span>
             <input
               required
+              list="player-options"
               value={formState.playerOneName}
               onChange={(event) => updateField("playerOneName", event.target.value)}
               disabled={isMutating}
@@ -72,24 +89,19 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
           </label>
           <label className="field">
             <span>Armee</span>
-            <input
+            <select
               required
               value={formState.playerOneArmy}
               onChange={(event) => updateField("playerOneArmy", event.target.value)}
               disabled={isMutating}
-            />
-          </label>
-          <label className="field">
-            <span>Max Punkte</span>
-            <input
-              required
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={formState.playerOneMaxPoints}
-              onChange={(event) => updateField("playerOneMaxPoints", Number(event.target.value))}
-              disabled={isMutating}
-            />
+            >
+              <option value="">Armee waehlen</option>
+              {ARMY_OPTIONS.map((army) => (
+                <option key={army} value={army}>
+                  {army}
+                </option>
+              ))}
+            </select>
           </label>
         </section>
 
@@ -99,6 +111,7 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
             <span>Name</span>
             <input
               required
+              list="player-options"
               value={formState.playerTwoName}
               onChange={(event) => updateField("playerTwoName", event.target.value)}
               disabled={isMutating}
@@ -106,29 +119,36 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
           </label>
           <label className="field">
             <span>Armee</span>
-            <input
+            <select
               required
               value={formState.playerTwoArmy}
               onChange={(event) => updateField("playerTwoArmy", event.target.value)}
               disabled={isMutating}
-            />
-          </label>
-          <label className="field">
-            <span>Max Punkte</span>
-            <input
-              required
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={formState.playerTwoMaxPoints}
-              onChange={(event) => updateField("playerTwoMaxPoints", Number(event.target.value))}
-              disabled={isMutating}
-            />
+            >
+              <option value="">Armee waehlen</option>
+              {ARMY_OPTIONS.map((army) => (
+                <option key={army} value={army}>
+                  {army}
+                </option>
+              ))}
+            </select>
           </label>
         </section>
 
         <section className="card stack">
           <h2>Spiel</h2>
+          <label className="field">
+            <span>Spielpunkte</span>
+            <input
+              required
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={formState.gamePoints}
+              onChange={(event) => updateField("gamePoints", Number(event.target.value))}
+              disabled={isMutating}
+            />
+          </label>
           <div className="two-column-grid">
             <label className="field">
               <span>Datum</span>
@@ -200,6 +220,11 @@ export const NewGamePage = ({ onCreated }: NewGamePageProps) => {
         <button type="submit" className="primary-button primary-button--large" disabled={isMutating}>
           {isMutating ? "Speichere..." : "Spiel anlegen"}
         </button>
+        <datalist id="player-options">
+          {playerOptions.map((playerName) => (
+            <option key={playerName} value={playerName} />
+          ))}
+        </datalist>
       </form>
     </Layout>
   );

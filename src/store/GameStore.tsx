@@ -9,12 +9,14 @@ import {
 } from "react";
 import { getSupabaseConfigError } from "../lib/supabase";
 import {
+  createGameUpdatePayload,
   createEventPayload,
   createImportedEventPayloads,
   createImportedGamePayload,
   gamesRepository
 } from "../services/gamesRepository";
 import type { CreateSupabaseEventPayload } from "../services/gamesRepository";
+import type { UpdateSupabaseEventPayload } from "../services/gamesRepository";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -25,9 +27,9 @@ import type {
 import {
   getLatestRound,
   getLatestTurn,
-  getPlayerTotalScore,
-  isTurnActive
+  getPlayerTotalScore
 } from "../utils/gameCalculations";
+import { rememberPlayerNames } from "../utils/presets";
 import { normalizeSupabaseErrorMessage } from "../utils/supabaseErrors";
 import { getNowIso } from "../utils/time";
 
@@ -46,13 +48,12 @@ interface GameStoreValue {
   createGame: (input: CreateGameInput) => Promise<Game>;
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
-  startRound: (gameId: string) => Promise<void>;
-  endRound: (gameId: string) => Promise<void>;
-  startTurn: (gameId: string) => Promise<void>;
-  endTurn: (gameId: string) => Promise<void>;
+  updateGameDetails: (gameId: string, input: CreateGameInput) => Promise<void>;
   addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
+  advanceGame: (gameId: string) => Promise<void>;
+  updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   finishGame: (gameId: string) => Promise<void>;
   importGames: (games: Game[]) => Promise<void>;
   exportGames: () => Game[];
@@ -154,147 +155,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     async (input: CreateGameInput): Promise<Game> =>
       runMutation(async () => {
         const createdGame = await gamesRepository.createGame(input);
+        rememberPlayerNames([input.playerOneName, input.playerTwoName]);
         setGames((currentGames) => [createdGame, ...currentGames]);
         return createdGame;
       }),
     [runMutation]
   );
 
-  const startRound = useCallback(
-    async (gameId: string) =>
+  const updateGameDetails = useCallback(
+    async (gameId: string, input: CreateGameInput) =>
       runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game) {
-          throw new Error("Spiel nicht gefunden.");
-        }
-
-        const latestRound = getLatestRound(game);
-        if (latestRound && !latestRound.endedAt) {
-          return;
-        }
-
-        const now = getNowIso();
-        const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
-        const payloads: CreateSupabaseEventPayload[] = [];
-
-        if (!game.timeEvents.some((event) => event.action === "game-start")) {
-          payloads.push(
-            createEventPayload(game, {
-              playerId: game.currentPlayerId,
-              eventType: "game-start",
-              occurredAt: now
-            })
-          );
-        }
-
-        payloads.push(
-          createEventPayload(game, {
-            playerId: game.currentPlayerId,
-            roundNumber: nextRoundNumber,
-            eventType: "round-start",
-            occurredAt: now
-          })
-        );
-
-        await gamesRepository.addEvents(payloads);
-        await gamesRepository.updateGame(gameId, {
-          started_at: now
-        });
+        await gamesRepository.updateGame(gameId, createGameUpdatePayload(input));
+        rememberPlayerNames([input.playerOneName, input.playerTwoName]);
         await refreshSingleGame(gameId);
       }),
-    [getGame, refreshSingleGame, runMutation]
-  );
-
-  const endTurn = useCallback(
-    async (gameId: string) =>
-      runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game) {
-          throw new Error("Spiel nicht gefunden.");
-        }
-
-        const latestTurn = getLatestTurn(game);
-        if (!latestTurn || latestTurn.timing.endedAt) {
-          return;
-        }
-
-        await gamesRepository.addEvent(
-          createEventPayload(game, {
-            playerId: latestTurn.playerId,
-            roundNumber: latestTurn.roundNumber,
-            turnNumber: latestTurn.turnNumber,
-            eventType: "turn-end"
-          })
-        );
-        await refreshSingleGame(gameId);
-      }),
-    [getGame, refreshSingleGame, runMutation]
-  );
-
-  const startTurn = useCallback(
-    async (gameId: string) =>
-      runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game) {
-          throw new Error("Spiel nicht gefunden.");
-        }
-
-        const latestRound = getLatestRound(game);
-        if (!latestRound || latestRound.endedAt || isTurnActive(game)) {
-          return;
-        }
-
-        await gamesRepository.addEvent(
-          createEventPayload(game, {
-            playerId: game.currentPlayerId,
-            roundNumber: latestRound.roundNumber,
-            turnNumber: latestRound.turns.length + 1,
-            eventType: "turn-start"
-          })
-        );
-        await refreshSingleGame(gameId);
-      }),
-    [getGame, refreshSingleGame, runMutation]
-  );
-
-  const endRound = useCallback(
-    async (gameId: string) =>
-      runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game) {
-          throw new Error("Spiel nicht gefunden.");
-        }
-
-        const latestRound = getLatestRound(game);
-        if (!latestRound || latestRound.endedAt) {
-          return;
-        }
-
-        const latestTurn = getLatestTurn(game);
-        const payloads: CreateSupabaseEventPayload[] = [];
-        if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
-          payloads.push(
-            createEventPayload(game, {
-              playerId: latestTurn.playerId,
-              roundNumber: latestTurn.roundNumber,
-              turnNumber: latestTurn.turnNumber,
-              eventType: "turn-end"
-            })
-          );
-        }
-
-        payloads.push(
-          createEventPayload(game, {
-            playerId: game.currentPlayerId,
-            roundNumber: latestRound.roundNumber,
-            eventType: "round-end"
-          })
-        );
-
-        await gamesRepository.addEvents(payloads);
-        await refreshSingleGame(gameId);
-      }),
-    [getGame, refreshSingleGame, runMutation]
+    [refreshSingleGame, runMutation]
   );
 
   const addScoreEvent = useCallback(
@@ -425,6 +300,153 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [getGame, refreshSingleGame, runMutation]
   );
 
+  const advanceGame = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed") {
+          return;
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+        const now = getNowIso();
+        const payloads: CreateSupabaseEventPayload[] = [];
+        const otherPlayerId =
+          game.players.find((player) => player.id !== game.currentPlayerId)?.id ?? game.currentPlayerId;
+
+        if (!latestRound || latestRound.endedAt) {
+          const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
+
+          if (!game.timeEvents.some((event) => event.action === "game-start")) {
+            payloads.push(
+              createEventPayload(game, {
+                playerId: game.startingPlayerId,
+                eventType: "game-start",
+                occurredAt: now
+              })
+            );
+          }
+
+          payloads.push(
+            createEventPayload(game, {
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              eventType: "round-start",
+              occurredAt: now
+            }),
+            createEventPayload(game, {
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              turnNumber: 1,
+              eventType: "turn-start",
+              occurredAt: now
+            })
+          );
+        } else if (!latestTurn || latestTurn.timing.endedAt) {
+          if (latestRound.turns.length >= 2) {
+            const nextRoundNumber = latestRound.roundNumber + 1;
+            payloads.push(
+              createEventPayload(game, {
+                playerId: latestRound.turns[latestRound.turns.length - 1]?.playerId ?? game.startingPlayerId,
+                roundNumber: latestRound.roundNumber,
+                eventType: "round-end",
+                occurredAt: now
+              }),
+              createEventPayload(game, {
+                playerId: game.startingPlayerId,
+                roundNumber: nextRoundNumber,
+                eventType: "round-start",
+                occurredAt: now
+              }),
+              createEventPayload(game, {
+                playerId: game.startingPlayerId,
+                roundNumber: nextRoundNumber,
+                turnNumber: 1,
+                eventType: "turn-start",
+                occurredAt: now
+              })
+            );
+          } else {
+            const nextTurnNumber = latestRound.turns.length + 1;
+            const previousPlayerId = latestTurn?.playerId ?? latestRound.turns[latestRound.turns.length - 1]?.playerId;
+            const nextPlayerId =
+              game.players.find((player) => player.id !== previousPlayerId)?.id ?? otherPlayerId;
+
+            payloads.push(
+              createEventPayload(game, {
+                playerId: nextPlayerId,
+                roundNumber: latestRound.roundNumber,
+                turnNumber: nextTurnNumber,
+                eventType: "turn-start",
+                occurredAt: now
+              })
+            );
+          }
+        } else {
+          payloads.push(
+            createEventPayload(game, {
+              playerId: latestTurn.playerId,
+              roundNumber: latestTurn.roundNumber,
+              turnNumber: latestTurn.turnNumber,
+              eventType: "turn-end",
+              occurredAt: now
+            })
+          );
+
+          if (latestRound.turns.length >= 2) {
+            const nextRoundNumber = latestRound.roundNumber + 1;
+            payloads.push(
+              createEventPayload(game, {
+                playerId: latestTurn.playerId,
+                roundNumber: latestRound.roundNumber,
+                eventType: "round-end",
+                occurredAt: now
+              }),
+              createEventPayload(game, {
+                playerId: game.startingPlayerId,
+                roundNumber: nextRoundNumber,
+                eventType: "round-start",
+                occurredAt: now
+              }),
+              createEventPayload(game, {
+                playerId: game.startingPlayerId,
+                roundNumber: nextRoundNumber,
+                turnNumber: 1,
+                eventType: "turn-start",
+                occurredAt: now
+              })
+            );
+          } else {
+            payloads.push(
+              createEventPayload(game, {
+                playerId: otherPlayerId,
+                roundNumber: latestRound.roundNumber,
+                turnNumber: latestRound.turns.length + 1,
+                eventType: "turn-start",
+                occurredAt: now
+              })
+            );
+          }
+        }
+
+        if (payloads.length) {
+          await gamesRepository.addEvents(payloads);
+          await refreshSingleGame(gameId);
+        }
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
+  const updateGameEvent = useCallback(
+    async (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) =>
+      runMutation(async () => {
+        await gamesRepository.updateEvent(eventId, patch);
+        await refreshSingleGame(gameId);
+      }),
+    [refreshSingleGame, runMutation]
+  );
+
   const importGames = useCallback(
     async (importedGames: Game[]) =>
       runMutation(async () => {
@@ -439,6 +461,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             ended_at: importedGame.endedAt ?? null,
             winner_player: importedGame.endedAt ? getWinnerPlayerSlot(importedGame) : null
           });
+          rememberPlayerNames(importedGame.players.map((player) => player.name));
         }
 
         await refreshGames();
@@ -458,13 +481,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       createGame,
       getGame,
       refreshGames,
-      startRound,
-      endRound,
-      startTurn,
-      endTurn,
+      updateGameDetails,
       addScoreEvent,
       addCommandPointEvent,
       addNoteEvent,
+      advanceGame,
+      updateGameEvent,
       finishGame,
       importGames,
       exportGames,
@@ -474,10 +496,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       addCommandPointEvent,
       addNoteEvent,
       addScoreEvent,
+      advanceGame,
       clearError,
       createGame,
-      endRound,
-      endTurn,
       errorMessage,
       exportGames,
       finishGame,
@@ -486,9 +507,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       importGames,
       isLoading,
       isMutating,
+      updateGameEvent,
+      updateGameDetails,
       refreshGames,
-      startRound,
-      startTurn
     ]
   );
 

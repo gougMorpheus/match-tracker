@@ -100,12 +100,17 @@ const App = () => {
       ) : null}
 
       {route.view === "new" ? (
-        <NewGamePage onCreated={(gameId) => navigate({ view: "game", gameId })} />
+        <NewGamePage
+          onCreated={(gameId) => navigate({ view: "game", gameId })}
+          onBack={() => navigate({ view: "games" })}
+        />
       ) : null}
 
-      {route.view === "game" ? <GamePage gameId={route.gameId} /> : null}
+      {route.view === "game" ? (
+        <GamePage gameId={route.gameId} onBack={() => navigate({ view: "games" })} />
+      ) : null}
 
-      {route.view === "stats" ? <StatsPage /> : null}
+      {route.view === "stats" ? <StatsPage onBack={() => navigate({ view: "games" })} /> : null}
 
       <Navigation items={navigationItems} />
     </>

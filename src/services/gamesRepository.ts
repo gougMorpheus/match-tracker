@@ -21,6 +21,7 @@ export type SupabaseEventRecord = Database["public"]["Tables"]["events"]["Row"];
 export type CreateSupabaseGamePayload = Database["public"]["Tables"]["games"]["Insert"];
 export type UpdateSupabaseGamePayload = Database["public"]["Tables"]["games"]["Update"];
 export type CreateSupabaseEventPayload = Database["public"]["Tables"]["events"]["Insert"];
+export type UpdateSupabaseEventPayload = Database["public"]["Tables"]["events"]["Update"];
 
 const scoreTypeByEventType = {
   "score-primary": "primary",
@@ -331,6 +332,7 @@ export const mapSupabaseGameToAppGame = (
     createdAt: row.created_at,
     updatedAt: getUpdatedAt(row, events),
     status: endedAt ? "completed" : "active",
+    gamePoints: row.player1_max_points,
     scheduledDate: date,
     scheduledTime: time,
     defenderPlayerId,
@@ -368,16 +370,28 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   game_date: combineScheduledDateTime(payload.scheduledDate, payload.scheduledTime),
   player1_name: payload.playerOneName.trim(),
   player1_army: payload.playerOneArmy.trim(),
-  player1_max_points: payload.playerOneMaxPoints,
+  player1_max_points: payload.gamePoints,
   player2_name: payload.playerTwoName.trim(),
   player2_army: payload.playerTwoArmy.trim(),
-  player2_max_points: payload.playerTwoMaxPoints,
+  player2_max_points: payload.gamePoints,
   defender_player: payload.defenderSlot === "player1" ? 1 : 2,
   starting_player: payload.startingSlot === "player1" ? 1 : 2,
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
   notes: null
+});
+
+export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabaseGamePayload => ({
+  game_date: combineScheduledDateTime(payload.scheduledDate, payload.scheduledTime),
+  player1_name: payload.playerOneName.trim(),
+  player1_army: payload.playerOneArmy.trim(),
+  player1_max_points: payload.gamePoints,
+  player2_name: payload.playerTwoName.trim(),
+  player2_army: payload.playerTwoArmy.trim(),
+  player2_max_points: payload.gamePoints,
+  defender_player: payload.defenderSlot === "player1" ? 1 : 2,
+  starting_player: payload.startingSlot === "player1" ? 1 : 2
 });
 
 const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
@@ -401,10 +415,10 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
   player1_name: game.players[0].name,
   player1_army: game.players[0].army.name,
-  player1_max_points: game.players[0].army.maxPoints,
+  player1_max_points: game.gamePoints ?? game.players[0].army.maxPoints,
   player2_name: game.players[1].name,
   player2_army: game.players[1].army.name,
-  player2_max_points: game.players[1].army.maxPoints,
+  player2_max_points: game.gamePoints ?? game.players[1].army.maxPoints,
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: getWinnerPlayerSlot(game),
@@ -626,6 +640,22 @@ export const gamesRepository = {
     if (error) {
       throw new Error(`Event konnte nicht geloescht werden: ${error.message}`);
     }
+  },
+
+  async updateEvent(eventId: string, patch: UpdateSupabaseEventPayload): Promise<SupabaseEventRecord> {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("events")
+      .update(patch)
+      .eq("id", eventId)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(`Event konnte nicht aktualisiert werden: ${error.message}`);
+    }
+
+    return data as SupabaseEventRecord;
   }
 };
 

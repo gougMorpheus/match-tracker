@@ -28,6 +28,7 @@ export const GameCard = ({ game, onOpen }: GameCardProps) => {
         ))}
       </div>
       <div className="game-card__foot">
+        <span>{game.gamePoints} Pkt.</span>
         <span>{summary.roundCount} Runden</span>
         <span>{formatDuration(summary.totalDurationMs)}</span>
       </div>

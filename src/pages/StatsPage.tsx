@@ -4,12 +4,20 @@ import { useGameStore } from "../store/GameStore";
 import { createPlayerAggregates } from "../utils/gameCalculations";
 import { formatDuration } from "../utils/time";
 
-export const StatsPage = () => {
+interface StatsPageProps {
+  onBack: () => void;
+}
+
+export const StatsPage = ({ onBack }: StatsPageProps) => {
   const { games, isLoading, errorMessage, clearError } = useGameStore();
   const aggregates = createPlayerAggregates(games);
 
   return (
-    <Layout title="Statistik" subtitle="Einfacher MVP-Ueberblick ueber synchronisierte Spiele">
+    <Layout
+      title="Statistik"
+      subtitle="Einfacher MVP-Ueberblick ueber synchronisierte Spiele"
+      onBack={onBack}
+    >
       <section className="stack">
         {errorMessage ? (
           <article className="notice-card notice-card--error">

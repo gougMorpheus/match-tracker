@@ -1,4 +1,5 @@
 import type { Game, Player } from "../types/game";
+import type { ReactNode } from "react";
 import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
@@ -11,13 +12,15 @@ interface PlayerScoreboardProps {
   player: Player;
   emphasized?: boolean;
   defender?: boolean;
+  controls?: ReactNode;
 }
 
 export const PlayerScoreboard = ({
   game,
   player,
   emphasized = false,
-  defender = false
+  defender = false,
+  controls
 }: PlayerScoreboardProps) => {
   const primary = getPlayerPrimaryTotal(game, player.id);
   const secondary = getPlayerSecondaryTotal(game, player.id);
@@ -29,9 +32,7 @@ export const PlayerScoreboard = ({
       <div className="scoreboard__head">
         <div>
           <h2>{player.name}</h2>
-          <p>
-            {player.army.name} | {player.army.maxPoints} Pkt.
-          </p>
+          <p>{player.army.name}</p>
         </div>
         <div className="scoreboard__meta">
           {defender ? <span className="meta-chip">Defender</span> : null}
@@ -56,6 +57,7 @@ export const PlayerScoreboard = ({
           <strong>{total}</strong>
         </div>
       </div>
+      {controls ? <div className="scoreboard__controls">{controls}</div> : null}
     </article>
   );
 };

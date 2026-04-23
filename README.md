@@ -8,6 +8,9 @@ Mobile-first Web-App zum Tracken von Warhammer- und Tabletop-Spielen fuer kleine
 - Routing ueber `location.hash`, damit keine zusaetzliche Router-Abhaengigkeit noetig ist und Netlify spaeter unkompliziert bleibt.
 - Datenhaltung eventbasiert mit Supabase als Source of Truth hinter einem kleinen Repository-Layer.
 - Mobile-first Layout mit grossen Action-Buttons und kompakten Scoreboards fuer die Nutzung waehrend des Spiels.
+- Spielernamen werden lokal gemerkt und koennen bei neuen oder bestehenden Spielen erneut ausgewaehlt werden.
+- Armee-Punkte gelten als gemeinsame Spielpunktzahl pro Match und nicht mehr separat pro Spieler.
+- Runde und Zug laufen ueber einen einzigen `Weiter`-Ablauf, damit die Bedienung im Spiel moeglichst schnell bleibt.
 
 ## Umgebungsvariablen
 
@@ -40,7 +43,7 @@ npm run build
 ## Struktur
 
 - `src/components`: wiederverwendbare UI-Bausteine
-- `src/pages`: Games, Neues Spiel, Live-Tracker, Statistik
+- `src/pages`: Games, Neues Spiel, Live-Tracker mit Editierfunktion, Statistik
 - `src/types`: zentrale TypeScript-Modelle
 - `src/store`: React Context fuer App-State und Supabase-Sync
 - `src/services`: Repository-Layer fuer Spiele und Events

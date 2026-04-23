@@ -5,13 +5,21 @@ interface LayoutProps extends PropsWithChildren {
   subtitle?: string;
   actions?: ReactNode;
   footer?: ReactNode;
+  onBack?: () => void;
 }
 
-export const Layout = ({ title, subtitle, actions, footer, children }: LayoutProps) => (
+export const Layout = ({ title, subtitle, actions, footer, onBack, children }: LayoutProps) => (
   <div className="app-shell">
     <header className="app-header">
-      <div>
-        <p className="eyebrow">Match Tracker</p>
+      <div className="header-content">
+        <div className="header-topline">
+          {onBack ? (
+            <button type="button" className="back-button" onClick={onBack}>
+              Zurueck
+            </button>
+          ) : null}
+          <p className="eyebrow">40K Match-Tracker</p>
+        </div>
         <h1>{title}</h1>
         {subtitle ? <p className="subtitle">{subtitle}</p> : null}
       </div>
