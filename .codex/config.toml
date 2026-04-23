@@ -1,0 +1,8 @@
+# .codex/config.toml
+
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+allow_login_shell = false
+
+[windows]
+sandbox = "unelevated"
