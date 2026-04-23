@@ -12,6 +12,8 @@ export const seedGames: Game[] = [
     gamePoints: 2000,
     scheduledDate: "2026-04-20",
     scheduledTime: "19:00",
+    deployment: "Hammer and Anvil",
+    primaryMission: "Take and Hold",
     defenderPlayerId: "player-1",
     startingPlayerId: "player-2",
     currentPlayerId: "player-1",

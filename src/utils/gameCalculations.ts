@@ -174,6 +174,8 @@ export interface PlayerAggregate {
   losses: number;
   ties: number;
   winRate: number;
+  winRateWhenGoFirst: number;
+  winRateWhenStartFirst: number;
   averagePrimary: number;
   averageSecondary: number;
   averageTotal: number;
@@ -219,6 +221,13 @@ export interface TurnRecord {
   durationMs: number;
 }
 
+export interface ScenarioLeader {
+  label: string;
+  playerName: string;
+  winRate: number;
+  games: number;
+}
+
 export interface GameFilterState {
   query: string;
   playerName: string;
@@ -242,14 +251,35 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
   const summaries = games.map(createGameSummary);
   const grouped = new Map<string, GameSummaryPlayer[]>();
   const durations = new Map<string, number[]>();
+  const goFirstGames = new Map<string, { wins: number; games: number }>();
+  const startFirstGames = new Map<string, { wins: number; games: number }>();
 
-  summaries.forEach((summary) => {
+  summaries.forEach((summary, summaryIndex) => {
+    const game = games[summaryIndex];
+    const actualFirstPlayerId = game.rounds[0]?.turns[0]?.playerId;
+
     summary.players.forEach((player) => {
       const existing = grouped.get(player.name) ?? [];
       grouped.set(player.name, [...existing, player]);
 
       const playerDurations = durations.get(player.name) ?? [];
       durations.set(player.name, [...playerDurations, summary.totalDurationMs]);
+
+      if (actualFirstPlayerId === player.playerId) {
+        const existingGoFirst = goFirstGames.get(player.name) ?? { wins: 0, games: 0 };
+        goFirstGames.set(player.name, {
+          wins: existingGoFirst.wins + (player.result === "win" ? 1 : 0),
+          games: existingGoFirst.games + 1
+        });
+      }
+
+      if (game.startingPlayerId === player.playerId) {
+        const existingStartFirst = startFirstGames.get(player.name) ?? { wins: 0, games: 0 };
+        startFirstGames.set(player.name, {
+          wins: existingStartFirst.wins + (player.result === "win" ? 1 : 0),
+          games: existingStartFirst.games + 1
+        });
+      }
     });
   });
 
@@ -260,6 +290,8 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
       const wins = players.filter((player) => player.result === "win").length;
       const losses = players.filter((player) => player.result === "loss").length;
       const ties = players.filter((player) => player.result === "tie").length;
+      const goFirst = goFirstGames.get(name) ?? { wins: 0, games: 0 };
+      const startFirst = startFirstGames.get(name) ?? { wins: 0, games: 0 };
 
       return {
         name,
@@ -268,6 +300,8 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
         losses,
         ties,
         winRate: gamesCount ? (wins / gamesCount) * 100 : 0,
+        winRateWhenGoFirst: goFirst.games ? (goFirst.wins / goFirst.games) * 100 : 0,
+        winRateWhenStartFirst: startFirst.games ? (startFirst.wins / startFirst.games) * 100 : 0,
         averagePrimary: gamesCount ? sumValues(players.map((player) => ({ value: player.primaryScore }))) / gamesCount : 0,
         averageSecondary: gamesCount
           ? sumValues(players.map((player) => ({ value: player.secondaryScore }))) / gamesCount
@@ -283,6 +317,58 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
     })
     .sort((left, right) => right.games - left.games || left.name.localeCompare(right.name));
 };
+
+const createScenarioLeaders = (
+  games: Game[],
+  scenarioSelector: (game: Game) => string
+): ScenarioLeader[] => {
+  const grouped = new Map<string, Map<string, { wins: number; games: number }>>();
+
+  games.forEach((game) => {
+    const label = scenarioSelector(game).trim();
+    if (!label) {
+      return;
+    }
+
+    const scenarioPlayers = grouped.get(label) ?? new Map<string, { wins: number; games: number }>();
+    const summary = createGameSummary(game);
+
+    summary.players.forEach((player) => {
+      const existing = scenarioPlayers.get(player.name) ?? { wins: 0, games: 0 };
+      scenarioPlayers.set(player.name, {
+        wins: existing.wins + (player.result === "win" ? 1 : 0),
+        games: existing.games + 1
+      });
+    });
+
+    grouped.set(label, scenarioPlayers);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([label, scenarioPlayers]) => {
+      const leader = Array.from(scenarioPlayers.entries())
+        .map(([playerName, stats]) => ({
+          playerName,
+          games: stats.games,
+          winRate: stats.games ? (stats.wins / stats.games) * 100 : 0
+        }))
+        .sort((left, right) => right.winRate - left.winRate || right.games - left.games || left.playerName.localeCompare(right.playerName))[0];
+
+      return {
+        label,
+        playerName: leader?.playerName ?? "-",
+        games: leader?.games ?? 0,
+        winRate: leader?.winRate ?? 0
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+};
+
+export const createMissionLeaders = (games: Game[]): ScenarioLeader[] =>
+  createScenarioLeaders(games, (game) => game.primaryMission);
+
+export const createDeploymentLeaders = (games: Game[]): ScenarioLeader[] =>
+  createScenarioLeaders(games, (game) => game.deployment);
 
 export const createInitialGameFilters = (): GameFilterState => ({
   query: "",
@@ -312,6 +398,8 @@ export const filterGames = (games: Game[], filters: GameFilterState): Game[] => 
         game.scheduledDate,
         game.scheduledTime,
         String(game.gamePoints),
+        game.deployment,
+        game.primaryMission,
         ...game.players.map((player) => player.name),
         ...game.players.map((player) => player.army.name)
       ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));

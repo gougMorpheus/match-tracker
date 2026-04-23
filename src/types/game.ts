@@ -95,6 +95,8 @@ export interface Game {
   gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;
+  deployment: string;
+  primaryMission: string;
   defenderPlayerId: PlayerId;
   startingPlayerId: PlayerId;
   currentPlayerId: PlayerId;
@@ -139,6 +141,8 @@ export interface CreateGameInput {
   gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;
+  deployment: string;
+  primaryMission: string;
   defenderSlot: "player1" | "player2";
   startingSlot: "player1" | "player2";
 }

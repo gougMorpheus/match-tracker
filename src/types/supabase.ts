@@ -22,6 +22,8 @@ export interface Database {
           player2_name: string;
           player2_army: string;
           player2_max_points: number;
+          deployment: string | null;
+          primary_mission: string | null;
           defender_player: 1 | 2 | null;
           starting_player: 1 | 2 | null;
           winner_player: 1 | 2 | null;
@@ -39,6 +41,8 @@ export interface Database {
           player2_name: string;
           player2_army: string;
           player2_max_points: number;
+          deployment?: string | null;
+          primary_mission?: string | null;
           defender_player?: 1 | 2 | null;
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
@@ -56,6 +60,8 @@ export interface Database {
           player2_name?: string;
           player2_army?: string;
           player2_max_points?: number;
+          deployment?: string | null;
+          primary_mission?: string | null;
           defender_player?: 1 | 2 | null;
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;

@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ARMY_OPTIONS } from "../data/armies";
+import { RememberedNameField } from "../components/RememberedNameField";
 import type { CreateGameInput } from "../types/game";
 import { Layout } from "../components/Layout";
 import { useGameStore } from "../store/GameStore";
@@ -19,6 +20,8 @@ const defaultFormState: CreateGameInput = {
   gamePoints: 2000,
   scheduledDate: toLocalDateInput(),
   scheduledTime: toLocalTimeInput(),
+  deployment: "",
+  primaryMission: "",
   defenderSlot: "player1",
   startingSlot: "player1"
 };
@@ -77,16 +80,13 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
 
         <section className="card stack">
           <h2>Spieler 1</h2>
-          <label className="field">
-            <span>Name</span>
-            <input
-              required
-              list="player-options"
-              value={formState.playerOneName}
-              onChange={(event) => updateField("playerOneName", event.target.value)}
-              disabled={isMutating}
-            />
-          </label>
+          <RememberedNameField
+            label="Name"
+            value={formState.playerOneName}
+            options={playerOptions}
+            disabled={isMutating}
+            onChange={(value) => updateField("playerOneName", value)}
+          />
           <label className="field">
             <span>Armee</span>
             <select
@@ -107,16 +107,13 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
 
         <section className="card stack">
           <h2>Spieler 2</h2>
-          <label className="field">
-            <span>Name</span>
-            <input
-              required
-              list="player-options"
-              value={formState.playerTwoName}
-              onChange={(event) => updateField("playerTwoName", event.target.value)}
-              disabled={isMutating}
-            />
-          </label>
+          <RememberedNameField
+            label="Name"
+            value={formState.playerTwoName}
+            options={playerOptions}
+            disabled={isMutating}
+            onChange={(value) => updateField("playerTwoName", value)}
+          />
           <label className="field">
             <span>Armee</span>
             <select
@@ -171,6 +168,22 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
               />
             </label>
           </div>
+          <label className="field">
+            <span>Aufstellung</span>
+            <input
+              value={formState.deployment}
+              onChange={(event) => updateField("deployment", event.target.value)}
+              disabled={isMutating}
+            />
+          </label>
+          <label className="field">
+            <span>Primaermission</span>
+            <input
+              value={formState.primaryMission}
+              onChange={(event) => updateField("primaryMission", event.target.value)}
+              disabled={isMutating}
+            />
+          </label>
 
           <div className="field">
             <span>Defender</span>
@@ -220,11 +233,6 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
         <button type="submit" className="primary-button primary-button--large" disabled={isMutating}>
           {isMutating ? "Speichere..." : "Spiel anlegen"}
         </button>
-        <datalist id="player-options">
-          {playerOptions.map((playerName) => (
-            <option key={playerName} value={playerName} />
-          ))}
-        </datalist>
       </form>
     </Layout>
   );

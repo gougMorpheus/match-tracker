@@ -5,8 +5,10 @@ import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
 import {
   createArmyAggregates,
+  createDeploymentLeaders,
   createInitialGameFilters,
   createMatchupAggregates,
+  createMissionLeaders,
   createPlayerAggregates,
   createRoundDurationAggregates,
   createStatsOverview,
@@ -21,14 +23,17 @@ interface StatsPageProps {
 }
 
 type StatsSectionKey = "overview" | "players" | "armies" | "rounds" | "records" | "matchups";
+type ExtendedStatsSectionKey = StatsSectionKey | "missions" | "deployments";
 
-const defaultOpenSections: Record<StatsSectionKey, boolean> = {
+const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
   overview: true,
   players: true,
   armies: false,
   rounds: false,
   records: true,
-  matchups: false
+  matchups: false,
+  missions: false,
+  deployments: false
 };
 
 export const StatsPage = ({ onBack }: StatsPageProps) => {
@@ -41,6 +46,8 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
   const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
   const playerAggregates = useMemo(() => createPlayerAggregates(filteredGames), [filteredGames]);
   const armyAggregates = useMemo(() => createArmyAggregates(filteredGames), [filteredGames]);
+  const missionLeaders = useMemo(() => createMissionLeaders(filteredGames), [filteredGames]);
+  const deploymentLeaders = useMemo(() => createDeploymentLeaders(filteredGames), [filteredGames]);
   const matchupAggregates = useMemo(() => createMatchupAggregates(filteredGames), [filteredGames]);
   const roundDurationAggregates = useMemo(() => createRoundDurationAggregates(filteredGames), [filteredGames]);
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
@@ -52,7 +59,7 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
     }));
   };
 
-  const toggleSection = (section: StatsSectionKey) => {
+  const toggleSection = (section: ExtendedStatsSectionKey) => {
     setOpenSections((current) => ({
       ...current,
       [section]: !current[section]
@@ -229,11 +236,71 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
                     </div>
                     <div className="stats-grid">
                       <StatCard label="W / L / T" value={`${player.wins} / ${player.losses} / ${player.ties}`} />
+                      <StatCard label="Win% when go first" value={`${player.winRateWhenGoFirst.toFixed(0)}%`} />
+                      <StatCard label="Win% when start first" value={`${player.winRateWhenStartFirst.toFixed(0)}%`} />
                       <StatCard label="Avg Primary" value={player.averagePrimary.toFixed(1)} />
                       <StatCard label="Avg Secondary" value={player.averageSecondary.toFixed(1)} />
                       <StatCard label="Avg Total" value={player.averageTotal.toFixed(1)} />
                       <StatCard label="Avg Dauer" value={formatDuration(player.averageDurationMs)} />
                       <StatCard label="Avg CP spent" value={player.averageSpentCp.toFixed(1)} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Primaermissionen"
+              helper="Wer hat auf welcher Mission die beste Winrate"
+              count={missionLeaders.length}
+              open={openSections.missions}
+              onToggle={() => toggleSection("missions")}
+            >
+              <div className="stack">
+                {missionLeaders.map((mission) => (
+                  <article key={mission.label} className="stats-row-card">
+                    <div>
+                      <strong>{mission.label}</strong>
+                      <p>{mission.playerName}</p>
+                    </div>
+                    <div className="stats-row-card__metrics">
+                      <div>
+                        <span>Win%</span>
+                        <strong>{mission.winRate.toFixed(0)}%</strong>
+                      </div>
+                      <div>
+                        <span>Spiele</span>
+                        <strong>{mission.games}</strong>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Aufstellungen"
+              helper="Wer performt auf welcher Aufstellung am besten"
+              count={deploymentLeaders.length}
+              open={openSections.deployments}
+              onToggle={() => toggleSection("deployments")}
+            >
+              <div className="stack">
+                {deploymentLeaders.map((deployment) => (
+                  <article key={deployment.label} className="stats-row-card">
+                    <div>
+                      <strong>{deployment.label}</strong>
+                      <p>{deployment.playerName}</p>
+                    </div>
+                    <div className="stats-row-card__metrics">
+                      <div>
+                        <span>Win%</span>
+                        <strong>{deployment.winRate.toFixed(0)}%</strong>
+                      </div>
+                      <div>
+                        <span>Spiele</span>
+                        <strong>{deployment.games}</strong>
+                      </div>
                     </div>
                   </article>
                 ))}

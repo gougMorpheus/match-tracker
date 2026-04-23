@@ -12,11 +12,16 @@ create table if not exists public.games (
   player2_name text not null,
   player2_army text not null,
   player2_max_points integer not null,
+  deployment text null,
+  primary_mission text null,
   defender_player smallint null check (defender_player in (1, 2)),
   starting_player smallint null check (starting_player in (1, 2)),
   winner_player smallint null check (winner_player in (1, 2)),
   notes text null
 );
+
+alter table public.games add column if not exists deployment text null;
+alter table public.games add column if not exists primary_mission text null;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

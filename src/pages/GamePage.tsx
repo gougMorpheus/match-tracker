@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Layout } from "../components/Layout";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
+import { RememberedNameField } from "../components/RememberedNameField";
 import { ARMY_OPTIONS } from "../data/armies";
 import { useGameStore } from "../store/GameStore";
 import type { CreateGameInput, Game, PlayerId } from "../types/game";
@@ -384,16 +385,13 @@ export const GamePage = ({ gameId }: GamePageProps) => {
           {detailsOpen && isEditingGame ? (
             <form className="stack" onSubmit={handleGameSave}>
               <section className="stack">
-                <label className="field">
-                  <span>Spieler 1</span>
-                  <input
-                    required
-                    list={`player-options-${game.id}`}
-                    value={gameForm.playerOneName}
-                    onChange={(editEvent) => updateGameField("playerOneName", editEvent.target.value)}
-                    disabled={isMutating}
-                  />
-                </label>
+                <RememberedNameField
+                  label="Spieler 1"
+                  value={gameForm.playerOneName}
+                  options={playerOptions}
+                  disabled={isMutating}
+                  onChange={(value) => updateGameField("playerOneName", value)}
+                />
                 <label className="field">
                   <span>Armee 1</span>
                   <select
@@ -410,16 +408,13 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                     ))}
                   </select>
                 </label>
-                <label className="field">
-                  <span>Spieler 2</span>
-                  <input
-                    required
-                    list={`player-options-${game.id}`}
-                    value={gameForm.playerTwoName}
-                    onChange={(editEvent) => updateGameField("playerTwoName", editEvent.target.value)}
-                    disabled={isMutating}
-                  />
-                </label>
+                <RememberedNameField
+                  label="Spieler 2"
+                  value={gameForm.playerTwoName}
+                  options={playerOptions}
+                  disabled={isMutating}
+                  onChange={(value) => updateGameField("playerTwoName", value)}
+                />
                 <label className="field">
                   <span>Armee 2</span>
                   <select
@@ -474,6 +469,22 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                   />
                 </label>
               </div>
+              <label className="field">
+                <span>Aufstellung</span>
+                <input
+                  value={gameForm.deployment}
+                  onChange={(editEvent) => updateGameField("deployment", editEvent.target.value)}
+                  disabled={isMutating}
+                />
+              </label>
+              <label className="field">
+                <span>Primaermission</span>
+                <input
+                  value={gameForm.primaryMission}
+                  onChange={(editEvent) => updateGameField("primaryMission", editEvent.target.value)}
+                  disabled={isMutating}
+                />
+              </label>
 
               <div className="field">
                 <span>Defender</span>
@@ -535,12 +546,6 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                   Abbrechen
                 </button>
               </div>
-
-              <datalist id={`player-options-${game.id}`}>
-                {playerOptions.map((playerName) => (
-                  <option key={playerName} value={playerName} />
-                ))}
-              </datalist>
             </form>
           ) : null}
 
@@ -563,6 +568,14 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               <div>
                 <span>Startspieler</span>
                 <strong>{game.startingPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}</strong>
+              </div>
+              <div>
+                <span>Aufstellung</span>
+                <strong>{game.deployment || "-"}</strong>
+              </div>
+              <div>
+                <span>Primaermission</span>
+                <strong>{game.primaryMission || "-"}</strong>
               </div>
             </div>
           ) : null}
@@ -632,7 +645,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                   type="button"
                   className="primary-button compact-button"
                   onClick={() => void advanceGame(game.id)}
-                  disabled={!isTimerRunning || isMutating}
+                  disabled={isMutating}
                 >
                   Weiter
                 </button>

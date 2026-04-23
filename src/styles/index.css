@@ -283,6 +283,28 @@ textarea {
   gap: 0.5rem;
 }
 
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.chip-button {
+  width: auto;
+  min-height: 34px;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(30, 41, 59, 0.85);
+  color: var(--text);
+}
+
+.chip-button.is-selected {
+  background: var(--accent-soft);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #d8f3ff;
+}
+
 .primary-button,
 .secondary-button,
 .danger-button,
