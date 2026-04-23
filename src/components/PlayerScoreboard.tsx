@@ -2,6 +2,8 @@ import type { Game, Player } from "../types/game";
 import type { ReactNode } from "react";
 import {
   getPlayerCommandPoints,
+  getPlayerCommandPointsGained,
+  getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
   getPlayerTotalScore
@@ -26,6 +28,8 @@ export const PlayerScoreboard = ({
   const secondary = getPlayerSecondaryTotal(game, player.id);
   const total = getPlayerTotalScore(game, player.id);
   const cp = getPlayerCommandPoints(game, player.id);
+  const cpGained = getPlayerCommandPointsGained(game, player.id);
+  const cpSpent = getPlayerCommandPointsSpent(game, player.id);
 
   return (
     <article className={`scoreboard ${emphasized ? "is-emphasized" : ""}`}>
@@ -41,8 +45,9 @@ export const PlayerScoreboard = ({
       </div>
       <div className="scoreboard__grid">
         <div>
-          <span>CP</span>
+          <span>CP Saldo</span>
           <strong>{cp}</strong>
+          <p>+{cpGained} / -{cpSpent}</p>
         </div>
         <div>
           <span>Primary</span>

@@ -380,6 +380,23 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
                     <p>{turnRecords.longestTurn.playerName} | {turnRecords.longestTurn.armyName}</p>
                     <p>{formatDateLabel(turnRecords.longestTurn.scheduledDate, turnRecords.longestTurn.scheduledTime)}</p>
                     <p>R{turnRecords.longestTurn.roundNumber} / Z{turnRecords.longestTurn.turnNumber}</p>
+                    <p className="record-card__scoreline">
+                      Punkte im Zug: {turnRecords.longestTurn.totalScore} | Secondary: {turnRecords.longestTurn.secondaryScore}
+                    </p>
+                    <div className="record-card__metrics">
+                      <div>
+                        <span>Secondary</span>
+                        <strong>{turnRecords.longestTurn.secondaryScore}</strong>
+                      </div>
+                      <div>
+                        <span>Primary</span>
+                        <strong>{turnRecords.longestTurn.primaryScore}</strong>
+                      </div>
+                      <div>
+                        <span>Gesamt</span>
+                        <strong>{turnRecords.longestTurn.totalScore}</strong>
+                      </div>
+                    </div>
                   </article>
                 ) : null}
                 {turnRecords.fastestTurn ? (
@@ -391,6 +408,23 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
                     <p>{turnRecords.fastestTurn.playerName} | {turnRecords.fastestTurn.armyName}</p>
                     <p>{formatDateLabel(turnRecords.fastestTurn.scheduledDate, turnRecords.fastestTurn.scheduledTime)}</p>
                     <p>R{turnRecords.fastestTurn.roundNumber} / Z{turnRecords.fastestTurn.turnNumber}</p>
+                    <p className="record-card__scoreline">
+                      Punkte im Zug: {turnRecords.fastestTurn.totalScore} | Secondary: {turnRecords.fastestTurn.secondaryScore}
+                    </p>
+                    <div className="record-card__metrics">
+                      <div>
+                        <span>Secondary</span>
+                        <strong>{turnRecords.fastestTurn.secondaryScore}</strong>
+                      </div>
+                      <div>
+                        <span>Primary</span>
+                        <strong>{turnRecords.fastestTurn.primaryScore}</strong>
+                      </div>
+                      <div>
+                        <span>Gesamt</span>
+                        <strong>{turnRecords.fastestTurn.totalScore}</strong>
+                      </div>
+                    </div>
                   </article>
                 ) : null}
               </div>

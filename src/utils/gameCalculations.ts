@@ -53,6 +53,12 @@ export const getPlayerCommandPoints = (game: Game, playerId: PlayerId): number =
   return gained - spent;
 };
 
+export const getPlayerCommandPointsGained = (game: Game, playerId: PlayerId): number =>
+  sumValues(getPlayerCommandPointEvents(game, playerId, "gained"));
+
+export const getPlayerCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
+  sumValues(getPlayerCommandPointEvents(game, playerId, "spent"));
+
 export const getTurnDurationMs = (turn: Turn): number =>
   (() => {
     const totalDuration = getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
@@ -219,6 +225,9 @@ export interface TurnRecord {
   roundNumber: number;
   turnNumber: number;
   durationMs: number;
+  primaryScore: number;
+  secondaryScore: number;
+  totalScore: number;
 }
 
 export interface ScenarioLeader {
@@ -565,7 +574,39 @@ export const getTurnRecords = (
             armyName: player.army.name,
             roundNumber: round.roundNumber,
             turnNumber: turn.turnNumber,
-            durationMs: getTurnDurationMs(turn)
+            durationMs: getTurnDurationMs(turn),
+            primaryScore: sumValues(
+              game.scoreEvents
+                .filter(
+                  (event) =>
+                    event.playerId === turn.playerId &&
+                    event.roundNumber === round.roundNumber &&
+                    event.turnNumber === turn.turnNumber &&
+                    event.scoreType === "primary"
+                )
+                .map((event) => ({ value: event.value }))
+            ),
+            secondaryScore: sumValues(
+              game.scoreEvents
+                .filter(
+                  (event) =>
+                    event.playerId === turn.playerId &&
+                    event.roundNumber === round.roundNumber &&
+                    event.turnNumber === turn.turnNumber &&
+                    event.scoreType === "secondary"
+                )
+                .map((event) => ({ value: event.value }))
+            ),
+            totalScore: sumValues(
+              game.scoreEvents
+                .filter(
+                  (event) =>
+                    event.playerId === turn.playerId &&
+                    event.roundNumber === round.roundNumber &&
+                    event.turnNumber === turn.turnNumber
+                )
+                .map((event) => ({ value: event.value }))
+            )
           } satisfies TurnRecord;
         })
         .filter((record): record is TurnRecord => Boolean(record))

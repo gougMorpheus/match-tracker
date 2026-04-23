@@ -382,8 +382,6 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             </div>
           </div>
 
-          {!detailsOpen ? <p className="muted-copy">Spieldetails sind ausgeblendet.</p> : null}
-
           {detailsOpen && isEditingGame ? (
             <form className="stack" onSubmit={handleGameSave}>
               <section className="stack">
@@ -472,19 +470,21 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                 </label>
               </div>
               <label className="field">
-                <span>Aufstellung</span>
+                <span>Aufstellung (optional)</span>
                 <input
                   value={gameForm.deployment}
                   onChange={(editEvent) => updateGameField("deployment", editEvent.target.value)}
                   disabled={isMutating}
+                  placeholder="Kann leer bleiben"
                 />
               </label>
               <label className="field">
-                <span>Primaermission</span>
+                <span>Primaermission (optional)</span>
                 <input
                   value={gameForm.primaryMission}
                   onChange={(editEvent) => updateGameField("primaryMission", editEvent.target.value)}
                   disabled={isMutating}
+                  placeholder="Kann leer bleiben"
                 />
               </label>
 

@@ -21,14 +21,14 @@ export const QuickAdjustControls = ({
   onScoreChange,
   onAddNote
 }: QuickAdjustControlsProps) => {
-  const [cpAmount, setCpAmount] = useState(1);
-  const [primaryAmount, setPrimaryAmount] = useState(5);
-  const [secondaryAmount, setSecondaryAmount] = useState(5);
+  const [cpAmount, setCpAmount] = useState(0);
+  const [primaryAmount, setPrimaryAmount] = useState(0);
+  const [secondaryAmount, setSecondaryAmount] = useState(0);
 
   return (
     <div className="quick-controls">
       <div className="quick-controls__row">
-        <span>CP</span>
+        <span>CP Earn / Spend</span>
         <div className="quick-controls__actions">
           <button
             type="button"
@@ -36,16 +36,16 @@ export const QuickAdjustControls = ({
             disabled={isSubmitting}
             onClick={() => void onCommandPointChange(player.id, "minus", cpAmount)}
           >
-            -{cpAmount}
+            Spend {cpAmount}
           </button>
           <input
             className="step-input"
             type="number"
-            min={1}
+            min={0}
             inputMode="numeric"
             value={cpAmount}
             disabled={isSubmitting}
-            onChange={(event) => setCpAmount(Math.max(1, Number(event.target.value) || 1))}
+            onChange={(event) => setCpAmount(Math.max(0, Number(event.target.value) || 0))}
           />
           <button
             type="button"
@@ -53,7 +53,7 @@ export const QuickAdjustControls = ({
             disabled={isSubmitting}
             onClick={() => void onCommandPointChange(player.id, "plus", cpAmount)}
           >
-            +{cpAmount}
+            Earn {cpAmount}
           </button>
         </div>
       </div>
@@ -72,11 +72,11 @@ export const QuickAdjustControls = ({
           <input
             className="step-input"
             type="number"
-            min={1}
+            min={0}
             inputMode="numeric"
             value={primaryAmount}
             disabled={isSubmitting}
-            onChange={(event) => setPrimaryAmount(Math.max(1, Number(event.target.value) || 1))}
+            onChange={(event) => setPrimaryAmount(Math.max(0, Number(event.target.value) || 0))}
           />
           <button
             type="button"
@@ -103,11 +103,11 @@ export const QuickAdjustControls = ({
           <input
             className="step-input"
             type="number"
-            min={1}
+            min={0}
             inputMode="numeric"
             value={secondaryAmount}
             disabled={isSubmitting}
-            onChange={(event) => setSecondaryAmount(Math.max(1, Number(event.target.value) || 1))}
+            onChange={(event) => setSecondaryAmount(Math.max(0, Number(event.target.value) || 0))}
           />
           <button
             type="button"

@@ -289,6 +289,16 @@ textarea {
   gap: 0.45rem;
 }
 
+.remembered-name-picker {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.remembered-name-picker__label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .chip-button {
   width: auto;
   min-height: 34px;
@@ -652,6 +662,11 @@ textarea {
   margin: 0.3rem 0 0;
 }
 
+.record-card__scoreline {
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
 .collapsible-section {
   gap: 0.8rem;
 }
@@ -729,6 +744,29 @@ textarea {
   padding: 1rem;
 }
 
+.record-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.record-card__metrics div {
+  padding: 0.65rem 0.7rem;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.record-card__metrics div:first-child {
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(56, 189, 248, 0.14);
+}
+
+.record-card__metrics strong {
+  display: block;
+  margin-top: 0.18rem;
+}
+
 .record-card--accent {
   background: linear-gradient(180deg, rgba(52, 211, 153, 0.16), rgba(15, 23, 42, 0.95));
 }
@@ -757,6 +795,10 @@ textarea {
 
   .game-page .scoreboard__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .record-card__metrics {
+    grid-template-columns: 1fr;
   }
 }
 

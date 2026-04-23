@@ -169,19 +169,21 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
             </label>
           </div>
           <label className="field">
-            <span>Aufstellung</span>
+            <span>Aufstellung (optional)</span>
             <input
               value={formState.deployment}
               onChange={(event) => updateField("deployment", event.target.value)}
               disabled={isMutating}
+              placeholder="Kann leer bleiben"
             />
           </label>
           <label className="field">
-            <span>Primaermission</span>
+            <span>Primaermission (optional)</span>
             <input
               value={formState.primaryMission}
               onChange={(event) => updateField("primaryMission", event.target.value)}
               disabled={isMutating}
+              placeholder="Kann leer bleiben"
             />
           </label>
 
