@@ -54,9 +54,12 @@ interface GameStoreValue {
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
   advanceGame: (gameId: string) => Promise<void>;
+  rewindLastTurn: (gameId: string) => Promise<void>;
   pauseActiveTimer: (gameId: string) => Promise<void>;
   startGameTimer: (gameId: string) => Promise<void>;
+  reopenGame: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
+  deleteGameEvent: (gameId: string, eventId: string) => Promise<void>;
   finishGame: (gameId: string) => Promise<void>;
   deleteGame: (gameId: string) => Promise<void>;
   importGames: (games: Game[]) => Promise<void>;
@@ -442,6 +445,73 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [getGame, refreshSingleGame, runMutation]
   );
 
+  const rewindLastTurn = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed") {
+          return;
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+        if (!latestRound || !latestTurn) {
+          return;
+        }
+
+        const eventIds = new Set<string>();
+
+        game.commandPointEvents.forEach((event) => {
+          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
+            eventIds.add(event.id);
+          }
+        });
+
+        game.scoreEvents.forEach((event) => {
+          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
+            eventIds.add(event.id);
+          }
+        });
+
+        game.noteEvents.forEach((event) => {
+          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
+            eventIds.add(event.id);
+          }
+        });
+
+        game.timeEvents.forEach((event) => {
+          if (
+            event.roundNumber === latestTurn.roundNumber &&
+            event.turnNumber === latestTurn.turnNumber
+          ) {
+            eventIds.add(event.id);
+          }
+
+          if (
+            event.action === "round-end" &&
+            event.roundNumber === latestRound.roundNumber
+          ) {
+            eventIds.add(event.id);
+          }
+
+          if (
+            latestRound.turns.length === 1 &&
+            event.action === "round-start" &&
+            event.roundNumber === latestRound.roundNumber
+          ) {
+            eventIds.add(event.id);
+          }
+        });
+
+        for (const eventId of eventIds) {
+          await gamesRepository.deleteEvent(eventId);
+        }
+
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
   const pauseActiveTimer = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
@@ -539,10 +609,44 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [getGame, refreshSingleGame, runMutation]
   );
 
+  const reopenGame = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status !== "completed") {
+          return;
+        }
+
+        const latestGameEndEvent = [...game.timeEvents]
+          .filter((event) => event.action === "game-end")
+          .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
+        if (latestGameEndEvent) {
+          await gamesRepository.deleteEvent(latestGameEndEvent.id);
+        }
+
+        await gamesRepository.updateGame(gameId, {
+          ended_at: null,
+          winner_player: null
+        });
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
   const updateGameEvent = useCallback(
     async (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) =>
       runMutation(async () => {
         await gamesRepository.updateEvent(eventId, patch);
+        await refreshSingleGame(gameId);
+      }),
+    [refreshSingleGame, runMutation]
+  );
+
+  const deleteGameEvent = useCallback(
+    async (gameId: string, eventId: string) =>
+      runMutation(async () => {
+        await gamesRepository.deleteEvent(eventId);
         await refreshSingleGame(gameId);
       }),
     [refreshSingleGame, runMutation]
@@ -596,9 +700,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       addCommandPointEvent,
       addNoteEvent,
       advanceGame,
+      rewindLastTurn,
       pauseActiveTimer,
       startGameTimer,
+      reopenGame,
       updateGameEvent,
+      deleteGameEvent,
       finishGame,
       deleteGame,
       importGames,
@@ -613,6 +720,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       clearError,
       createGame,
       deleteGame,
+      deleteGameEvent,
       errorMessage,
       exportGames,
       finishGame,
@@ -622,6 +730,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       isLoading,
       isMutating,
       pauseActiveTimer,
+      reopenGame,
+      rewindLastTurn,
       startGameTimer,
       updateGameEvent,
       updateGameDetails,

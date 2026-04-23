@@ -609,6 +609,26 @@ textarea {
   gap: 0.6rem;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(11, 17, 32, 0.72);
+  backdrop-filter: blur(8px);
+  z-index: 30;
+}
+
+.modal-card {
+  width: min(100%, 460px);
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
 .bottom-nav {
   position: fixed;
   left: 0;

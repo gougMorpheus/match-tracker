@@ -11,7 +11,7 @@ interface QuickAdjustControlsProps {
     direction: "plus" | "minus",
     amount: number
   ) => Promise<void>;
-  onSaveNote: (playerId: string, note: string) => Promise<void>;
+  onAddNote: (playerId: string) => void;
 }
 
 export const QuickAdjustControls = ({
@@ -19,12 +19,11 @@ export const QuickAdjustControls = ({
   isSubmitting = false,
   onCommandPointChange,
   onScoreChange,
-  onSaveNote
+  onAddNote
 }: QuickAdjustControlsProps) => {
   const [cpAmount, setCpAmount] = useState(1);
   const [primaryAmount, setPrimaryAmount] = useState(5);
   const [secondaryAmount, setSecondaryAmount] = useState(5);
-  const [note, setNote] = useState("");
 
   return (
     <div className="quick-controls">
@@ -120,27 +119,14 @@ export const QuickAdjustControls = ({
           </button>
         </div>
       </div>
-
-      <div className="quick-controls__note">
-        <textarea
-          rows={2}
-          placeholder={`${player.name}: Notiz`}
-          value={note}
-          disabled={isSubmitting}
-          onChange={(event) => setNote(event.target.value)}
-        />
-        <button
-          type="button"
-          className="mini-button mini-button--accent"
-          disabled={isSubmitting || !note.trim()}
-          onClick={async () => {
-            await onSaveNote(player.id, note);
-            setNote("");
-          }}
-        >
-          Notiz speichern
-        </button>
-      </div>
+      <button
+        type="button"
+        className="mini-button mini-button--accent"
+        disabled={isSubmitting}
+        onClick={() => onAddNote(player.id)}
+      >
+        Notiz hinzufuegen
+      </button>
     </div>
   );
 };

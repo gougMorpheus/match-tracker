@@ -4,7 +4,7 @@ import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { ARMY_OPTIONS } from "../data/armies";
 import { useGameStore } from "../store/GameStore";
-import type { CreateGameInput, Game } from "../types/game";
+import type { CreateGameInput, Game, PlayerId } from "../types/game";
 import {
   getCurrentRoundNumber,
   getCurrentTurnNumber,
@@ -47,7 +47,7 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
 });
 
-export const GamePage = ({ gameId, onBack }: GamePageProps) => {
+export const GamePage = ({ gameId }: GamePageProps) => {
   const {
     games,
     getGame,
@@ -56,13 +56,16 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     errorMessage,
     clearError,
     advanceGame,
+    rewindLastTurn,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
     updateGameEvent,
+    deleteGameEvent,
     updateGameDetails,
     pauseActiveTimer,
     startGameTimer,
+    reopenGame,
     finishGame,
     deleteGame
   } = useGameStore();
@@ -71,6 +74,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const [editingValue, setEditingValue] = useState("");
   const [editingNote, setEditingNote] = useState("");
   const [isEditingGame, setIsEditingGame] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [noteDialogPlayerId, setNoteDialogPlayerId] = useState<PlayerId | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
   const game = getGame(gameId);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
@@ -126,14 +132,13 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               turnNumber: event.turnNumber,
               createdAt: event.createdAt
             }))
-          ]
-            .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+          ].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         : [],
     [game]
   );
 
   useEffect(() => {
-    if (!game || game.status === "completed" || !game.startedAt) {
+    if (!game || !game.startedAt) {
       return;
     }
 
@@ -154,7 +159,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   }, [game]);
 
   if (!game && isLoading) {
-    return <Layout title="Live Tracker" subtitle="Spiel wird geladen" onBack={onBack} />;
+    return <Layout title="Live Tracker" subtitle="Spiel wird geladen" />;
   }
 
   if (!game || !gameForm) {
@@ -162,18 +167,23 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
       <Layout
         title="Spiel nicht gefunden"
         subtitle={errorMessage ?? "Das Match ist nicht verfuegbar oder konnte nicht geladen werden."}
-        onBack={onBack}
       />
     );
   }
 
+  const latestRound = game.rounds[game.rounds.length - 1];
   const activePlayerId =
     latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt
       ? latestTurn.playerId
       : game.currentPlayerId;
+  const isClosed = game.status === "completed";
   const isPaused = isTurnPaused(latestTurn);
   const hasActiveTurn = Boolean(latestTurn?.timing.startedAt && !latestTurn.timing.endedAt);
-  const latestRound = game.rounds[game.rounds.length - 1];
+  const isTimerRunning = !isClosed && hasActiveTurn && !isPaused;
+  const timerStatusLabel = isTimerRunning ? "Laeuft" : "Gestoppt";
+  const selectedNotePlayer = noteDialogPlayerId
+    ? game.players.find((player) => player.id === noteDialogPlayerId)
+    : undefined;
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
@@ -190,13 +200,22 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   };
 
   const openGameEditor = async () => {
-    if (hasActiveTurn && !isPaused) {
+    if (isClosed) {
+      return;
+    }
+
+    if (isTimerRunning) {
       await pauseActiveTimer(game.id);
     }
+
+    setDetailsOpen(true);
     setIsEditingGame(true);
   };
 
-  const openEditor = (event: EditableEventItem) => {
+  const openEditor = async (event: EditableEventItem) => {
+    if (isTimerRunning) {
+      await pauseActiveTimer(game.id);
+    }
     setEditingEventId(event.id);
     setEditingValue(typeof event.value === "number" ? String(event.value) : "");
     setEditingNote(event.note ?? "");
@@ -235,23 +254,54 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     }
 
     await deleteGame(game.id);
-    onBack();
+    window.location.hash = "/games";
+  };
+
+  const handleDeleteEvent = async (event: EditableEventItem) => {
+    if (!window.confirm("Eintrag wirklich loeschen?")) {
+      return;
+    }
+
+    await deleteGameEvent(game.id, event.id);
+    if (editingEventId === event.id) {
+      closeEditor();
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!noteDialogPlayerId || !noteDraft.trim()) {
+      return;
+    }
+
+    await addNoteEvent({
+      gameId,
+      playerId: noteDialogPlayerId,
+      note: noteDraft
+    });
+    setNoteDialogPlayerId(null);
+    setNoteDraft("");
+  };
+
+  const handleReopenGame = async () => {
+    await reopenGame(game.id);
   };
 
   return (
     <Layout
       title="Live Tracker"
       subtitle={formatDateLabel(game.scheduledDate, game.scheduledTime)}
-      onBack={onBack}
-      actions={<span className={`status-pill status-pill--${game.status}`}>{game.status}</span>}
+      actions={
+        <div className="header-actions">
+          <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
+            Spiel: {isClosed ? "geschlossen" : "offen"}
+          </span>
+          <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
+            Timer: {timerStatusLabel}
+          </span>
+        </div>
+      }
     >
       <section className="stack">
-        <div className="button-row button-row--compact">
-          <button type="button" className="ghost-button compact-button" onClick={onBack}>
-            Zurueck
-          </button>
-        </div>
-
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">
@@ -267,6 +317,14 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         ) : null}
 
         <article className="tracker-summary">
+          <div>
+            <span>Spielstatus</span>
+            <strong>{isClosed ? "Geschlossen" : "Offen"}</strong>
+          </div>
+          <div>
+            <span>Timer</span>
+            <strong>{timerStatusLabel}</strong>
+          </div>
           <div>
             <span>Runde</span>
             <strong>{getCurrentRoundNumber(game)}</strong>
@@ -300,19 +358,30 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         <section className="card stack">
           <div className="list-row">
             <h2>Spieldetails</h2>
-            {!isEditingGame ? (
+            <div className="button-row button-row--compact">
               <button
                 type="button"
                 className="ghost-button compact-button"
-                onClick={() => void openGameEditor()}
-                disabled={isMutating}
+                onClick={() => setDetailsOpen((current) => !current)}
               >
-                Bearbeiten
+                {detailsOpen ? "Ausblenden" : "Anzeigen"}
               </button>
-            ) : null}
+              {!isEditingGame && !isClosed ? (
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => void openGameEditor()}
+                  disabled={isMutating}
+                >
+                  Bearbeiten
+                </button>
+              ) : null}
+            </div>
           </div>
 
-          {isEditingGame ? (
+          {!detailsOpen ? <p className="muted-copy">Spieldetails sind ausgeblendet.</p> : null}
+
+          {detailsOpen && isEditingGame ? (
             <form className="stack" onSubmit={handleGameSave}>
               <section className="stack">
                 <label className="field">
@@ -473,7 +542,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                 ))}
               </datalist>
             </form>
-          ) : (
+          ) : null}
+
+          {detailsOpen && !isEditingGame ? (
             <div className="scoreboard__grid">
               <div>
                 <span>Spieler 1</span>
@@ -494,7 +565,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                 <strong>{game.startingPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}</strong>
               </div>
             </div>
-          )}
+          ) : null}
         </section>
 
         <div className="stack">
@@ -508,7 +579,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               controls={
                 <QuickAdjustControls
                   player={player}
-                  isSubmitting={isMutating}
+                  isSubmitting={isMutating || isClosed}
                   onCommandPointChange={async (playerId, direction, amount) => {
                     await addCommandPointEvent({
                       gameId,
@@ -525,12 +596,17 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                       scoreType
                     });
                   }}
-                  onSaveNote={async (playerId, note) => {
-                    await addNoteEvent({
-                      gameId,
-                      playerId,
-                      note
-                    });
+                  onAddNote={(playerId) => {
+                    if (isClosed) {
+                      return;
+                    }
+
+                    void (async () => {
+                      if (isTimerRunning) {
+                        await pauseActiveTimer(game.id);
+                      }
+                      setNoteDialogPlayerId(playerId);
+                    })();
                   }}
                 />
               }
@@ -541,32 +617,53 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         <section className="card stack">
           <h2>Spielsteuerung</h2>
           <div className="button-grid button-grid--tracker">
-            <button
-              type="button"
-              className="primary-button primary-button--large"
-              onClick={() => void advanceGame(game.id)}
-              disabled={game.status === "completed" || isMutating}
-            >
-              Weiter
-            </button>
-            <button
-              type="button"
-              className="secondary-button compact-button"
-              onClick={() =>
-                void (isPaused ? startGameTimer(game.id) : pauseActiveTimer(game.id))
-              }
-              disabled={game.status === "completed" || isMutating || !hasActiveTurn}
-            >
-              {isPaused ? "Timer starten" : "Timer stoppen"}
-            </button>
-            <button
-              type="button"
-              className="danger-button compact-button"
-              onClick={() => void finishGame(game.id)}
-              disabled={game.status === "completed" || isMutating}
-            >
-              Spiel beenden
-            </button>
+            {isClosed ? (
+              <button
+                type="button"
+                className="primary-button compact-button"
+                onClick={() => void handleReopenGame()}
+                disabled={isMutating}
+              >
+                Spiel wieder eroeffnen
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  onClick={() => void advanceGame(game.id)}
+                  disabled={!isTimerRunning || isMutating}
+                >
+                  Weiter
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  onClick={() =>
+                    void (isTimerRunning ? pauseActiveTimer(game.id) : startGameTimer(game.id))
+                  }
+                  disabled={isMutating}
+                >
+                  {isTimerRunning ? "Timer stoppen" : "Timer starten"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => void rewindLastTurn(game.id)}
+                  disabled={isMutating || !latestTurn}
+                >
+                  Zug zurueck
+                </button>
+                <button
+                  type="button"
+                  className="danger-button compact-button"
+                  onClick={() => void finishGame(game.id)}
+                  disabled={isMutating}
+                >
+                  Spiel beenden
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="danger-button compact-button"
@@ -606,7 +703,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         <section className="card stack">
           <div className="list-row">
             <h2>Eintraege</h2>
-            <span>editierbar</span>
+            <span>{isClosed ? "geschlossen" : "editierbar"}</span>
           </div>
           {editableEvents.length ? (
             editableEvents.map((event) => (
@@ -618,14 +715,24 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                       {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="ghost-button compact-button"
-                    disabled={isMutating}
-                    onClick={() => openEditor(event)}
-                  >
-                    Bearbeiten
-                  </button>
+                  <div className="button-row button-row--compact">
+                    <button
+                      type="button"
+                      className="ghost-button compact-button"
+                      disabled={isMutating || isClosed}
+                      onClick={() => void openEditor(event)}
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button compact-button"
+                      disabled={isMutating || isClosed}
+                      onClick={() => void handleDeleteEvent(event)}
+                    >
+                      Loeschen
+                    </button>
+                  </div>
                 </div>
 
                 {editingEventId === event.id ? (
@@ -677,6 +784,46 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           )}
         </section>
       </section>
+
+      {noteDialogPlayerId ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div>
+                <h2>Notiz hinzufuegen</h2>
+                <p className="muted-copy">{selectedNotePlayer?.name ?? "Spieler"}</p>
+              </div>
+              <textarea
+                rows={4}
+                value={noteDraft}
+                disabled={isMutating}
+                onChange={(event) => setNoteDraft(event.target.value)}
+              />
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  disabled={isMutating || !noteDraft.trim()}
+                  onClick={() => void handleAddNote()}
+                >
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => {
+                    setNoteDialogPlayerId(null);
+                    setNoteDraft("");
+                  }}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Layout>
   );
 };

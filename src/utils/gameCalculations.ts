@@ -69,7 +69,7 @@ export const getRoundDurationMs = (round: Round): number => {
   }
 
   if (round.startedAt && !round.endedAt) {
-    return getDurationMs(round.startedAt, new Date().toISOString());
+    return round.turns.reduce((total, turn) => total + getTurnDurationMs(turn), 0);
   }
 
   return round.turns.reduce((total, turn) => total + getTurnDurationMs(turn), 0);
@@ -77,11 +77,11 @@ export const getRoundDurationMs = (round: Round): number => {
 
 export const getGameDurationMs = (game: Game): number => {
   if (game.startedAt && game.endedAt) {
-    return getDurationMs(game.startedAt, game.endedAt);
+    return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
   }
 
   if (game.startedAt && !game.endedAt) {
-    return getDurationMs(game.startedAt, new Date().toISOString());
+    return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
   }
 
   return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
