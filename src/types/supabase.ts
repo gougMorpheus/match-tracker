@@ -1,3 +1,11 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export interface Database {
   public: {
     Tables: {
@@ -53,6 +61,7 @@ export interface Database {
           winner_player?: 1 | 2 | null;
           notes?: string | null;
         };
+        Relationships: [];
       };
       events: {
         Row: {
@@ -91,7 +100,20 @@ export interface Database {
           note?: string | null;
           occurred_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: "events_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: false;
+            referencedRelation: "games";
+            referencedColumns: ["id"];
+          }
+        ];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }
