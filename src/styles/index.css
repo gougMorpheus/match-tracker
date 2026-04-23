@@ -218,6 +218,20 @@ textarea {
   flex-wrap: wrap;
 }
 
+.game-status-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.game-status-strip .status-pill {
+  width: 100%;
+  min-height: 38px;
+  padding: 0.45rem 0.55rem;
+  text-align: center;
+}
+
 .scoreboard__grid,
 .tracker-summary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -398,6 +412,27 @@ textarea {
 
 .tracker-summary {
   padding: 1rem;
+}
+
+.game-page .tracker-summary {
+  gap: 0.55rem;
+  padding: 0.85rem;
+}
+
+.game-page .tracker-summary div,
+.game-page .scoreboard__grid div {
+  padding: 0.65rem;
+}
+
+.game-page .tracker-summary strong,
+.game-page .scoreboard__grid strong {
+  font-size: 1.1rem;
+}
+
+.game-page .tracker-summary span,
+.game-page .scoreboard__grid span,
+.game-page .scoreboard__grid p {
+  font-size: 0.9rem;
 }
 
 .button-grid--tracker {
@@ -675,6 +710,11 @@ textarea {
 
   .stats-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .game-status-strip {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+    width: auto;
   }
 
   .stats-hero,

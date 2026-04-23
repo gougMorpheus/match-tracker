@@ -291,7 +291,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
       title="Live Tracker"
       subtitle={formatDateLabel(game.scheduledDate, game.scheduledTime)}
       actions={
-        <div className="header-actions">
+        <div className="game-status-strip">
           <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
             Spiel: {isClosed ? "geschlossen" : "offen"}
           </span>
@@ -301,7 +301,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
         </div>
       }
     >
-      <section className="stack">
+      <section className="stack game-page">
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">
