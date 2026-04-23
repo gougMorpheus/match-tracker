@@ -44,6 +44,8 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   gamePoints: game.gamePoints,
   scheduledDate: game.scheduledDate,
   scheduledTime: game.scheduledTime,
+  deployment: game.deployment,
+  primaryMission: game.primaryMission,
   defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : "player2",
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
 });
