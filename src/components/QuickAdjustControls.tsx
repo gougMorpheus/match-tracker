@@ -4,6 +4,7 @@ import type { Player } from "../types/game";
 interface QuickAdjustControlsProps {
   player: Player;
   isSubmitting?: boolean;
+  canSpendCommandPoints?: boolean;
   onCommandPointChange: (playerId: string, direction: "plus" | "minus", amount: number) => Promise<void>;
   onScoreChange: (
     playerId: string,
@@ -20,6 +21,7 @@ const SCORE_AMOUNT_OPTIONS = [0, 1, 2, 3, 4, 5, 10, 15, 20];
 export const QuickAdjustControls = ({
   player,
   isSubmitting = false,
+  canSpendCommandPoints = true,
   onCommandPointChange,
   onScoreChange,
   onAddNote
@@ -36,7 +38,7 @@ export const QuickAdjustControls = ({
           <button
             type="button"
             className="mini-button"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !canSpendCommandPoints}
             onClick={() => void onCommandPointChange(player.id, "minus", cpAmount)}
           >
             Spend {cpAmount}

@@ -125,6 +125,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [games]
   );
 
+  const getActiveActionPlayerId = useCallback((game: Game): PlayerId => {
+    const latestTurn = getLatestTurn(game);
+    if (latestTurn?.timing.startedAt && !latestTurn.timing.endedAt) {
+      return latestTurn.playerId;
+    }
+
+    return game.currentPlayerId;
+  }, []);
+
   const refreshSingleGame = useCallback(async (gameId: string) => {
     const freshGame = await gamesRepository.getGameById(gameId);
     setGames((currentGames) => {
@@ -212,6 +221,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           throw new Error("Spiel nicht gefunden.");
         }
 
+        if (cpType === "spent" && playerId !== getActiveActionPlayerId(game)) {
+          throw new Error("CP koennen nur vom aktiven Spieler im aktuellen Zug ausgegeben werden.");
+        }
+
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
         await gamesRepository.addEvent(
@@ -226,7 +239,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         );
         await refreshSingleGame(gameId);
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [getActiveActionPlayerId, getGame, refreshSingleGame, runMutation]
   );
 
   const addNoteEvent = useCallback(

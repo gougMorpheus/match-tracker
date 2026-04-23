@@ -595,6 +595,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                 <QuickAdjustControls
                   player={player}
                   isSubmitting={isMutating || isClosed}
+                  canSpendCommandPoints={activePlayerId === player.id}
                   onCommandPointChange={async (playerId, direction, amount) => {
                     await addCommandPointEvent({
                       gameId,
