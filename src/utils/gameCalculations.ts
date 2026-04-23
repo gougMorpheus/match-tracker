@@ -201,6 +201,24 @@ export interface MatchupAggregate {
   averageScoreDifference: number;
 }
 
+export interface RoundDurationAggregate {
+  roundNumber: number;
+  games: number;
+  averageDurationMs: number;
+  maxDurationMs: number;
+}
+
+export interface TurnRecord {
+  gameId: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  playerName: string;
+  armyName: string;
+  roundNumber: number;
+  turnNumber: number;
+  durationMs: number;
+}
+
 export interface GameFilterState {
   query: string;
   playerName: string;
@@ -414,4 +432,69 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
         : 0
     }))
     .sort((left, right) => right.games - left.games || left.label.localeCompare(right.label));
+};
+
+export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggregate[] => {
+  const grouped = new Map<number, number[]>();
+
+  games.forEach((game) => {
+    game.rounds.forEach((round) => {
+      const durations = grouped.get(round.roundNumber) ?? [];
+      durations.push(getRoundDurationMs(round));
+      grouped.set(round.roundNumber, durations);
+    });
+  });
+
+  return Array.from(grouped.entries())
+    .map(([roundNumber, durations]) => ({
+      roundNumber,
+      games: durations.length,
+      averageDurationMs: durations.length
+        ? sumValues(durations.map((value) => ({ value }))) / durations.length
+        : 0,
+      maxDurationMs: durations.length ? Math.max(...durations) : 0
+    }))
+    .sort((left, right) => left.roundNumber - right.roundNumber);
+};
+
+export const getTurnRecords = (
+  games: Game[]
+): { longestTurn: TurnRecord | null; fastestTurn: TurnRecord | null } => {
+  const turnRecords = games.flatMap((game) =>
+    game.rounds.flatMap((round) =>
+      round.turns
+        .map((turn) => {
+          const player = game.players.find((entry) => entry.id === turn.playerId);
+          if (!player || !turn.timing.startedAt) {
+            return null;
+          }
+
+          return {
+            gameId: game.id,
+            scheduledDate: game.scheduledDate,
+            scheduledTime: game.scheduledTime,
+            playerName: player.name,
+            armyName: player.army.name,
+            roundNumber: round.roundNumber,
+            turnNumber: turn.turnNumber,
+            durationMs: getTurnDurationMs(turn)
+          } satisfies TurnRecord;
+        })
+        .filter((record): record is TurnRecord => Boolean(record))
+    )
+  );
+
+  if (!turnRecords.length) {
+    return {
+      longestTurn: null,
+      fastestTurn: null
+    };
+  }
+
+  const sortedByDuration = [...turnRecords].sort((left, right) => left.durationMs - right.durationMs);
+
+  return {
+    fastestTurn: sortedByDuration[0] ?? null,
+    longestTurn: sortedByDuration[sortedByDuration.length - 1] ?? null
+  };
 };

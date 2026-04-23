@@ -7,11 +7,13 @@ import {
   createInitialGameFilters,
   createMatchupAggregates,
   createPlayerAggregates,
+  createRoundDurationAggregates,
   createStatsOverview,
   filterGames,
+  getTurnRecords,
   getFilterOptions
 } from "../utils/gameCalculations";
-import { formatDuration } from "../utils/time";
+import { formatDateLabel, formatDuration } from "../utils/time";
 
 interface StatsPageProps {
   onBack: () => void;
@@ -27,6 +29,8 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
   const playerAggregates = useMemo(() => createPlayerAggregates(filteredGames), [filteredGames]);
   const armyAggregates = useMemo(() => createArmyAggregates(filteredGames), [filteredGames]);
   const matchupAggregates = useMemo(() => createMatchupAggregates(filteredGames), [filteredGames]);
+  const roundDurationAggregates = useMemo(() => createRoundDurationAggregates(filteredGames), [filteredGames]);
+  const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
 
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
     setFilters((current) => ({
@@ -204,6 +208,70 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
                   </div>
                 </article>
               ))}
+            </section>
+
+            <section className="stack">
+              <div className="list-row">
+                <h2>Rundenzeiten</h2>
+                <span>{roundDurationAggregates.length}</span>
+              </div>
+              {roundDurationAggregates.map((round) => (
+                <article key={round.roundNumber} className="card stack">
+                  <div className="list-row">
+                    <strong>Runde {round.roundNumber}</strong>
+                    <span>{round.games} Spiele</span>
+                  </div>
+                  <div className="stats-grid">
+                    <StatCard label="Avg Runde" value={formatDuration(round.averageDurationMs)} />
+                    <StatCard label="Max Runde" value={formatDuration(round.maxDurationMs)} />
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            <section className="stack">
+              <div className="list-row">
+                <h2>Zugrekorde</h2>
+                <span>inkl. Datum</span>
+              </div>
+              {turnRecords.longestTurn ? (
+                <article className="card stack">
+                  <div className="list-row">
+                    <strong>Laengster Zug</strong>
+                    <span>{formatDuration(turnRecords.longestTurn.durationMs)}</span>
+                  </div>
+                  <div className="stats-grid">
+                    <StatCard label="Spieler" value={turnRecords.longestTurn.playerName} helper={turnRecords.longestTurn.armyName} />
+                    <StatCard
+                      label="Datum"
+                      value={formatDateLabel(turnRecords.longestTurn.scheduledDate, turnRecords.longestTurn.scheduledTime)}
+                    />
+                    <StatCard
+                      label="Runde / Zug"
+                      value={`R${turnRecords.longestTurn.roundNumber} / Z${turnRecords.longestTurn.turnNumber}`}
+                    />
+                  </div>
+                </article>
+              ) : null}
+              {turnRecords.fastestTurn ? (
+                <article className="card stack">
+                  <div className="list-row">
+                    <strong>Schnellster Zug</strong>
+                    <span>{formatDuration(turnRecords.fastestTurn.durationMs)}</span>
+                  </div>
+                  <div className="stats-grid">
+                    <StatCard label="Spieler" value={turnRecords.fastestTurn.playerName} helper={turnRecords.fastestTurn.armyName} />
+                    <StatCard
+                      label="Datum"
+                      value={formatDateLabel(turnRecords.fastestTurn.scheduledDate, turnRecords.fastestTurn.scheduledTime)}
+                    />
+                    <StatCard
+                      label="Runde / Zug"
+                      value={`R${turnRecords.fastestTurn.roundNumber} / Z${turnRecords.fastestTurn.turnNumber}`}
+                    />
+                  </div>
+                </article>
+              ) : null}
             </section>
 
             <section className="stack">
