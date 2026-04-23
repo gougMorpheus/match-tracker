@@ -14,6 +14,9 @@ interface QuickAdjustControlsProps {
   onAddNote: (playerId: string) => void;
 }
 
+const CP_AMOUNT_OPTIONS = [0, 1, 2, 3, 4, 5];
+const SCORE_AMOUNT_OPTIONS = [0, 1, 2, 3, 4, 5, 10, 15, 20];
+
 export const QuickAdjustControls = ({
   player,
   isSubmitting = false,
@@ -38,15 +41,18 @@ export const QuickAdjustControls = ({
           >
             Spend {cpAmount}
           </button>
-          <input
+          <select
             className="step-input"
-            type="number"
-            min={0}
-            inputMode="numeric"
             value={cpAmount}
             disabled={isSubmitting}
-            onChange={(event) => setCpAmount(Math.max(0, Number(event.target.value) || 0))}
-          />
+            onChange={(event) => setCpAmount(Number(event.target.value))}
+          >
+            {CP_AMOUNT_OPTIONS.map((amount) => (
+              <option key={amount} value={amount}>
+                {amount}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className="mini-button mini-button--accent"
@@ -69,15 +75,18 @@ export const QuickAdjustControls = ({
           >
             -{primaryAmount}
           </button>
-          <input
+          <select
             className="step-input"
-            type="number"
-            min={0}
-            inputMode="numeric"
             value={primaryAmount}
             disabled={isSubmitting}
-            onChange={(event) => setPrimaryAmount(Math.max(0, Number(event.target.value) || 0))}
-          />
+            onChange={(event) => setPrimaryAmount(Number(event.target.value))}
+          >
+            {SCORE_AMOUNT_OPTIONS.map((amount) => (
+              <option key={amount} value={amount}>
+                {amount}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className="mini-button mini-button--accent"
@@ -100,15 +109,18 @@ export const QuickAdjustControls = ({
           >
             -{secondaryAmount}
           </button>
-          <input
+          <select
             className="step-input"
-            type="number"
-            min={0}
-            inputMode="numeric"
             value={secondaryAmount}
             disabled={isSubmitting}
-            onChange={(event) => setSecondaryAmount(Math.max(0, Number(event.target.value) || 0))}
-          />
+            onChange={(event) => setSecondaryAmount(Number(event.target.value))}
+          >
+            {SCORE_AMOUNT_OPTIONS.map((amount) => (
+              <option key={amount} value={amount}>
+                {amount}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className="mini-button mini-button--accent"

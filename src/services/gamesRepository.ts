@@ -84,6 +84,26 @@ const getNumericValue = (value: number | string | null | undefined): number | nu
   return Number.isFinite(parsedValue) ? parsedValue : null;
 };
 
+const hasMissingScenarioColumnError = (message: string): boolean => {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("deployment") ||
+    normalizedMessage.includes("primary_mission")
+  );
+};
+
+const stripOptionalScenarioFields = <
+  T extends {
+    deployment?: string | null;
+    primary_mission?: string | null;
+  }
+>(
+  payload: T
+): Omit<T, "deployment" | "primary_mission"> => {
+  const { deployment: _deployment, primary_mission: _primaryMission, ...rest } = payload;
+  return rest;
+};
+
 const sortEventRecords = (events: SupabaseEventRecord[]): SupabaseEventRecord[] =>
   [...events].sort((left, right) => {
     const leftRound = left.round_number ?? 0;
@@ -594,11 +614,19 @@ export const gamesRepository = {
     const insertPayload: CreateSupabaseGamePayload =
       "playerOneName" in payload ? mapGameInputToInsert(payload) : payload;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("games")
       .insert(insertPayload)
       .select("*")
       .single();
+
+    if (error && hasMissingScenarioColumnError(error.message)) {
+      ({ data, error } = await supabase
+        .from("games")
+        .insert(stripOptionalScenarioFields(insertPayload))
+        .select("*")
+        .single());
+    }
 
     if (error) {
       throw new Error(`Spiel konnte nicht angelegt werden: ${error.message}`);
@@ -610,12 +638,21 @@ export const gamesRepository = {
   async updateGame(gameId: string, patch: UpdateSupabaseGamePayload): Promise<Game> {
     const supabase = getSupabaseClient();
     const updatePayload: UpdateSupabaseGamePayload = patch;
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("games")
       .update(updatePayload)
       .eq("id", gameId)
       .select("*")
       .single();
+
+    if (error && hasMissingScenarioColumnError(error.message)) {
+      ({ data, error } = await supabase
+        .from("games")
+        .update(stripOptionalScenarioFields(updatePayload))
+        .eq("id", gameId)
+        .select("*")
+        .single());
+    }
 
     if (error) {
       throw new Error(`Spiel konnte nicht aktualisiert werden: ${error.message}`);

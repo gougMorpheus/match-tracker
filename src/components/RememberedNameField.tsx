@@ -43,20 +43,5 @@ export const RememberedNameField = ({
       placeholder="Name eingeben"
       onChange={(event) => onChange(event.target.value)}
     />
-    {options.length ? (
-      <div className="chip-row">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`chip-button ${option === value ? "is-selected" : ""}`}
-            disabled={disabled}
-            onClick={() => onChange(option)}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    ) : null}
   </label>
 );
