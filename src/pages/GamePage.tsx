@@ -11,7 +11,8 @@ import {
   getGameDurationMs,
   getLatestTurn,
   getRoundDurationMs,
-  getTurnDurationMs
+  getTurnDurationMs,
+  isTurnPaused
 } from "../utils/gameCalculations";
 import { loadRememberedPlayerNames } from "../utils/presets";
 import { formatClockTime, formatDateLabel, formatDuration } from "../utils/time";
@@ -60,7 +61,8 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     addNoteEvent,
     updateGameEvent,
     updateGameDetails,
-    stopActiveTimer,
+    pauseActiveTimer,
+    startGameTimer,
     finishGame,
     deleteGame
   } = useGameStore();
@@ -169,6 +171,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt
       ? latestTurn.playerId
       : game.currentPlayerId;
+  const isPaused = isTurnPaused(latestTurn);
   const hasActiveTurn = Boolean(latestTurn?.timing.startedAt && !latestTurn.timing.endedAt);
   const latestRound = game.rounds[game.rounds.length - 1];
 
@@ -184,6 +187,13 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           }
         : current
     );
+  };
+
+  const openGameEditor = async () => {
+    if (hasActiveTurn && !isPaused) {
+      await pauseActiveTimer(game.id);
+    }
+    setIsEditingGame(true);
   };
 
   const openEditor = (event: EditableEventItem) => {
@@ -236,6 +246,12 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
       actions={<span className={`status-pill status-pill--${game.status}`}>{game.status}</span>}
     >
       <section className="stack">
+        <div className="button-row button-row--compact">
+          <button type="button" className="ghost-button compact-button" onClick={onBack}>
+            Zurueck
+          </button>
+        </div>
+
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">
@@ -288,7 +304,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               <button
                 type="button"
                 className="ghost-button compact-button"
-                onClick={() => setIsEditingGame(true)}
+                onClick={() => void openGameEditor()}
                 disabled={isMutating}
               >
                 Bearbeiten
@@ -535,15 +551,17 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
             </button>
             <button
               type="button"
-              className="secondary-button"
-              onClick={() => void stopActiveTimer(game.id)}
+              className="secondary-button compact-button"
+              onClick={() =>
+                void (isPaused ? startGameTimer(game.id) : pauseActiveTimer(game.id))
+              }
               disabled={game.status === "completed" || isMutating || !hasActiveTurn}
             >
-              Timer stoppen
+              {isPaused ? "Timer starten" : "Timer stoppen"}
             </button>
             <button
               type="button"
-              className="danger-button"
+              className="danger-button compact-button"
               onClick={() => void finishGame(game.id)}
               disabled={game.status === "completed" || isMutating}
             >
@@ -551,7 +569,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
             </button>
             <button
               type="button"
-              className="danger-button"
+              className="danger-button compact-button"
               onClick={() => void handleDeleteGame()}
               disabled={isMutating}
             >

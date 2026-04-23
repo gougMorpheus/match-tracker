@@ -54,7 +54,14 @@ export const getPlayerCommandPoints = (game: Game, playerId: PlayerId): number =
 };
 
 export const getTurnDurationMs = (turn: Turn): number =>
-  getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
+  (() => {
+    const totalDuration = getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
+    const pausedDuration = turn.timing.pauses.reduce(
+      (total, pause) => total + getDurationMs(pause.startedAt, pause.endedAt ?? new Date().toISOString()),
+      0
+    );
+    return Math.max(totalDuration - pausedDuration, 0);
+  })();
 
 export const getRoundDurationMs = (round: Round): number => {
   if (round.startedAt && round.endedAt) {
@@ -96,7 +103,12 @@ export const isRoundActive = (game: Game): boolean => {
 
 export const isTurnActive = (game: Game): boolean => {
   const turn = getLatestTurn(game);
-  return Boolean(turn?.timing.startedAt && !turn.timing.endedAt);
+  return Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn));
+};
+
+export const isTurnPaused = (turn?: Turn): boolean => {
+  const latestPause = turn?.timing.pauses[turn.timing.pauses.length - 1];
+  return Boolean(turn?.timing.startedAt && !turn.timing.endedAt && latestPause && !latestPause.endedAt);
 };
 
 export const getCurrentRoundNumber = (game: Game): number => getLatestRound(game)?.roundNumber ?? 0;

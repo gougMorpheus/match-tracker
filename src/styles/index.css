@@ -244,7 +244,7 @@ textarea {
 }
 
 .button-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 }
 
 .stats-grid {
@@ -279,8 +279,8 @@ textarea {
 .mini-button {
   border: 0;
   border-radius: 18px;
-  padding: 1rem;
-  min-height: 56px;
+  padding: 0.8rem 0.9rem;
+  min-height: 46px;
   transition: transform 0.16s ease, opacity 0.16s ease, background 0.16s ease;
 }
 
@@ -297,8 +297,8 @@ textarea {
 }
 
 .primary-button--large {
-  min-height: 62px;
-  font-size: 1.05rem;
+  min-height: 52px;
+  font-size: 0.98rem;
 }
 
 .secondary-button,
@@ -314,8 +314,8 @@ textarea {
 .compact-button,
 .back-button,
 .mini-button {
-  min-height: 42px;
-  padding: 0.7rem 0.9rem;
+  min-height: 38px;
+  padding: 0.55rem 0.75rem;
 }
 
 .back-button {
@@ -401,7 +401,7 @@ textarea {
 }
 
 .button-grid--tracker {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .scoreboard__controls {
@@ -511,6 +511,8 @@ textarea {
   background: rgba(15, 23, 42, 0.94);
   color: var(--muted);
   border: 1px solid var(--border);
+  min-height: 52px;
+  padding: 0.65rem 0.5rem;
 }
 
 .bottom-nav__item.is-active {
@@ -524,14 +526,6 @@ textarea {
 }
 
 @media (min-width: 700px) {
-  .button-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .button-grid--tracker {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .app-header {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;

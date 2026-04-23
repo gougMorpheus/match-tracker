@@ -27,7 +27,8 @@ import type {
 import {
   getLatestRound,
   getLatestTurn,
-  getPlayerTotalScore
+  getPlayerTotalScore,
+  isTurnPaused
 } from "../utils/gameCalculations";
 import { rememberPlayerNames } from "../utils/presets";
 import { normalizeSupabaseErrorMessage } from "../utils/supabaseErrors";
@@ -53,7 +54,8 @@ interface GameStoreValue {
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
   advanceGame: (gameId: string) => Promise<void>;
-  stopActiveTimer: (gameId: string) => Promise<void>;
+  pauseActiveTimer: (gameId: string) => Promise<void>;
+  startGameTimer: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   finishGame: (gameId: string) => Promise<void>;
   deleteGame: (gameId: string) => Promise<void>;
@@ -440,7 +442,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [getGame, refreshSingleGame, runMutation]
   );
 
-  const stopActiveTimer = useCallback(
+  const pauseActiveTimer = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
         const game = getGame(gameId);
@@ -449,7 +451,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const latestTurn = getLatestTurn(game);
-        if (!latestTurn || !latestTurn.timing.startedAt || latestTurn.timing.endedAt) {
+        if (!latestTurn || !latestTurn.timing.startedAt || latestTurn.timing.endedAt || isTurnPaused(latestTurn)) {
           return;
         }
 
@@ -458,10 +460,81 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             playerId: latestTurn.playerId,
             roundNumber: latestTurn.roundNumber,
             turnNumber: latestTurn.turnNumber,
-            eventType: "turn-end"
+            eventType: "turn-pause"
           })
         );
         await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
+  const startGameTimer = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed") {
+          return;
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+
+        if (!latestRound || latestRound.endedAt) {
+          const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
+          const payloads: CreateSupabaseEventPayload[] = [];
+
+          if (!game.timeEvents.some((event) => event.action === "game-start")) {
+            payloads.push(
+              createEventPayload(game, {
+                playerId: game.startingPlayerId,
+                eventType: "game-start"
+              })
+            );
+          }
+
+          payloads.push(
+            createEventPayload(game, {
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              eventType: "round-start"
+            }),
+            createEventPayload(game, {
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              turnNumber: 1,
+              eventType: "turn-start"
+            })
+          );
+
+          await gamesRepository.addEvents(payloads);
+          await refreshSingleGame(gameId);
+          return;
+        }
+
+        if (!latestTurn) {
+          await gamesRepository.addEvent(
+            createEventPayload(game, {
+              playerId: game.currentPlayerId,
+              roundNumber: latestRound.roundNumber,
+              turnNumber: latestRound.turns.length + 1,
+              eventType: "turn-start"
+            })
+          );
+          await refreshSingleGame(gameId);
+          return;
+        }
+
+        if (isTurnPaused(latestTurn)) {
+          await gamesRepository.addEvent(
+            createEventPayload(game, {
+              playerId: latestTurn.playerId,
+              roundNumber: latestTurn.roundNumber,
+              turnNumber: latestTurn.turnNumber,
+              eventType: "turn-resume"
+            })
+          );
+          await refreshSingleGame(gameId);
+        }
       }),
     [getGame, refreshSingleGame, runMutation]
   );
@@ -523,7 +596,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       addCommandPointEvent,
       addNoteEvent,
       advanceGame,
-      stopActiveTimer,
+      pauseActiveTimer,
+      startGameTimer,
       updateGameEvent,
       finishGame,
       deleteGame,
@@ -547,7 +621,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       importGames,
       isLoading,
       isMutating,
-      stopActiveTimer,
+      pauseActiveTimer,
+      startGameTimer,
       updateGameEvent,
       updateGameDetails,
       refreshGames,

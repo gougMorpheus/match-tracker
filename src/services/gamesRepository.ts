@@ -39,7 +39,9 @@ const timeActions = new Set<TimeEventAction>([
   "round-start",
   "round-end",
   "turn-start",
-  "turn-end"
+  "turn-end",
+  "turn-pause",
+  "turn-resume"
 ]);
 
 const createPlayerId = (gameId: string, slot: 1 | 2): PlayerId => `${gameId}:player-${slot}`;
@@ -129,7 +131,9 @@ const ensureTurn = (
     roundNumber: round.roundNumber,
     turnNumber,
     playerId,
-    timing: {}
+    timing: {
+      pauses: []
+    }
   };
   round.turns.push(nextTurn);
   return nextTurn;
@@ -175,12 +179,43 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
     const turn = ensureTurn(round, event.turn_number, playerId);
     if (event.event_type === "turn-start") {
       turn.playerId = playerId;
-      turn.timing.startedAt = event.occurred_at;
+      if (!turn.timing.startedAt) {
+        turn.timing.startedAt = event.occurred_at;
+      } else {
+        const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
+        if (latestPause && !latestPause.endedAt) {
+          latestPause.endedAt = event.occurred_at;
+        }
+      }
+      return;
+    }
+
+    if (event.event_type === "turn-resume") {
+      turn.playerId = playerId;
+      const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
+      if (latestPause && !latestPause.endedAt) {
+        latestPause.endedAt = event.occurred_at;
+      }
+      return;
+    }
+
+    if (event.event_type === "turn-pause") {
+      turn.playerId = playerId;
+      const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
+      if (!latestPause || latestPause.endedAt) {
+        turn.timing.pauses.push({
+          startedAt: event.occurred_at
+        });
+      }
       return;
     }
 
     if (event.event_type === "turn-end") {
       turn.playerId = playerId;
+      const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
+      if (latestPause && !latestPause.endedAt) {
+        latestPause.endedAt = event.occurred_at;
+      }
       turn.timing.endedAt = event.occurred_at;
     }
   });
@@ -291,7 +326,10 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
 
     if (timeActions.has(event.event_type as TimeEventAction)) {
       const includePlayer =
-        event.event_type === "turn-start" || event.event_type === "turn-end";
+        event.event_type === "turn-start" ||
+        event.event_type === "turn-end" ||
+        event.event_type === "turn-pause" ||
+        event.event_type === "turn-resume";
 
       timeEvents.push({
         id: event.id,

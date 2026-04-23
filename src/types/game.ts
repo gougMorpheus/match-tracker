@@ -8,7 +8,9 @@ export type TimeEventAction =
   | "round-start"
   | "round-end"
   | "turn-start"
-  | "turn-end";
+  | "turn-end"
+  | "turn-pause"
+  | "turn-resume";
 export type GameResult = "win" | "loss" | "tie";
 
 export interface Army {
@@ -22,9 +24,15 @@ export interface Player {
   army: Army;
 }
 
+export interface TurnPauseWindow {
+  startedAt: string;
+  endedAt?: string;
+}
+
 export interface TurnTiming {
   startedAt?: string;
   endedAt?: string;
+  pauses: TurnPauseWindow[];
 }
 
 export interface Turn {

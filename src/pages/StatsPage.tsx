@@ -20,6 +20,7 @@ interface StatsPageProps {
 export const StatsPage = ({ onBack }: StatsPageProps) => {
   const { games, isLoading, errorMessage, clearError } = useGameStore();
   const [filters, setFilters] = useState(createInitialGameFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const filteredGames = useMemo(() => filterGames(games, filters), [games, filters]);
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
   const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
@@ -54,81 +55,96 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
         <section className="card stack">
           <div className="list-row">
             <h2>Filter</h2>
-            <button
-              type="button"
-              className="ghost-button compact-button"
-              onClick={() => setFilters(createInitialGameFilters())}
-            >
-              Reset
-            </button>
+            <div className="button-row button-row--compact">
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() => setFiltersOpen((current) => !current)}
+              >
+                {filtersOpen ? "Schliessen" : "Oeffnen"}
+              </button>
+              {filtersOpen ? (
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => setFilters(createInitialGameFilters())}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
           </div>
-          <label className="field">
-            <span>Suche</span>
-            <input
-              value={filters.query}
-              onChange={(event) => updateFilter("query", event.target.value)}
-              placeholder="Name, Armee, Punkte"
-            />
-          </label>
-          <div className="two-column-grid">
-            <label className="field">
-              <span>Status</span>
-              <select
-                value={filters.status}
-                onChange={(event) =>
-                  updateFilter("status", event.target.value as typeof filters.status)
-                }
-              >
-                <option value="all">Alle</option>
-                <option value="active">Aktiv</option>
-                <option value="completed">Abgeschlossen</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Spieler</span>
-              <select
-                value={filters.playerName}
-                onChange={(event) => updateFilter("playerName", event.target.value)}
-              >
-                <option value="all">Alle</option>
-                {filterOptions.playerNames.map((playerName) => (
-                  <option key={playerName} value={playerName}>
-                    {playerName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Armee</span>
-              <select
-                value={filters.armyName}
-                onChange={(event) => updateFilter("armyName", event.target.value)}
-              >
-                <option value="all">Alle</option>
-                {filterOptions.armyNames.map((armyName) => (
-                  <option key={armyName} value={armyName}>
-                    {armyName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Von</span>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(event) => updateFilter("dateFrom", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Bis</span>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(event) => updateFilter("dateTo", event.target.value)}
-              />
-            </label>
-          </div>
+          {filtersOpen ? (
+            <>
+              <label className="field">
+                <span>Suche</span>
+                <input
+                  value={filters.query}
+                  onChange={(event) => updateFilter("query", event.target.value)}
+                  placeholder="Name, Armee, Punkte"
+                />
+              </label>
+              <div className="two-column-grid">
+                <label className="field">
+                  <span>Status</span>
+                  <select
+                    value={filters.status}
+                    onChange={(event) =>
+                      updateFilter("status", event.target.value as typeof filters.status)
+                    }
+                  >
+                    <option value="all">Alle</option>
+                    <option value="active">Aktiv</option>
+                    <option value="completed">Abgeschlossen</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Spieler</span>
+                  <select
+                    value={filters.playerName}
+                    onChange={(event) => updateFilter("playerName", event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {filterOptions.playerNames.map((playerName) => (
+                      <option key={playerName} value={playerName}>
+                        {playerName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Armee</span>
+                  <select
+                    value={filters.armyName}
+                    onChange={(event) => updateFilter("armyName", event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {filterOptions.armyNames.map((armyName) => (
+                      <option key={armyName} value={armyName}>
+                        {armyName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Von</span>
+                  <input
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(event) => updateFilter("dateFrom", event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span>Bis</span>
+                  <input
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(event) => updateFilter("dateTo", event.target.value)}
+                  />
+                </label>
+              </div>
+            </>
+          ) : null}
         </section>
 
         <div className="stats-grid">
