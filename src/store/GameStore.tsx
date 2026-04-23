@@ -53,8 +53,10 @@ interface GameStoreValue {
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
   advanceGame: (gameId: string) => Promise<void>;
+  stopActiveTimer: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   finishGame: (gameId: string) => Promise<void>;
+  deleteGame: (gameId: string) => Promise<void>;
   importGames: (games: Game[]) => Promise<void>;
   exportGames: () => Game[];
   clearError: () => void;
@@ -438,6 +440,32 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [getGame, refreshSingleGame, runMutation]
   );
 
+  const stopActiveTimer = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed") {
+          return;
+        }
+
+        const latestTurn = getLatestTurn(game);
+        if (!latestTurn || !latestTurn.timing.startedAt || latestTurn.timing.endedAt) {
+          return;
+        }
+
+        await gamesRepository.addEvent(
+          createEventPayload(game, {
+            playerId: latestTurn.playerId,
+            roundNumber: latestTurn.roundNumber,
+            turnNumber: latestTurn.turnNumber,
+            eventType: "turn-end"
+          })
+        );
+        await refreshSingleGame(gameId);
+      }),
+    [getGame, refreshSingleGame, runMutation]
+  );
+
   const updateGameEvent = useCallback(
     async (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) =>
       runMutation(async () => {
@@ -445,6 +473,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         await refreshSingleGame(gameId);
       }),
     [refreshSingleGame, runMutation]
+  );
+
+  const deleteGame = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        await gamesRepository.deleteGame(gameId);
+        setGames((currentGames) => currentGames.filter((game) => game.id !== gameId));
+      }),
+    [runMutation]
   );
 
   const importGames = useCallback(
@@ -486,8 +523,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       addCommandPointEvent,
       addNoteEvent,
       advanceGame,
+      stopActiveTimer,
       updateGameEvent,
       finishGame,
+      deleteGame,
       importGames,
       exportGames,
       clearError
@@ -499,6 +538,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       advanceGame,
       clearError,
       createGame,
+      deleteGame,
       errorMessage,
       exportGames,
       finishGame,
@@ -507,6 +547,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       importGames,
       isLoading,
       isMutating,
+      stopActiveTimer,
       updateGameEvent,
       updateGameDetails,
       refreshGames,

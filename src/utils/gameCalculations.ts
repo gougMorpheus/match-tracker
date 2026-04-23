@@ -161,9 +161,50 @@ export interface PlayerAggregate {
   wins: number;
   losses: number;
   ties: number;
+  winRate: number;
   averagePrimary: number;
   averageSecondary: number;
+  averageTotal: number;
   averageDurationMs: number;
+  averageSpentCp: number;
+}
+
+export interface ArmyAggregate {
+  armyName: string;
+  games: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  winRate: number;
+  averagePrimary: number;
+  averageSecondary: number;
+  averageTotal: number;
+}
+
+export interface MatchupAggregate {
+  label: string;
+  games: number;
+  averageDurationMs: number;
+  averageCombinedScore: number;
+  averageScoreDifference: number;
+}
+
+export interface GameFilterState {
+  query: string;
+  playerName: string;
+  armyName: string;
+  status: "all" | "active" | "completed";
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface StatsOverview {
+  games: number;
+  players: number;
+  armies: number;
+  averageDurationMs: number;
+  averageRounds: number;
+  averageCombinedScore: number;
   averageSpentCp: number;
 }
 
@@ -196,10 +237,12 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
         wins,
         losses,
         ties,
+        winRate: gamesCount ? (wins / gamesCount) * 100 : 0,
         averagePrimary: gamesCount ? sumValues(players.map((player) => ({ value: player.primaryScore }))) / gamesCount : 0,
         averageSecondary: gamesCount
           ? sumValues(players.map((player) => ({ value: player.secondaryScore }))) / gamesCount
           : 0,
+        averageTotal: gamesCount ? sumValues(players.map((player) => ({ value: player.totalScore }))) / gamesCount : 0,
         averageDurationMs: playerDurations.length
           ? sumValues(playerDurations.map((value) => ({ value }))) / playerDurations.length
           : 0,
@@ -209,4 +252,154 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
       };
     })
     .sort((left, right) => right.games - left.games || left.name.localeCompare(right.name));
+};
+
+export const createInitialGameFilters = (): GameFilterState => ({
+  query: "",
+  playerName: "all",
+  armyName: "all",
+  status: "all",
+  dateFrom: "",
+  dateTo: ""
+});
+
+export const getFilterOptions = (games: Game[]) => ({
+  playerNames: Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.name)))).sort((left, right) =>
+    left.localeCompare(right)
+  ),
+  armyNames: Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.army.name)))).sort((left, right) =>
+    left.localeCompare(right)
+  )
+});
+
+export const filterGames = (games: Game[], filters: GameFilterState): Game[] => {
+  const normalizedQuery = filters.query.trim().toLocaleLowerCase();
+
+  return games.filter((game) => {
+    const matchesQuery =
+      !normalizedQuery ||
+      [
+        game.scheduledDate,
+        game.scheduledTime,
+        String(game.gamePoints),
+        ...game.players.map((player) => player.name),
+        ...game.players.map((player) => player.army.name)
+      ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+
+    const matchesPlayer =
+      filters.playerName === "all" || game.players.some((player) => player.name === filters.playerName);
+
+    const matchesArmy =
+      filters.armyName === "all" || game.players.some((player) => player.army.name === filters.armyName);
+
+    const matchesStatus = filters.status === "all" || game.status === filters.status;
+
+    const matchesDateFrom = !filters.dateFrom || game.scheduledDate >= filters.dateFrom;
+    const matchesDateTo = !filters.dateTo || game.scheduledDate <= filters.dateTo;
+
+    return (
+      matchesQuery &&
+      matchesPlayer &&
+      matchesArmy &&
+      matchesStatus &&
+      matchesDateFrom &&
+      matchesDateTo
+    );
+  });
+};
+
+export const createStatsOverview = (games: Game[]): StatsOverview => {
+  const summaries = games.map(createGameSummary);
+  const playerEntries = summaries.flatMap((summary) => summary.players);
+  const playerCount = new Set(playerEntries.map((player) => player.name)).size;
+  const armyCount = new Set(playerEntries.map((player) => player.armyName)).size;
+
+  return {
+    games: games.length,
+    players: playerCount,
+    armies: armyCount,
+    averageDurationMs: games.length
+      ? sumValues(games.map((game) => ({ value: getGameDurationMs(game) }))) / games.length
+      : 0,
+    averageRounds: games.length ? sumValues(games.map((game) => ({ value: game.rounds.length }))) / games.length : 0,
+    averageCombinedScore: games.length
+      ? sumValues(
+          summaries.map((summary) => ({
+            value: summary.players[0].totalScore + summary.players[1].totalScore
+          }))
+        ) / games.length
+      : 0,
+    averageSpentCp: playerEntries.length
+      ? sumValues(playerEntries.map((player) => ({ value: player.commandPointsSpent }))) / playerEntries.length
+      : 0
+  };
+};
+
+export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
+  const grouped = new Map<string, GameSummaryPlayer[]>();
+
+  games.map(createGameSummary).forEach((summary) => {
+    summary.players.forEach((player) => {
+      const existing = grouped.get(player.armyName) ?? [];
+      grouped.set(player.armyName, [...existing, player]);
+    });
+  });
+
+  return Array.from(grouped.entries())
+    .map(([armyName, players]) => {
+      const gamesCount = players.length;
+      const wins = players.filter((player) => player.result === "win").length;
+      const losses = players.filter((player) => player.result === "loss").length;
+      const ties = players.filter((player) => player.result === "tie").length;
+
+      return {
+        armyName,
+        games: gamesCount,
+        wins,
+        losses,
+        ties,
+        winRate: gamesCount ? (wins / gamesCount) * 100 : 0,
+        averagePrimary: gamesCount ? sumValues(players.map((player) => ({ value: player.primaryScore }))) / gamesCount : 0,
+        averageSecondary: gamesCount ? sumValues(players.map((player) => ({ value: player.secondaryScore }))) / gamesCount : 0,
+        averageTotal: gamesCount ? sumValues(players.map((player) => ({ value: player.totalScore }))) / gamesCount : 0
+      };
+    })
+    .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName));
+};
+
+export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
+  const grouped = new Map<string, { count: number; durations: number[]; combinedScores: number[]; scoreDifferences: number[] }>();
+
+  games.forEach((game) => {
+    const [armyA, armyB] = game.players.map((player) => player.army.name).sort((left, right) => left.localeCompare(right));
+    const label = `${armyA} vs ${armyB}`;
+    const existing = grouped.get(label) ?? {
+      count: 0,
+      durations: [],
+      combinedScores: [],
+      scoreDifferences: []
+    };
+    const scoreA = getPlayerTotalScore(game, game.players[0].id);
+    const scoreB = getPlayerTotalScore(game, game.players[1].id);
+
+    existing.count += 1;
+    existing.durations.push(getGameDurationMs(game));
+    existing.combinedScores.push(scoreA + scoreB);
+    existing.scoreDifferences.push(Math.abs(scoreA - scoreB));
+    grouped.set(label, existing);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([label, values]) => ({
+      label,
+      games: values.count,
+      averageDurationMs: values.count ? sumValues(values.durations.map((value) => ({ value }))) / values.count : 0,
+      averageCombinedScore: values.count
+        ? sumValues(values.combinedScores.map((value) => ({ value }))) / values.count
+        : 0,
+      averageScoreDifference: values.count
+        ? sumValues(values.scoreDifferences.map((value) => ({ value }))) / values.count
+        : 0
+    }))
+    .sort((left, right) => right.games - left.games || left.label.localeCompare(right.label));
 };

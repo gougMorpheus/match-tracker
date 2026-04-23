@@ -60,7 +60,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     addNoteEvent,
     updateGameEvent,
     updateGameDetails,
-    finishGame
+    stopActiveTimer,
+    finishGame,
+    deleteGame
   } = useGameStore();
   const [, setTick] = useState(0);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -167,6 +169,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt
       ? latestTurn.playerId
       : game.currentPlayerId;
+  const hasActiveTurn = Boolean(latestTurn?.timing.startedAt && !latestTurn.timing.endedAt);
   const latestRound = game.rounds[game.rounds.length - 1];
 
   const updateGameField = <K extends keyof CreateGameInput,>(
@@ -214,6 +217,15 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     event.preventDefault();
     await updateGameDetails(game.id, gameForm);
     setIsEditingGame(false);
+  };
+
+  const handleDeleteGame = async () => {
+    if (!window.confirm("Spiel wirklich loeschen? Alle Events gehen dabei verloren.")) {
+      return;
+    }
+
+    await deleteGame(game.id);
+    onBack();
   };
 
   return (
@@ -523,11 +535,27 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
             </button>
             <button
               type="button"
+              className="secondary-button"
+              onClick={() => void stopActiveTimer(game.id)}
+              disabled={game.status === "completed" || isMutating || !hasActiveTurn}
+            >
+              Timer stoppen
+            </button>
+            <button
+              type="button"
               className="danger-button"
               onClick={() => void finishGame(game.id)}
               disabled={game.status === "completed" || isMutating}
             >
               Spiel beenden
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              onClick={() => void handleDeleteGame()}
+              disabled={isMutating}
+            >
+              Spiel loeschen
             </button>
           </div>
         </section>

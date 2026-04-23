@@ -93,10 +93,7 @@ const App = () => {
   return (
     <>
       {route.view === "games" ? (
-        <GamesPage
-          onOpenGame={(gameId) => navigate({ view: "game", gameId })}
-          onCreateGame={() => navigate({ view: "new" })}
-        />
+        <GamesPage onOpenGame={(gameId) => navigate({ view: "game", gameId })} />
       ) : null}
 
       {route.view === "new" ? (

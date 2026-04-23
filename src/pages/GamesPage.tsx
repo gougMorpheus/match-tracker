@@ -1,19 +1,29 @@
-import { useRef, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { GameCard } from "../components/GameCard";
 import { Layout } from "../components/Layout";
 import { seedGames } from "../data/seedGames";
 import { useGameStore } from "../store/GameStore";
+import { createInitialGameFilters, filterGames, getFilterOptions } from "../utils/gameCalculations";
 import { parseImportedGames, exportGamesAsJson } from "../utils/importExport";
 
 interface GamesPageProps {
   onOpenGame: (gameId: string) => void;
-  onCreateGame: () => void;
 }
 
-export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
+export const GamesPage = ({ onOpenGame }: GamesPageProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { games, importGames, isLoading, isMutating, errorMessage, clearError, refreshGames } =
     useGameStore();
+  const [filters, setFilters] = useState(createInitialGameFilters);
+  const filterOptions = useMemo(() => getFilterOptions(games), [games]);
+  const filteredGames = useMemo(() => filterGames(games, filters), [games, filters]);
+
+  const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
+    setFilters((current) => ({
+      ...current,
+      [key]: value
+    }));
+  };
 
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -72,6 +82,88 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
           onChange={handleImport}
         />
 
+        <section className="card stack">
+          <div className="list-row">
+            <h2>Filter</h2>
+            <button
+              type="button"
+              className="ghost-button compact-button"
+              onClick={() => setFilters(createInitialGameFilters())}
+              disabled={isLoading}
+            >
+              Reset
+            </button>
+          </div>
+          <label className="field">
+            <span>Suche</span>
+            <input
+              value={filters.query}
+              onChange={(event) => updateFilter("query", event.target.value)}
+              placeholder="Name, Armee, Punkte"
+            />
+          </label>
+          <div className="two-column-grid">
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={filters.status}
+                onChange={(event) =>
+                  updateFilter("status", event.target.value as typeof filters.status)
+                }
+              >
+                <option value="all">Alle</option>
+                <option value="active">Aktiv</option>
+                <option value="completed">Abgeschlossen</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Spieler</span>
+              <select
+                value={filters.playerName}
+                onChange={(event) => updateFilter("playerName", event.target.value)}
+              >
+                <option value="all">Alle</option>
+                {filterOptions.playerNames.map((playerName) => (
+                  <option key={playerName} value={playerName}>
+                    {playerName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Armee</span>
+              <select
+                value={filters.armyName}
+                onChange={(event) => updateFilter("armyName", event.target.value)}
+              >
+                <option value="all">Alle</option>
+                {filterOptions.armyNames.map((armyName) => (
+                  <option key={armyName} value={armyName}>
+                    {armyName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Von</span>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => updateFilter("dateFrom", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Bis</span>
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => updateFilter("dateTo", event.target.value)}
+              />
+            </label>
+          </div>
+          <p className="muted-copy">{filteredGames.length} Spiele sichtbar</p>
+        </section>
+
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">
@@ -91,12 +183,17 @@ export const GamesPage = ({ onOpenGame, onCreateGame }: GamesPageProps) => {
             <h2>Spiele werden geladen</h2>
             <p>Die Daten kommen direkt aus Supabase.</p>
           </article>
-        ) : games.length ? (
+        ) : filteredGames.length ? (
           <div className="stack">
-            {games.map((game) => (
+            {filteredGames.map((game) => (
               <GameCard key={game.id} game={game} onOpen={() => onOpenGame(game.id)} />
             ))}
           </div>
+        ) : games.length ? (
+          <article className="empty-state">
+            <h2>Keine Treffer</h2>
+            <p>Die aktuellen Filter passen zu keinem gespeicherten Spiel.</p>
+          </article>
         ) : (
           <article className="empty-state">
             <h2>Noch keine Spiele</h2>
