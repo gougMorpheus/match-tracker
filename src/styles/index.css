@@ -219,16 +219,17 @@ textarea {
 
 .game-status-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
   width: 100%;
 }
 
 .game-status-strip .status-pill {
   width: 100%;
-  min-height: 38px;
-  padding: 0.45rem 0.55rem;
+  min-height: 32px;
+  padding: 0.35rem 0.45rem;
   text-align: center;
+  font-size: 0.74rem;
 }
 
 .scoreboard__grid,
@@ -433,29 +434,111 @@ textarea {
 
 .tracker-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 1rem;
-  gap: 0.55rem;
+  gap: 0.4rem;
 }
 
 .game-page .tracker-summary {
-  padding: 0.85rem;
+  padding: 0.55rem;
 }
 
 .game-page .tracker-summary div,
 .game-page .scoreboard__grid div {
-  padding: 0.65rem;
+  padding: 0.45rem;
+  border-radius: 14px;
 }
 
 .game-page .tracker-summary strong,
 .game-page .scoreboard__grid strong {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
+  margin-top: 0.18rem;
 }
 
 .game-page .tracker-summary span,
 .game-page .scoreboard__grid span,
 .game-page .scoreboard__grid p {
-  font-size: 0.9rem;
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.game-page .scoreboard {
+  padding: 0.7rem;
+}
+
+.game-page .scoreboard__head {
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.game-page .scoreboard__head h2 {
+  font-size: 1rem;
+}
+
+.game-page .scoreboard__head p {
+  font-size: 0.78rem;
+}
+
+.game-page .scoreboard__meta {
+  gap: 0.35rem;
+}
+
+.game-page .scoreboard__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.game-page .scoreboard__controls {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+}
+
+.game-page .quick-controls {
+  gap: 0.5rem;
+}
+
+.game-page .quick-controls__row,
+.game-page .quick-controls__actions,
+.game-page .event-editor__meta {
+  gap: 0.35rem;
+}
+
+.game-page .step-input {
+  width: 3rem;
+  flex: 0 0 3rem;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+
+.game-page .mini-button {
+  min-height: 32px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.game-page .button-grid--tracker {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.game-page .compact-button,
+.game-page .primary-button,
+.game-page .secondary-button,
+.game-page .danger-button,
+.game-page .ghost-button {
+  min-height: 34px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.game-page .primary-button--large {
+  min-height: 38px;
+  font-size: 0.82rem;
+}
+
+.game-details-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(240px, 100%);
 }
 
 .button-grid--tracker {
@@ -667,6 +750,16 @@ textarea {
   gap: 0.6rem;
 }
 
+@media (max-width: 360px) {
+  .game-page .tracker-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .game-page .scoreboard__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -738,10 +831,6 @@ textarea {
   .game-status-strip {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
     width: auto;
-  }
-
-  .tracker-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stats-hero,

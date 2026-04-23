@@ -361,7 +361,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
         <section className="card stack">
           <div className="list-row">
             <h2>Spieldetails</h2>
-            <div className="button-row button-row--compact">
+            <div className="button-row button-row--compact game-details-actions">
               <button
                 type="button"
                 className="ghost-button compact-button"
