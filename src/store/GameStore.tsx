@@ -107,8 +107,18 @@ interface GameStoreValue {
 
 const GameStoreContext = createContext<GameStoreValue | null>(null);
 
+const getScheduledSortKey = (game: Game): string =>
+  `${game.scheduledDate || "0000-00-00"}T${game.scheduledTime || "00:00"}`;
+
 const sortGames = (games: Game[]): Game[] =>
-  [...games].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  [...games].sort((left, right) => {
+    const scheduledComparison = getScheduledSortKey(right).localeCompare(getScheduledSortKey(left));
+    if (scheduledComparison !== 0) {
+      return scheduledComparison;
+    }
+
+    return right.createdAt.localeCompare(left.createdAt);
+  });
 
 const getErrorMessage = (error: unknown): string => getSyncErrorMessage(error);
 const clampNonNegative = (value: number): number => Math.max(value, 0);
