@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { FloatingMenu } from "../components/FloatingMenu";
 import { GameCard } from "../components/GameCard";
 import { Layout } from "../components/Layout";
 import { seedGames } from "../data/seedGames";
@@ -8,9 +9,11 @@ import { parseImportedGames, exportGamesAsJson } from "../utils/importExport";
 
 interface GamesPageProps {
   onOpenGame: (gameId: string) => void;
+  onCreateGame: () => void;
+  onOpenStats: () => void;
 }
 
-export const GamesPage = ({ onOpenGame }: GamesPageProps) => {
+export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPageProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { games, importGames, isLoading, isMutating, errorMessage, clearError, refreshGames } =
     useGameStore();
@@ -46,35 +49,33 @@ export const GamesPage = ({ onOpenGame }: GamesPageProps) => {
   };
 
   return (
-    <Layout title="40K Match-Tracker">
+    <Layout
+      title="Spiele"
+      actions={
+        <FloatingMenu
+          items={[
+            { label: "Neues Spiel", onClick: onCreateGame },
+            { label: "Statistik", onClick: onOpenStats },
+            {
+              label: filtersOpen ? "Filter schliessen" : "Filter",
+              onClick: () => setFiltersOpen((current) => !current)
+            },
+            { label: "Import", onClick: () => fileInputRef.current?.click(), disabled: isMutating },
+            {
+              label: "Export",
+              onClick: () => exportGamesAsJson(games),
+              disabled: !games.length || isLoading
+            },
+            {
+              label: "Update",
+              onClick: () => void refreshGames(),
+              disabled: isLoading || isMutating
+            }
+          ]}
+        />
+      }
+    >
       <section className="stack">
-        <div className="button-row button-row--compact">
-          <button
-            type="button"
-            className="secondary-button compact-button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isMutating}
-          >
-            Import
-          </button>
-          <button
-            type="button"
-            className="secondary-button compact-button"
-            onClick={() => exportGamesAsJson(games)}
-            disabled={!games.length || isLoading}
-          >
-            Export
-          </button>
-          <button
-            type="button"
-            className="secondary-button compact-button"
-            onClick={() => void refreshGames()}
-            disabled={isLoading || isMutating}
-          >
-            Update
-          </button>
-        </div>
-
         <input
           ref={fileInputRef}
           type="file"
@@ -83,28 +84,18 @@ export const GamesPage = ({ onOpenGame }: GamesPageProps) => {
           onChange={handleImport}
         />
 
-        <div className="button-row button-row--compact">
-          <button
-            type="button"
-            className="ghost-button compact-button"
-            onClick={() => setFiltersOpen((current) => !current)}
-          >
-            {filtersOpen ? "Filter schliessen" : "Filter"}
-          </button>
-          {filtersOpen ? (
-            <button
-              type="button"
-              className="ghost-button compact-button"
-              onClick={() => setFilters(createInitialGameFilters())}
-              disabled={isLoading}
-            >
-              Reset
-            </button>
-          ) : null}
-        </div>
-
         {filtersOpen ? (
           <section className="card stack">
+            <div className="button-row button-row--compact">
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() => setFilters(createInitialGameFilters())}
+                disabled={isLoading}
+              >
+                Reset
+              </button>
+            </div>
             <label className="field">
               <span>Suche</span>
               <input

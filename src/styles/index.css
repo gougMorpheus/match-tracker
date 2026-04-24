@@ -71,6 +71,16 @@ textarea {
   padding: 1rem 0 1.25rem;
 }
 
+.app-shell--sticky-header .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  margin: 0 -0.2rem;
+  padding: 0.75rem 0.2rem 0.9rem;
+  background: linear-gradient(180deg, rgba(11, 17, 32, 0.96), rgba(11, 17, 32, 0.82));
+  backdrop-filter: blur(12px);
+}
+
 .header-content {
   display: grid;
   gap: 0.35rem;
@@ -83,9 +93,21 @@ textarea {
   flex-wrap: wrap;
 }
 
+.header-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .app-header h1 {
   margin: 0.2rem 0 0;
   font-size: clamp(2rem, 6vw, 2.75rem);
+}
+
+.app-shell--sticky-header .app-header h1 {
+  font-size: clamp(1.3rem, 5vw, 1.7rem);
+  margin-top: 0;
 }
 
 .subtitle,
@@ -217,11 +239,29 @@ textarea {
   flex-wrap: wrap;
 }
 
+.header-actions {
+  margin-left: auto;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.page-tools,
+.page-tools--game {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.page-tools--game {
+  width: 100%;
+  justify-content: flex-end;
+}
+
 .game-status-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.3rem;
-  width: 100%;
+  width: auto;
 }
 
 .game-status-strip .status-pill {
@@ -450,9 +490,12 @@ textarea {
 }
 
 .game-page .tracker-summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 0.4rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0.1rem 0;
   gap: 0.3rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .game-page .tracker-summary div,
@@ -515,6 +558,12 @@ textarea {
   gap: 0.25rem;
 }
 
+.game-page .quick-controls__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
 .game-page .step-input {
   width: 3.35rem;
   flex: 0 0 3.35rem;
@@ -527,6 +576,18 @@ textarea {
   min-height: 30px;
   padding: 0.35rem 0.45rem;
   font-size: 0.74rem;
+}
+
+.game-page .quick-controls__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.2rem minmax(0, 1fr);
+  width: min(100%, 12.6rem);
+  margin-left: auto;
+  justify-content: end;
+}
+
+.game-page .quick-controls__actions .mini-button {
+  width: 100%;
 }
 
 .game-page .button-grid--tracker {
@@ -816,9 +877,29 @@ textarea {
   }
 
   .game-page .quick-controls__actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 3.2rem minmax(0, 1fr);
     width: 100%;
+  }
+
+  .app-shell {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    padding-bottom: 6.5rem;
+  }
+
+  .header-title-row {
+    gap: 0.45rem;
+  }
+
+  .page-tools--game {
+    gap: 0.25rem;
+  }
+
+  .game-status-strip .status-pill {
+    min-width: 4.4rem;
+  }
+
+  .floating-menu__trigger {
+    min-width: 4.1rem;
   }
 }
 
@@ -846,6 +927,68 @@ textarea {
   max-height: min(62vh, 520px);
   overflow-y: auto;
   padding-right: 0.2rem;
+}
+
+.floating-menu {
+  position: relative;
+}
+
+.floating-menu__trigger {
+  min-width: 4.6rem;
+}
+
+.floating-menu__panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 35;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 10rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.floating-menu__item {
+  border: 0;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.95);
+  color: var(--text);
+  border: 1px solid var(--border);
+  min-height: 36px;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+}
+
+.floating-menu__item.is-danger {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, 0.25);
+  background: rgba(127, 29, 29, 0.28);
+}
+
+.game-bottom-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 0.8rem;
+  z-index: 26;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  width: min(calc(100% - 1.2rem), 760px);
+  transform: translateX(-50%);
+  padding: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(11, 17, 32, 0.94);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.game-bottom-dock .compact-button {
+  min-height: 34px;
 }
 
 .bottom-nav {

@@ -6,10 +6,19 @@ interface LayoutProps extends PropsWithChildren {
   actions?: ReactNode;
   footer?: ReactNode;
   onBack?: () => void;
+  stickyHeader?: boolean;
 }
 
-export const Layout = ({ title, subtitle, actions, footer, onBack, children }: LayoutProps) => (
-  <div className="app-shell">
+export const Layout = ({
+  title,
+  subtitle,
+  actions,
+  footer,
+  onBack,
+  stickyHeader = false,
+  children
+}: LayoutProps) => (
+  <div className={`app-shell ${stickyHeader ? "app-shell--sticky-header" : ""}`}>
     <header className="app-header">
       <div className="header-content">
         <div className="header-topline">
@@ -20,10 +29,12 @@ export const Layout = ({ title, subtitle, actions, footer, onBack, children }: L
           ) : null}
           <p className="eyebrow">40K Match-Tracker</p>
         </div>
-        <h1>{title}</h1>
+        <div className="header-title-row">
+          <h1>{title}</h1>
+          {actions ? <div className="header-actions">{actions}</div> : null}
+        </div>
         {subtitle ? <p className="subtitle">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="header-actions">{actions}</div> : null}
     </header>
     <main className="app-main">{children}</main>
     {footer ? <footer className="app-footer">{footer}</footer> : null}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { FloatingMenu } from "../components/FloatingMenu";
 import { Layout } from "../components/Layout";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
@@ -54,7 +55,7 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
 });
 
-export const GamePage = ({ gameId }: GamePageProps) => {
+export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const {
     games,
     getGame,
@@ -228,6 +229,17 @@ export const GamePage = ({ gameId }: GamePageProps) => {
     setIsEditingGame(true);
   };
 
+  const openGameDetails = () => {
+    setDetailsOpen(true);
+    setIsEditingGame(false);
+  };
+
+  const closeGameDetails = () => {
+    setDetailsOpen(false);
+    setIsEditingGame(false);
+    setGameForm(createGameFormState(game));
+  };
+
   const openEditor = async (event: EditableEventItem) => {
     if (isTimerRunning) {
       await pauseActiveTimer(game.id);
@@ -264,6 +276,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
   const handleGameSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await updateGameDetails(game.id, gameForm);
+    setDetailsOpen(false);
     setIsEditingGame(false);
   };
 
@@ -312,15 +325,42 @@ export const GamePage = ({ gameId }: GamePageProps) => {
   return (
     <Layout
       title="Live Tracker"
-      subtitle={formatDateLabel(game.scheduledDate, game.scheduledTime)}
+      stickyHeader
       actions={
-        <div className="game-status-strip">
-          <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
-            Spiel: {isClosed ? "geschlossen" : "offen"}
-          </span>
-          <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
-            Timer: {timerStatusLabel}
-          </span>
+        <div className="page-tools page-tools--game">
+          <div className="game-status-strip">
+            <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
+              Spiel: {isClosed ? "zu" : "offen"}
+            </span>
+            <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
+              Timer: {timerStatusLabel}
+            </span>
+          </div>
+          <FloatingMenu
+            items={[
+              { label: "Spiele", onClick: onBack },
+              { label: "Spieldetails", onClick: openGameDetails },
+              { label: "Verlauf", onClick: () => setEntriesOpen(true) },
+              { label: "Notizen", onClick: () => setNotesOpen(true) },
+              isClosed
+                ? {
+                    label: "Spiel wieder eroeffnen",
+                    onClick: () => void handleReopenGame()
+                  }
+                : {
+                    label: "Spiel beenden",
+                    onClick: () => void finishGame(game.id),
+                    disabled: isMutating,
+                    danger: true
+                  },
+              {
+                label: "Spiel loeschen",
+                onClick: () => void handleDeleteGame(),
+                disabled: isMutating,
+                danger: true
+              }
+            ]}
+          />
         </div>
       }
     >
@@ -349,8 +389,10 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             <strong>{getCurrentTurnNumber(game)}</strong>
           </div>
           <div>
-            <span>Spielpunkte</span>
-            <strong>{game.gamePoints}</strong>
+            <span>Aktiv</span>
+            <strong>
+              {game.players.find((player) => player.id === activePlayerId)?.name ?? "-"}
+            </strong>
           </div>
           <div>
             <span>Gesamtzeit</span>
@@ -364,236 +406,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             <span>Zugzeit</span>
             <strong>{formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}</strong>
           </div>
-          <div>
-            <span>Start</span>
-            <strong>{formatClockTime(game.startedAt)}</strong>
-          </div>
         </article>
-
-        <section className="card stack">
-          <div className="list-row">
-            <h2>Spieldetails</h2>
-            <div className="button-row button-row--compact game-details-actions">
-              <button
-                type="button"
-                className="ghost-button compact-button"
-                onClick={() => setDetailsOpen((current) => !current)}
-              >
-                {detailsOpen ? "Ausblenden" : "Anzeigen"}
-              </button>
-              {!isEditingGame && !isClosed ? (
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  onClick={() => void openGameEditor()}
-                  disabled={isMutating}
-                >
-                  Bearbeiten
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          {detailsOpen && isEditingGame ? (
-            <form className="stack" onSubmit={handleGameSave}>
-              <section className="stack">
-                <RememberedNameField
-                  label="Spieler 1"
-                  value={gameForm.playerOneName}
-                  options={playerOptions}
-                  disabled={isMutating}
-                  onChange={(value) => updateGameField("playerOneName", value)}
-                />
-                <label className="field">
-                  <span>Armee 1</span>
-                  <select
-                    required
-                    value={gameForm.playerOneArmy}
-                    onChange={(editEvent) => updateGameField("playerOneArmy", editEvent.target.value)}
-                    disabled={isMutating}
-                  >
-                    <option value="">Armee waehlen</option>
-                    {ARMY_OPTIONS.map((army) => (
-                      <option key={army} value={army}>
-                        {army}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <RememberedNameField
-                  label="Spieler 2"
-                  value={gameForm.playerTwoName}
-                  options={playerOptions}
-                  disabled={isMutating}
-                  onChange={(value) => updateGameField("playerTwoName", value)}
-                />
-                <label className="field">
-                  <span>Armee 2</span>
-                  <select
-                    required
-                    value={gameForm.playerTwoArmy}
-                    onChange={(editEvent) => updateGameField("playerTwoArmy", editEvent.target.value)}
-                    disabled={isMutating}
-                  >
-                    <option value="">Armee waehlen</option>
-                    {ARMY_OPTIONS.map((army) => (
-                      <option key={army} value={army}>
-                        {army}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </section>
-
-              <div className="two-column-grid">
-                <label className="field">
-                  <span>Spielpunkte</span>
-                  <input
-                    required
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    value={gameForm.gamePoints}
-                    onChange={(editEvent) =>
-                      updateGameField("gamePoints", Number(editEvent.target.value) || 0)
-                    }
-                    disabled={isMutating}
-                  />
-                </label>
-                <label className="field">
-                  <span>Datum</span>
-                  <input
-                    required
-                    type="date"
-                    value={gameForm.scheduledDate}
-                    onChange={(editEvent) => updateGameField("scheduledDate", editEvent.target.value)}
-                    disabled={isMutating}
-                  />
-                </label>
-                <label className="field">
-                  <span>Uhrzeit</span>
-                  <input
-                    required
-                    type="time"
-                    value={gameForm.scheduledTime}
-                    onChange={(editEvent) => updateGameField("scheduledTime", editEvent.target.value)}
-                    disabled={isMutating}
-                  />
-                </label>
-              </div>
-              <label className="field">
-                <span>Aufstellung (optional)</span>
-                <input
-                  value={gameForm.deployment}
-                  onChange={(editEvent) => updateGameField("deployment", editEvent.target.value)}
-                  disabled={isMutating}
-                  placeholder="Kann leer bleiben"
-                />
-              </label>
-              <label className="field">
-                <span>Primaermission (optional)</span>
-                <input
-                  value={gameForm.primaryMission}
-                  onChange={(editEvent) => updateGameField("primaryMission", editEvent.target.value)}
-                  disabled={isMutating}
-                  placeholder="Kann leer bleiben"
-                />
-              </label>
-
-              <div className="field">
-                <span>Defender</span>
-                <div className="segmented-control">
-                  <button
-                    type="button"
-                    className={gameForm.defenderSlot === "player1" ? "is-selected" : ""}
-                    onClick={() => updateGameField("defenderSlot", "player1")}
-                    disabled={isMutating}
-                  >
-                    Spieler 1
-                  </button>
-                  <button
-                    type="button"
-                    className={gameForm.defenderSlot === "player2" ? "is-selected" : ""}
-                    onClick={() => updateGameField("defenderSlot", "player2")}
-                    disabled={isMutating}
-                  >
-                    Spieler 2
-                  </button>
-                </div>
-              </div>
-
-              <div className="field">
-                <span>Startspieler</span>
-                <div className="segmented-control">
-                  <button
-                    type="button"
-                    className={gameForm.startingSlot === "player1" ? "is-selected" : ""}
-                    onClick={() => updateGameField("startingSlot", "player1")}
-                    disabled={isMutating}
-                  >
-                    Spieler 1
-                  </button>
-                  <button
-                    type="button"
-                    className={gameForm.startingSlot === "player2" ? "is-selected" : ""}
-                    onClick={() => updateGameField("startingSlot", "player2")}
-                    disabled={isMutating}
-                  >
-                    Spieler 2
-                  </button>
-                </div>
-              </div>
-
-              <div className="button-row button-row--compact">
-                <button type="submit" className="primary-button compact-button" disabled={isMutating}>
-                  Speichern
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  disabled={isMutating}
-                  onClick={() => {
-                    setGameForm(createGameFormState(game));
-                    setIsEditingGame(false);
-                  }}
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </form>
-          ) : null}
-
-          {detailsOpen && !isEditingGame ? (
-            <div className="scoreboard__grid">
-              <div>
-                <span>Spieler 1</span>
-                <strong>{game.players[0].name}</strong>
-                <p>{game.players[0].army.name}</p>
-              </div>
-              <div>
-                <span>Spieler 2</span>
-                <strong>{game.players[1].name}</strong>
-                <p>{game.players[1].army.name}</p>
-              </div>
-              <div>
-                <span>Defender</span>
-                <strong>{game.defenderPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}</strong>
-              </div>
-              <div>
-                <span>Startspieler</span>
-                <strong>{game.startingPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}</strong>
-              </div>
-              <div>
-                <span>Aufstellung</span>
-                <strong>{game.deployment || "-"}</strong>
-              </div>
-              <div>
-                <span>Primaermission</span>
-                <strong>{game.primaryMission || "-"}</strong>
-              </div>
-            </div>
-          ) : null}
-        </section>
 
         <div className="stack">
           {game.players.map((player) => (
@@ -661,90 +474,6 @@ export const GamePage = ({ gameId }: GamePageProps) => {
             />
           ))}
         </div>
-
-        <section className="card stack">
-          <h2>Spielsteuerung</h2>
-          <div className="button-grid button-grid--tracker">
-            {isClosed ? (
-              <button
-                type="button"
-                className="primary-button compact-button"
-                onClick={() => void handleReopenGame()}
-                disabled={isMutating}
-              >
-                Spiel wieder eroeffnen
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="primary-button compact-button"
-                  onClick={() => void advanceGame(game.id)}
-                  disabled={isMutating}
-                >
-                  Weiter
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button compact-button"
-                  onClick={() =>
-                    void (isTimerRunning ? pauseActiveTimer(game.id) : startGameTimer(game.id))
-                  }
-                  disabled={isMutating}
-                >
-                  {isTimerRunning ? "Timer stoppen" : "Timer starten"}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  onClick={() => void rewindLastTurn(game.id)}
-                  disabled={isMutating || !latestTurn}
-                >
-                  Zug zurueck
-                </button>
-                <button
-                  type="button"
-                  className="danger-button compact-button"
-                  onClick={() => void finishGame(game.id)}
-                  disabled={isMutating}
-                >
-                  Spiel beenden
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              className="danger-button compact-button"
-              onClick={() => void handleDeleteGame()}
-              disabled={isMutating}
-            >
-              Spiel loeschen
-            </button>
-          </div>
-        </section>
-
-        <section className="card stack">
-          <div className="list-row">
-            <h2>Verlauf</h2>
-            <span>{editableEvents.length} Eintraege</span>
-          </div>
-          <div className="button-row button-row--compact">
-            <button
-              type="button"
-              className="ghost-button compact-button"
-              onClick={() => setNotesOpen(true)}
-            >
-              Notizen ({game.noteEvents.length})
-            </button>
-            <button
-              type="button"
-              className="ghost-button compact-button"
-              onClick={() => setEntriesOpen(true)}
-            >
-              Eintraege ({editableEvents.length})
-            </button>
-          </div>
-        </section>
       </section>
 
       {noteDialogPlayerId ? (
@@ -779,6 +508,257 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                   Abbrechen
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {detailsOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spieldetails</h2>
+                  <p className="muted-copy">
+                    {formatDateLabel(game.scheduledDate, game.scheduledTime)}
+                  </p>
+                </div>
+                <div className="button-row button-row--compact game-details-actions">
+                  {!isEditingGame && !isClosed ? (
+                    <button
+                      type="button"
+                      className="ghost-button compact-button"
+                      onClick={() => void openGameEditor()}
+                      disabled={isMutating}
+                    >
+                      Bearbeiten
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    onClick={closeGameDetails}
+                  >
+                    Schliessen
+                  </button>
+                </div>
+              </div>
+
+              {isEditingGame ? (
+                <form className="stack" onSubmit={handleGameSave}>
+                  <section className="stack">
+                    <RememberedNameField
+                      label="Spieler 1"
+                      value={gameForm.playerOneName}
+                      options={playerOptions}
+                      disabled={isMutating}
+                      onChange={(value) => updateGameField("playerOneName", value)}
+                    />
+                    <label className="field">
+                      <span>Armee 1</span>
+                      <select
+                        required
+                        value={gameForm.playerOneArmy}
+                        onChange={(editEvent) => updateGameField("playerOneArmy", editEvent.target.value)}
+                        disabled={isMutating}
+                      >
+                        <option value="">Armee waehlen</option>
+                        {ARMY_OPTIONS.map((army) => (
+                          <option key={army} value={army}>
+                            {army}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <RememberedNameField
+                      label="Spieler 2"
+                      value={gameForm.playerTwoName}
+                      options={playerOptions}
+                      disabled={isMutating}
+                      onChange={(value) => updateGameField("playerTwoName", value)}
+                    />
+                    <label className="field">
+                      <span>Armee 2</span>
+                      <select
+                        required
+                        value={gameForm.playerTwoArmy}
+                        onChange={(editEvent) => updateGameField("playerTwoArmy", editEvent.target.value)}
+                        disabled={isMutating}
+                      >
+                        <option value="">Armee waehlen</option>
+                        {ARMY_OPTIONS.map((army) => (
+                          <option key={army} value={army}>
+                            {army}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </section>
+
+                  <div className="two-column-grid">
+                    <label className="field">
+                      <span>Spielpunkte</span>
+                      <input
+                        required
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={gameForm.gamePoints}
+                        onChange={(editEvent) =>
+                          updateGameField("gamePoints", Number(editEvent.target.value) || 0)
+                        }
+                        disabled={isMutating}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Datum</span>
+                      <input
+                        required
+                        type="date"
+                        value={gameForm.scheduledDate}
+                        onChange={(editEvent) => updateGameField("scheduledDate", editEvent.target.value)}
+                        disabled={isMutating}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Uhrzeit</span>
+                      <input
+                        required
+                        type="time"
+                        value={gameForm.scheduledTime}
+                        onChange={(editEvent) => updateGameField("scheduledTime", editEvent.target.value)}
+                        disabled={isMutating}
+                      />
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Aufstellung (optional)</span>
+                    <input
+                      value={gameForm.deployment}
+                      onChange={(editEvent) => updateGameField("deployment", editEvent.target.value)}
+                      disabled={isMutating}
+                      placeholder="Kann leer bleiben"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Primaermission (optional)</span>
+                    <input
+                      value={gameForm.primaryMission}
+                      onChange={(editEvent) => updateGameField("primaryMission", editEvent.target.value)}
+                      disabled={isMutating}
+                      placeholder="Kann leer bleiben"
+                    />
+                  </label>
+
+                  <div className="field">
+                    <span>Defender</span>
+                    <div className="segmented-control">
+                      <button
+                        type="button"
+                        className={gameForm.defenderSlot === "player1" ? "is-selected" : ""}
+                        onClick={() => updateGameField("defenderSlot", "player1")}
+                        disabled={isMutating}
+                      >
+                        Spieler 1
+                      </button>
+                      <button
+                        type="button"
+                        className={gameForm.defenderSlot === "player2" ? "is-selected" : ""}
+                        onClick={() => updateGameField("defenderSlot", "player2")}
+                        disabled={isMutating}
+                      >
+                        Spieler 2
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <span>Startspieler</span>
+                    <div className="segmented-control">
+                      <button
+                        type="button"
+                        className={gameForm.startingSlot === "player1" ? "is-selected" : ""}
+                        onClick={() => updateGameField("startingSlot", "player1")}
+                        disabled={isMutating}
+                      >
+                        Spieler 1
+                      </button>
+                      <button
+                        type="button"
+                        className={gameForm.startingSlot === "player2" ? "is-selected" : ""}
+                        onClick={() => updateGameField("startingSlot", "player2")}
+                        disabled={isMutating}
+                      >
+                        Spieler 2
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="button-row button-row--compact">
+                    <button type="submit" className="primary-button compact-button" disabled={isMutating}>
+                      Speichern
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button compact-button"
+                      disabled={isMutating}
+                      onClick={() => {
+                        setGameForm(createGameFormState(game));
+                        setIsEditingGame(false);
+                      }}
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="scoreboard__grid">
+                  <div>
+                    <span>Spieler 1</span>
+                    <strong>{game.players[0].name}</strong>
+                    <p>{game.players[0].army.name}</p>
+                  </div>
+                  <div>
+                    <span>Spieler 2</span>
+                    <strong>{game.players[1].name}</strong>
+                    <p>{game.players[1].army.name}</p>
+                  </div>
+                  <div>
+                    <span>Datum</span>
+                    <strong>{game.scheduledDate || "-"}</strong>
+                    <p>{game.scheduledTime || "-"}</p>
+                  </div>
+                  <div>
+                    <span>Spielpunkte</span>
+                    <strong>{game.gamePoints}</strong>
+                  </div>
+                  <div>
+                    <span>Defender</span>
+                    <strong>
+                      {game.defenderPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Startspieler</span>
+                    <strong>
+                      {game.startingPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Startzeit</span>
+                    <strong>{formatClockTime(game.startedAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Aufstellung</span>
+                    <strong>{game.deployment || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Primaermission</span>
+                    <strong>{game.primaryMission || "-"}</strong>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -936,6 +916,37 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               )}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {!isClosed ? (
+        <div className="game-bottom-dock">
+          <button
+            type="button"
+            className="primary-button compact-button"
+            onClick={() => void advanceGame(game.id)}
+            disabled={isMutating}
+          >
+            Weiter
+          </button>
+          <button
+            type="button"
+            className="ghost-button compact-button"
+            onClick={() => void rewindLastTurn(game.id)}
+            disabled={isMutating || !latestTurn}
+          >
+            Zurueck
+          </button>
+          <button
+            type="button"
+            className="secondary-button compact-button"
+            onClick={() =>
+              void (isTimerRunning ? pauseActiveTimer(game.id) : startGameTimer(game.id))
+            }
+            disabled={isMutating}
+          >
+            {isTimerRunning ? "Timer aus" : "Timer an"}
+          </button>
         </div>
       ) : null}
     </Layout>

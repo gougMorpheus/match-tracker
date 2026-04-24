@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigation } from "./components/Navigation";
 import { GamesPage } from "./pages/GamesPage";
 import { GamePage } from "./pages/GamePage";
 import { NewGamePage } from "./pages/NewGamePage";
@@ -63,37 +62,14 @@ const App = () => {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const navigationItems = useMemo(
-    () => [
-      {
-        key: "games",
-        label: "Spiele",
-        icon: "M",
-        active: route.view === "games" || route.view === "game",
-        onClick: () => navigate({ view: "games" })
-      },
-      {
-        key: "new",
-        label: "Neu",
-        icon: "+",
-        active: route.view === "new",
-        onClick: () => navigate({ view: "new" })
-      },
-      {
-        key: "stats",
-        label: "Stats",
-        icon: "#",
-        active: route.view === "stats",
-        onClick: () => navigate({ view: "stats" })
-      }
-    ],
-    [route.view]
-  );
-
   return (
     <>
       {route.view === "games" ? (
-        <GamesPage onOpenGame={(gameId) => navigate({ view: "game", gameId })} />
+        <GamesPage
+          onOpenGame={(gameId) => navigate({ view: "game", gameId })}
+          onCreateGame={() => navigate({ view: "new" })}
+          onOpenStats={() => navigate({ view: "stats" })}
+        />
       ) : null}
 
       {route.view === "new" ? (
@@ -107,9 +83,12 @@ const App = () => {
         <GamePage gameId={route.gameId} onBack={() => navigate({ view: "games" })} />
       ) : null}
 
-      {route.view === "stats" ? <StatsPage onBack={() => navigate({ view: "games" })} /> : null}
-
-      <Navigation items={navigationItems} />
+      {route.view === "stats" ? (
+        <StatsPage
+          onBack={() => navigate({ view: "games" })}
+          onCreateGame={() => navigate({ view: "new" })}
+        />
+      ) : null}
     </>
   );
 };

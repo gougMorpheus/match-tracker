@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CollapsibleSection } from "../components/CollapsibleSection";
+import { FloatingMenu } from "../components/FloatingMenu";
 import { Layout } from "../components/Layout";
 import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
@@ -20,6 +21,7 @@ import { formatDateLabel, formatDuration } from "../utils/time";
 
 interface StatsPageProps {
   onBack: () => void;
+  onCreateGame: () => void;
 }
 
 type StatsSectionKey = "overview" | "players" | "armies" | "rounds" | "records" | "matchups";
@@ -36,7 +38,7 @@ const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
   deployments: false
 };
 
-export const StatsPage = ({ onBack }: StatsPageProps) => {
+export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const { games, isLoading, errorMessage, clearError } = useGameStore();
   const [filters, setFilters] = useState(createInitialGameFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -67,7 +69,21 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
   };
 
   return (
-    <Layout title="Statistik" subtitle="Kompakte Uebersicht mit aufklappbaren Auswertungen" onBack={onBack}>
+    <Layout
+      title="Statistik"
+      actions={
+        <FloatingMenu
+          items={[
+            { label: "Spiele", onClick: onBack },
+            { label: "Neues Spiel", onClick: onCreateGame },
+            {
+              label: filtersOpen ? "Filter schliessen" : "Filter",
+              onClick: () => setFiltersOpen((current) => !current)
+            }
+          ]}
+        />
+      }
+    >
       <section className="stack">
         {errorMessage ? (
           <article className="notice-card notice-card--error">
@@ -83,27 +99,17 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
           </article>
         ) : null}
 
-        <div className="button-row button-row--compact">
-          <button
-            type="button"
-            className="ghost-button compact-button"
-            onClick={() => setFiltersOpen((current) => !current)}
-          >
-            {filtersOpen ? "Filter schliessen" : "Filter"}
-          </button>
-          {filtersOpen ? (
-            <button
-              type="button"
-              className="ghost-button compact-button"
-              onClick={() => setFilters(createInitialGameFilters())}
-            >
-              Reset
-            </button>
-          ) : null}
-        </div>
-
         {filtersOpen ? (
           <section className="card stack">
+            <div className="button-row button-row--compact">
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() => setFilters(createInitialGameFilters())}
+              >
+                Reset
+              </button>
+            </div>
             <label className="field">
               <span>Suche</span>
               <input
