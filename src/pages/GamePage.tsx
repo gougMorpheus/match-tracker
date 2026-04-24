@@ -252,6 +252,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   );
 
   useEffect(() => {
+    if (detailsOpen || isEditingGame) {
+      return;
+    }
+
     const runningTurn =
       allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
     if (
@@ -267,7 +271,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [allTurns, latestTurn, selectedTurnKey]);
+  }, [allTurns, detailsOpen, isEditingGame, latestTurn, selectedTurnKey]);
 
   useEffect(() => {
     if (!game) {
@@ -482,6 +486,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       );
     }
 
+    setGameForm(createGameFormState(getGame(game.id) ?? game));
     setDetailsOpen(true);
     setIsEditingGame(true);
   };

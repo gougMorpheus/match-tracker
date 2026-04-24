@@ -119,6 +119,11 @@ const createDefaultPlayerDetachments = (): Record<string, string> => ({
   "player-2": ""
 });
 
+const createDefaultScenarioMeta = (): { deployment: string; primaryMission: string } => ({
+  deployment: "",
+  primaryMission: ""
+});
+
 const createPlayerDetachmentsFromInput = (payload: CreateGameInput): Record<string, string> => ({
   "player-1": payload.playerOneDetachment.trim(),
   "player-2": payload.playerTwoDetachment.trim()
@@ -203,11 +208,35 @@ const parsePlayerMeta = (value: string | null): Record<string, string> => {
   }
 };
 
+const parseScenarioMeta = (value: string | null): { deployment: string; primaryMission: string } => {
+  if (!value) {
+    return createDefaultScenarioMeta();
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      scenarioMeta?: {
+        deployment?: string;
+        primaryMission?: string;
+      };
+    };
+    return {
+      deployment:
+        typeof parsed?.scenarioMeta?.deployment === "string" ? parsed.scenarioMeta.deployment : "",
+      primaryMission:
+        typeof parsed?.scenarioMeta?.primaryMission === "string" ? parsed.scenarioMeta.primaryMission : ""
+    };
+  } catch {
+    return createDefaultScenarioMeta();
+  }
+};
+
 const serializeGameNotes = (
   timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
   legacyScoreTotals: Record<string, number>,
-  playerDetachments: Record<string, string>
+  playerDetachments: Record<string, string>,
+  scenarioMeta?: { deployment: string; primaryMission: string }
 ): string | null => {
   const hasCorrections =
     Boolean(timerCorrections.totalMs) ||
@@ -215,8 +244,11 @@ const serializeGameNotes = (
     Object.keys(timerCorrections.turns).length > 0;
   const hasScoreMeta = scoreDetailLevel !== "full" || Object.keys(legacyScoreTotals).length > 0;
   const hasPlayerMeta = Object.values(playerDetachments).some((value) => value.trim().length > 0);
+  const hasScenarioMeta = Boolean(
+    scenarioMeta?.deployment.trim() || scenarioMeta?.primaryMission.trim()
+  );
 
-  if (!hasCorrections && !hasScoreMeta && !hasPlayerMeta) {
+  if (!hasCorrections && !hasScoreMeta && !hasPlayerMeta && !hasScenarioMeta) {
     return null;
   }
 
@@ -228,6 +260,10 @@ const serializeGameNotes = (
     },
     playerMeta: {
       detachments: playerDetachments
+    },
+    scenarioMeta: {
+      deployment: scenarioMeta?.deployment.trim() ?? "",
+      primaryMission: scenarioMeta?.primaryMission.trim() ?? ""
     }
   });
 };
@@ -553,6 +589,7 @@ export const mapSupabaseGameToAppGame = (
   const endedAt = getDerivedEndedAt(row, mappedEvents.timeEvents);
   const scoreMeta = parseScoreMeta(row.notes);
   const playerDetachments = parsePlayerMeta(row.notes);
+  const scenarioMeta = parseScenarioMeta(row.notes);
 
   return {
     id: row.id,
@@ -563,8 +600,8 @@ export const mapSupabaseGameToAppGame = (
     gamePoints: row.player1_max_points,
     scheduledDate: date,
     scheduledTime: time,
-    deployment: row.deployment ?? "",
-    primaryMission: row.primary_mission ?? "",
+    deployment: row.deployment ?? scenarioMeta.deployment,
+    primaryMission: row.primary_mission ?? scenarioMeta.primaryMission,
     defenderPlayerId,
     startingPlayerId,
     currentPlayerId: getCurrentPlayerId(row.id, startingPlayerId, rounds, endedAt),
@@ -619,7 +656,11 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
     createEmptyTimerCorrections(),
     "full",
     {},
-    createPlayerDetachmentsFromInput(payload)
+    createPlayerDetachmentsFromInput(payload),
+    {
+      deployment: payload.deployment,
+      primaryMission: payload.primaryMission
+    }
   )
 });
 
@@ -672,6 +713,9 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
     "player-1": game.players[0].army.detachment,
     "player-2": game.players[1].army.detachment
+  }, {
+    deployment: game.deployment,
+    primaryMission: game.primaryMission
   })
 });
 
@@ -772,6 +816,9 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
     "player-1": game.players[0].army.detachment,
     "player-2": game.players[1].army.detachment
+  }, {
+    deployment: game.deployment,
+    primaryMission: game.primaryMission
   })
 });
 
