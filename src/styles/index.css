@@ -110,6 +110,16 @@ textarea {
   margin-top: 0;
 }
 
+.app-shell--sticky-header .subtitle {
+  margin: 0.1rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.1rem;
+}
+
 .subtitle,
 .muted-copy,
 .game-card__player span,
@@ -527,24 +537,9 @@ textarea {
 }
 
 .game-header-meta {
-  display: grid;
-  gap: 0.2rem;
-  justify-items: end;
-  width: min(100%, 26rem);
-}
-
-.tracker-summary--textline {
   display: flex;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.25rem 0.6rem;
-  width: 100%;
-  font-size: 0.68rem;
-  color: var(--muted);
-}
-
-.tracker-summary--textline span {
-  white-space: nowrap;
+  width: auto;
 }
 
 .tracker-summary--inline span {
@@ -1048,13 +1043,7 @@ textarea {
   }
 
   .game-header-meta {
-    width: min(100%, 15rem);
     padding-right: 2.9rem;
-  }
-
-  .tracker-summary--textline {
-    justify-content: flex-start;
-    gap: 0.15rem 0.45rem;
   }
 
   .floating-menu__trigger {

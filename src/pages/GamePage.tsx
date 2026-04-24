@@ -328,6 +328,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   return (
     <Layout
       title="Tracker"
+      subtitle={`Runden ${getCurrentRoundNumber(game)} (${formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}) Zug ${getCurrentTurnNumber(game)} (${formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}) Gesamt ${formatDuration(getGameDurationMs(game))}`}
       stickyHeader
       actions={
         <>
@@ -339,15 +340,6 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
                 Timer: {timerStatusLabel}
               </span>
-            </div>
-            <div className="tracker-summary tracker-summary--textline">
-              <span>
-                Runden {getCurrentRoundNumber(game)} ({formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)})
-              </span>
-              <span>
-                Zug {getCurrentTurnNumber(game)} ({formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)})
-              </span>
-              <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
             </div>
           </div>
           <FloatingMenu
