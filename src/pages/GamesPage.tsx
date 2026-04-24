@@ -50,7 +50,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
 
   return (
     <Layout
-      title="Spiele"
+      title="Main - Spiele"
       actions={
         <FloatingMenu
           fixed

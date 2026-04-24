@@ -250,7 +250,14 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     scoreEvents: [],
     commandPointEvents: [],
     noteEvents: [],
-    timeEvents: []
+    timeEvents: [
+      {
+        id: createUuid(),
+        type: "time",
+        action: "session-start",
+        createdAt
+      }
+    ]
   });
 };
 

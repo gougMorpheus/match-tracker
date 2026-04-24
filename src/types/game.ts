@@ -3,6 +3,8 @@ export type GameStatus = "active" | "completed";
 export type ScoreType = "primary" | "secondary";
 export type CommandPointType = "gained" | "spent";
 export type TimeEventAction =
+  | "session-start"
+  | "session-end"
   | "game-start"
   | "game-end"
   | "round-start"

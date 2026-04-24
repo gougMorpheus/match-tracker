@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { GameOverview } from "../components/GameOverview";
 import { Layout } from "../components/Layout";
 import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
@@ -43,6 +44,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [filters, setFilters] = useState(createInitialGameFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [openSections, setOpenSections] = useState(defaultOpenSections);
+  const [gamePickerOpen, setGamePickerOpen] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const filteredGames = useMemo(() => filterGames(games, filters), [games, filters]);
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
   const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
@@ -53,6 +56,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const matchupAggregates = useMemo(() => createMatchupAggregates(filteredGames), [filteredGames]);
   const roundDurationAggregates = useMemo(() => createRoundDurationAggregates(filteredGames), [filteredGames]);
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
+  const selectedGame = filteredGames.find((game) => game.id === selectedGameId) ?? null;
 
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
     setFilters((current) => ({
@@ -201,7 +205,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
         ) : filteredGames.length ? (
           <>
             <section className="stats-hero">
-              <article className="stats-hero__feature">
+              <article
+                className="stats-hero__feature stats-hero__feature--clickable"
+                onClick={() => setGamePickerOpen(true)}
+              >
                 <span>Gefilterte Spiele</span>
                 <strong>{overview.games}</strong>
                 <p>{overview.players} Spieler | {overview.armies} Armeen</p>
@@ -482,6 +489,80 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           </article>
         )}
       </section>
+
+      {gamePickerOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spiel auswaehlen</h2>
+                  <p className="muted-copy">{filteredGames.length} Treffer</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => setGamePickerOpen(false)}
+                >
+                  Schliessen
+                </button>
+              </div>
+              <div className="modal-list">
+                {filteredGames.map((game) => (
+                  <button
+                    key={game.id}
+                    type="button"
+                    className="game-picker-item"
+                    onClick={() => {
+                      setSelectedGameId(game.id);
+                      setGamePickerOpen(false);
+                    }}
+                  >
+                    <strong>
+                      {game.players[0].name} vs {game.players[1].name}
+                    </strong>
+                    <span>{formatDateLabel(game.scheduledDate, game.scheduledTime)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedGame ? (
+        <div className="modal-backdrop">
+          <div className="modal-card modal-card--wide">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spielstatistik</h2>
+                  <p className="muted-copy">
+                    {selectedGame.players[0].name} vs {selectedGame.players[1].name}
+                  </p>
+                </div>
+                <div className="button-row button-row--compact">
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    onClick={() => setGamePickerOpen(true)}
+                  >
+                    Anderes Spiel
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    onClick={() => setSelectedGameId(null)}
+                  >
+                    Schliessen
+                  </button>
+                </div>
+              </div>
+              <GameOverview game={selectedGame} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Layout>
   );
 };

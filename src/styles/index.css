@@ -259,6 +259,8 @@ textarea {
   top: 0.75rem;
   right: 1rem;
   z-index: 28;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .game-status-strip {
@@ -523,6 +525,11 @@ textarea {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.25rem 0.45rem;
+  width: min(100%, 16.5rem);
+}
+
+.tracker-summary--floating {
+  margin-top: 0.1rem;
 }
 
 .tracker-summary--inline span {
@@ -639,6 +646,82 @@ textarea {
   min-height: 28px;
   padding: 0.3rem 0.45rem;
   font-size: 0.68rem;
+}
+
+.overview-summary-grid,
+.overview-player-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.overview-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-summary-grid div,
+.overview-player-card {
+  border-radius: 16px;
+  background: var(--bg-soft);
+  padding: 0.75rem;
+}
+
+.overview-summary-grid span,
+.overview-player-card p,
+.overview-stat-line span,
+.overview-bar-row__meta p {
+  color: var(--muted);
+}
+
+.overview-player-card__head,
+.overview-stat-line,
+.overview-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.overview-player-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-bar-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.overview-bar-row {
+  align-items: center;
+}
+
+.overview-bar-row__meta {
+  width: 6rem;
+  min-width: 6rem;
+}
+
+.overview-bar {
+  flex: 1;
+  height: 0.65rem;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.9);
+  overflow: hidden;
+}
+
+.overview-bar__fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.overview-bar__fill--score {
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+}
+
+.overview-bar__fill--time {
+  background: linear-gradient(90deg, #34d399, #10b981);
+}
+
+.overview-bar__fill--round {
+  background: linear-gradient(90deg, #f59e0b, #f97316);
 }
 
 .game-page .button-grid--tracker {
@@ -979,6 +1062,10 @@ textarea {
   padding: 1rem;
 }
 
+.modal-card--wide {
+  width: min(100%, 760px);
+}
+
 .modal-list {
   max-height: min(62vh, 520px);
   overflow-y: auto;
@@ -1000,11 +1087,14 @@ textarea {
   width: 2.6rem;
   min-width: 2.6rem;
   padding: 0.45rem;
+  display: grid;
+  place-items: center;
 }
 
 .floating-menu__burger {
   display: inline-grid;
   gap: 0.22rem;
+  place-items: center;
 }
 
 .floating-menu__burger span {
@@ -1052,6 +1142,23 @@ textarea {
 .floating-menu__section-items {
   display: grid;
   gap: 0.25rem;
+}
+
+.stats-hero__feature--clickable,
+.game-picker-item {
+  cursor: pointer;
+}
+
+.game-picker-item {
+  width: 100%;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.88);
+  color: var(--text);
+  padding: 0.7rem 0.85rem;
 }
 
 .floating-menu__item {

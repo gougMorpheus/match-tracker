@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { GameOverview } from "../components/GameOverview";
 import { Layout } from "../components/Layout";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
@@ -338,6 +339,26 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               Timer: {timerStatusLabel}
             </span>
           </div>
+          <div className="tracker-summary tracker-summary--inline tracker-summary--floating">
+            <span>
+              <strong>Runde</strong> {getCurrentRoundNumber(game)}
+            </span>
+            <span>
+              <strong>Zug</strong> {getCurrentTurnNumber(game)}
+            </span>
+            <span>
+              <strong>Aktiv</strong> {game.players.find((player) => player.id === activePlayerId)?.name ?? "-"}
+            </span>
+            <span>
+              <strong>Gesamt</strong> {formatDuration(getGameDurationMs(game))}
+            </span>
+            <span>
+              <strong>Runde</strong> {formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}
+            </span>
+            <span>
+              <strong>Zug</strong> {formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}
+            </span>
+          </div>
           <FloatingMenu
             ariaLabel="Spielmenue"
             sections={[
@@ -394,37 +415,18 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           </article>
         ) : null}
 
-        <article className="tracker-summary tracker-summary--inline">
-          <span>
-            <strong>R</strong> {getCurrentRoundNumber(game)}
-          </span>
-          <span>
-            <strong>Z</strong> {getCurrentTurnNumber(game)}
-          </span>
-          <span>
-            <strong>Aktiv</strong> {game.players.find((player) => player.id === activePlayerId)?.name ?? "-"}
-          </span>
-          <span>
-            <strong>Gesamt</strong> {formatDuration(getGameDurationMs(game))}
-          </span>
-          <span>
-            <strong>Runde</strong> {formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}
-          </span>
-          <span>
-            <strong>Zug</strong> {formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}
-          </span>
-        </article>
-
-        <div className="stack">
-          {orderedPlayers.map((player) => (
-            <PlayerScoreboard
-              key={player.id}
-              game={game}
-              player={player}
-              emphasized={activePlayerId === player.id}
-              defender={game.defenderPlayerId === player.id}
-              noteAction={
-                !isClosed ? (
+        {isClosed ? (
+          <GameOverview game={game} />
+        ) : (
+          <div className="stack">
+            {orderedPlayers.map((player) => (
+              <PlayerScoreboard
+                key={player.id}
+                game={game}
+                player={player}
+                emphasized={activePlayerId === player.id}
+                defender={game.defenderPlayerId === player.id}
+                noteAction={
                   <button
                     type="button"
                     className="ghost-button compact-button scoreboard__note-button"
@@ -440,54 +442,54 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                   >
                     Notiz
                   </button>
-                ) : null
-              }
-              controls={
-                <QuickAdjustControls
-                  player={player}
-                  currentCommandPoints={getPlayerCommandPoints(game, player.id)}
-                  currentPrimary={getPlayerPrimaryTotal(game, player.id)}
-                  currentSecondary={getPlayerSecondaryTotal(game, player.id)}
-                  isSubmitting={isMutating || isClosed}
-                  canSpendCommandPoints={activePlayerId === player.id}
-                  onCommandPointChange={async (playerId, direction, amount) => {
-                    const currentCommandPoints = getPlayerCommandPoints(game, playerId);
-                    const safeAmount =
-                      direction === "minus" ? Math.min(amount, currentCommandPoints) : amount;
-                    if (safeAmount <= 0) {
-                      return;
-                    }
+                }
+                controls={
+                  <QuickAdjustControls
+                    player={player}
+                    currentCommandPoints={getPlayerCommandPoints(game, player.id)}
+                    currentPrimary={getPlayerPrimaryTotal(game, player.id)}
+                    currentSecondary={getPlayerSecondaryTotal(game, player.id)}
+                    isSubmitting={isMutating || isClosed}
+                    canSpendCommandPoints={activePlayerId === player.id}
+                    onCommandPointChange={async (playerId, direction, amount) => {
+                      const currentCommandPoints = getPlayerCommandPoints(game, playerId);
+                      const safeAmount =
+                        direction === "minus" ? Math.min(amount, currentCommandPoints) : amount;
+                      if (safeAmount <= 0) {
+                        return;
+                      }
 
-                    await addCommandPointEvent({
-                      gameId,
-                      playerId,
-                      value: safeAmount,
-                      cpType: direction === "plus" ? "gained" : "spent"
-                    });
-                  }}
-                  onScoreChange={async (playerId, scoreType, direction, amount) => {
-                    const currentScore =
-                      scoreType === "primary"
-                        ? getPlayerPrimaryTotal(game, playerId)
-                        : getPlayerSecondaryTotal(game, playerId);
-                    const safeAmount =
-                      direction === "minus" ? Math.min(amount, currentScore) : amount;
-                    if (safeAmount <= 0) {
-                      return;
-                    }
+                      await addCommandPointEvent({
+                        gameId,
+                        playerId,
+                        value: safeAmount,
+                        cpType: direction === "plus" ? "gained" : "spent"
+                      });
+                    }}
+                    onScoreChange={async (playerId, scoreType, direction, amount) => {
+                      const currentScore =
+                        scoreType === "primary"
+                          ? getPlayerPrimaryTotal(game, playerId)
+                          : getPlayerSecondaryTotal(game, playerId);
+                      const safeAmount =
+                        direction === "minus" ? Math.min(amount, currentScore) : amount;
+                      if (safeAmount <= 0) {
+                        return;
+                      }
 
-                    await addScoreEvent({
-                      gameId,
-                      playerId,
-                      value: direction === "plus" ? safeAmount : safeAmount * -1,
-                      scoreType
-                    });
-                  }}
-                />
-              }
-            />
-          ))}
-        </div>
+                      await addScoreEvent({
+                        gameId,
+                        playerId,
+                        value: direction === "plus" ? safeAmount : safeAmount * -1,
+                        scoreType
+                      });
+                    }}
+                  />
+                }
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {noteDialogPlayerId ? (
@@ -857,6 +859,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                             {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
                           </p>
                         </div>
+                        <span>{formatClockTime(event.createdAt)}</span>
                         <div className="button-row button-row--compact">
                           <button
                             type="button"

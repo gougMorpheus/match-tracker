@@ -42,6 +42,7 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
+  isSessionRunning,
   isTurnPaused
 } from "../utils/gameCalculations";
 import {
@@ -978,12 +979,31 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        const nextGame = mutateGame(gameId, (currentGame) => removeLocalEvent(currentGame, latestGameEndEvent.id));
-        enqueueGameUpsert(nextGame.id);
+        const restartSession = window.confirm(
+          "Gesamtspielzeit beim Wiedereroeffnen wieder starten?"
+        );
+
+        let nextGame = mutateGame(gameId, (currentGame) =>
+          removeLocalEvent(currentGame, latestGameEndEvent.id)
+        );
         enqueueEventDelete(nextGame.id, latestGameEndEvent.id);
+
+        if (restartSession && !isSessionRunning(nextGame)) {
+          nextGame = enqueueTimeEvents(nextGame, [{ action: "session-start" }]);
+        } else {
+          enqueueGameUpsert(nextGame.id);
+        }
         void flushSyncQueue();
       }),
-    [enqueueEventDelete, enqueueGameUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
+    [
+      enqueueEventDelete,
+      enqueueGameUpsert,
+      enqueueTimeEvents,
+      flushSyncQueue,
+      getGame,
+      mutateGame,
+      runMutation
+    ]
   );
 
   const updateGameEvent = useCallback(
@@ -1055,6 +1075,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             playerId: game.currentPlayerId,
             roundNumber: latestRound.roundNumber,
             action: "round-end"
+          });
+        }
+
+        if (isSessionRunning(game)) {
+          eventsToAdd.push({
+            action: "session-end"
           });
         }
 
