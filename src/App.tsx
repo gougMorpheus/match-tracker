@@ -8,14 +8,16 @@ type Route =
   | { view: "games" }
   | { view: "new" }
   | { view: "stats" }
-  | { view: "game"; gameId: string };
+  | { view: "game"; gameId: string; mode?: "overview" };
 
 const parseHashRoute = (hash: string): Route => {
   const normalized = hash.replace(/^#/, "");
 
   if (normalized.startsWith("/game/")) {
-    const gameId = normalized.replace("/game/", "");
-    return gameId ? { view: "game", gameId } : { view: "games" };
+    const [, , gameId, mode] = normalized.split("/");
+    return gameId
+      ? { view: "game", gameId, mode: mode === "overview" ? "overview" : undefined }
+      : { view: "games" };
   }
 
   if (normalized === "/new") {
@@ -31,7 +33,8 @@ const parseHashRoute = (hash: string): Route => {
 
 const navigate = (route: Route) => {
   if (route.view === "game") {
-    window.location.hash = `/game/${route.gameId}`;
+    window.location.hash =
+      route.mode === "overview" ? `/game/${route.gameId}/overview` : `/game/${route.gameId}`;
     return;
   }
 
@@ -80,7 +83,11 @@ const App = () => {
       ) : null}
 
       {route.view === "game" ? (
-        <GamePage gameId={route.gameId} onBack={() => navigate({ view: "games" })} />
+        <GamePage
+          gameId={route.gameId}
+          forceOverview={route.mode === "overview"}
+          onBack={() => navigate({ view: "games" })}
+        />
       ) : null}
 
       {route.view === "stats" ? (

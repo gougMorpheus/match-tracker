@@ -15,6 +15,7 @@ import type { Database } from "../types/supabase";
 import { createId } from "../utils/id";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
+import type { TimerCorrections } from "../types/game";
 
 export type SupabaseGameRecord = Database["public"]["Tables"]["games"]["Row"];
 export type SupabaseEventRecord = Database["public"]["Tables"]["events"]["Row"];
@@ -84,6 +85,55 @@ const getNumericValue = (value: number | string | null | undefined): number | nu
 
   const parsedValue = typeof value === "string" ? Number(value) : value;
   return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const createEmptyTimerCorrections = (): TimerCorrections => ({
+  totalMs: 0,
+  rounds: {},
+  turns: {}
+});
+
+const parseTimerCorrections = (value: string | null): TimerCorrections => {
+  if (!value) {
+    return createEmptyTimerCorrections();
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      timerCorrections?: {
+        totalMs?: number;
+        rounds?: Record<string, number>;
+        turns?: Record<string, number>;
+      };
+    };
+    const timerCorrections = parsed?.timerCorrections;
+    return {
+      totalMs: typeof timerCorrections?.totalMs === "number" ? timerCorrections.totalMs : 0,
+      rounds: Object.fromEntries(
+        Object.entries(timerCorrections?.rounds ?? {}).filter(([, amount]) => typeof amount === "number")
+      ),
+      turns: Object.fromEntries(
+        Object.entries(timerCorrections?.turns ?? {}).filter(([, amount]) => typeof amount === "number")
+      )
+    };
+  } catch {
+    return createEmptyTimerCorrections();
+  }
+};
+
+const serializeTimerCorrections = (timerCorrections: TimerCorrections): string | null => {
+  const hasCorrections =
+    Boolean(timerCorrections.totalMs) ||
+    Object.keys(timerCorrections.rounds).length > 0 ||
+    Object.keys(timerCorrections.turns).length > 0;
+
+  if (!hasCorrections) {
+    return null;
+  }
+
+  return JSON.stringify({
+    timerCorrections
+  });
 };
 
 const hasMissingScenarioColumnError = (message: string): boolean => {
@@ -443,7 +493,8 @@ export const mapSupabaseGameToAppGame = (
     scoreEvents: mappedEvents.scoreEvents,
     commandPointEvents: mappedEvents.commandPointEvents,
     noteEvents: mappedEvents.noteEvents,
-    timeEvents: mappedEvents.timeEvents
+    timeEvents: mappedEvents.timeEvents,
+    timerCorrections: parseTimerCorrections(row.notes)
   };
 };
 
@@ -462,7 +513,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
-  notes: null
+  notes: serializeTimerCorrections(game.timerCorrections)
 });
 
 export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabaseGamePayload => ({
@@ -511,7 +562,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: getWinnerPlayerSlot(game),
-  notes: null
+  notes: serializeTimerCorrections(game.timerCorrections)
 });
 
 export const createImportedEventPayloads = (persistedGame: Game, importedGame: Game): CreateSupabaseEventPayload[] => {
@@ -598,7 +649,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
-  notes: null
+  notes: serializeTimerCorrections(game.timerCorrections)
 });
 
 export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayload[] => {

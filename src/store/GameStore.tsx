@@ -68,6 +68,14 @@ interface EventPayload {
   turnNumber?: number;
 }
 
+interface TimerCorrectionInput {
+  gameId: string;
+  turnRef: TurnRef;
+  totalMs: number;
+  roundMs: number;
+  turnMs: number;
+}
+
 interface GameStoreValue {
   games: Game[];
   isLoading: boolean;
@@ -77,6 +85,7 @@ interface GameStoreValue {
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
   updateGameDetails: (gameId: string, input: CreateGameInput) => Promise<void>;
+  setTimerCorrections: (input: TimerCorrectionInput) => Promise<void>;
   addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
@@ -572,6 +581,43 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     async (gameId: string, input: CreateGameInput) =>
       runMutation(async () => {
         const nextGame = mutateGame(gameId, (game) => updateLocalGameDetails(game, input));
+        enqueueGameUpsert(nextGame.id);
+        void flushSyncQueue();
+      }),
+    [enqueueGameUpsert, flushSyncQueue, mutateGame, runMutation]
+  );
+
+  const setTimerCorrections = useCallback(
+    async ({ gameId, turnRef, totalMs, roundMs, turnMs }: TimerCorrectionInput) =>
+      runMutation(async () => {
+        const nextGame = mutateGame(gameId, (game) => {
+          const nextTurns = { ...game.timerCorrections.turns };
+          const nextRounds = { ...game.timerCorrections.rounds };
+          const turnKey = `${turnRef.roundNumber}:${turnRef.turnNumber}`;
+          const roundKey = String(turnRef.roundNumber);
+
+          if (turnMs) {
+            nextTurns[turnKey] = turnMs;
+          } else {
+            delete nextTurns[turnKey];
+          }
+
+          if (roundMs) {
+            nextRounds[roundKey] = roundMs;
+          } else {
+            delete nextRounds[roundKey];
+          }
+
+          return {
+            ...game,
+            timerCorrections: {
+              totalMs,
+              rounds: nextRounds,
+              turns: nextTurns
+            }
+          };
+        });
+
         enqueueGameUpsert(nextGame.id);
         void flushSyncQueue();
       }),
@@ -1382,6 +1428,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       getGame,
       refreshGames,
       updateGameDetails,
+      setTimerCorrections,
       addScoreEvent,
       addCommandPointEvent,
       addNoteEvent,
@@ -1417,6 +1464,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       isMutating,
       pauseActiveTimer,
       refreshGames,
+      setTimerCorrections,
       reopenGame,
       rewindLastTurn,
       startGameTimer,

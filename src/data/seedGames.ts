@@ -128,6 +128,11 @@ export const seedGames: Game[] = [
         createdAt: "2026-04-20T18:09:00.000Z"
       }
     ],
+    timerCorrections: {
+      totalMs: 0,
+      rounds: {},
+      turns: {}
+    },
     timeEvents: [
       {
         id: createId("time"),

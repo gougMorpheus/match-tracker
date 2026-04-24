@@ -770,15 +770,18 @@ textarea {
 }
 
 .overview-summary-grid--compact div {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-content: start;
   padding: 0.42rem 0.5rem;
   border-radius: 14px;
-  min-height: 0;
+  min-height: 3.25rem;
 }
 
 .overview-summary-grid--compact strong {
-  margin-top: 0.12rem;
+  margin-top: 0.22rem;
   font-size: 0.82rem;
-  line-height: 1.05;
+  line-height: 1.1;
   word-break: break-word;
 }
 
@@ -805,29 +808,38 @@ textarea {
 
 .overview-player-card__head {
   align-items: flex-start;
-  min-height: 2.8rem;
+  min-height: 3.5rem;
 }
 
 .overview-player-card__identity {
   min-width: 0;
   flex: 1;
+  display: grid;
+  grid-template-rows: auto minmax(2.15rem, auto);
 }
 
 .overview-player-card__identity strong,
 .overview-player-card__identity p {
   display: block;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .overview-player-card__identity strong {
   line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .overview-player-card__identity p {
   margin: 0.18rem 0 0;
   line-height: 1.05;
+  min-height: 2.1rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .overview-player-grid {
@@ -1462,9 +1474,13 @@ textarea {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
   padding: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: rgba(11, 17, 32, 0.72);
   backdrop-filter: blur(8px);
   z-index: 30;
@@ -1529,6 +1545,10 @@ textarea {
 
 .modal-card {
   width: min(100%, 460px);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border-radius: 24px;
   border: 1px solid var(--border);
   background: var(--bg-raised);

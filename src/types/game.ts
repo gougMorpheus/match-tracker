@@ -94,6 +94,12 @@ export interface TimeEvent {
   createdAt: string;
 }
 
+export interface TimerCorrections {
+  totalMs: number;
+  rounds: Record<string, number>;
+  turns: Record<string, number>;
+}
+
 export interface Game {
   id: string;
   createdAt: string;
@@ -115,6 +121,7 @@ export interface Game {
   commandPointEvents: CommandPointEvent[];
   noteEvents: NoteEvent[];
   timeEvents: TimeEvent[];
+  timerCorrections: TimerCorrections;
 }
 
 export interface GameSummaryPlayer {

@@ -9,6 +9,7 @@ import type {
   Round,
   ScoreEvent,
   ScoreType,
+  TimerCorrections,
   TimeEvent,
   TimeEventAction,
   Turn
@@ -190,6 +191,12 @@ const syncPlayers = (players: [Player, Player], gamePoints: number): [Player, Pl
     }
   ];
 
+const createEmptyTimerCorrections = (): TimerCorrections => ({
+  totalMs: 0,
+  rounds: {},
+  turns: {}
+});
+
 export const syncDerivedGameState = (game: Game): Game => {
   const sortedTimeEvents = sortByCreatedAt(game.timeEvents);
   const hasTimeEvents = sortedTimeEvents.length > 0;
@@ -223,7 +230,8 @@ export const syncDerivedGameState = (game: Game): Game => {
     timeEvents: sortedTimeEvents,
     scoreEvents: sortByCreatedAt(game.scoreEvents),
     commandPointEvents: sortByCreatedAt(game.commandPointEvents),
-    noteEvents: sortByCreatedAt(game.noteEvents)
+    noteEvents: sortByCreatedAt(game.noteEvents),
+    timerCorrections: game.timerCorrections ?? createEmptyTimerCorrections()
   };
 };
 
@@ -271,6 +279,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     scoreEvents: [],
     commandPointEvents: [],
     noteEvents: [],
+    timerCorrections: createEmptyTimerCorrections(),
     timeEvents: [
       {
         id: createUuid(),
@@ -491,6 +500,7 @@ export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game 
     currentPlayerId: localGame.currentPlayerId,
     startedAt: localGame.startedAt,
     endedAt: localGame.endedAt,
+    timerCorrections: localGame.timerCorrections,
     players: localGame.players
   });
 
@@ -595,6 +605,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
       id: isUuid(event.id) ? event.id : createUuid(),
       playerId: mapPlayerId(event.playerId) ?? playerOneId
     })),
+    timerCorrections: rawGame.timerCorrections ?? createEmptyTimerCorrections(),
     timeEvents: rawGame.timeEvents.map((event) => ({
       ...event,
       id: isUuid(event.id) ? event.id : createUuid(),

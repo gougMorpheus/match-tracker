@@ -15,8 +15,10 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
-  getRoundDurationMs,
+  getRoundCorrectionMs,
   getSessionDurationMs,
+  getTotalCorrectionMs,
+  getTurnBaseDurationMs,
   getTurnDurationMs,
   isTurnPaused
 } from "../utils/gameCalculations";
@@ -26,6 +28,7 @@ import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDur
 interface GamePageProps {
   gameId: string;
   onBack: () => void;
+  forceOverview?: boolean;
 }
 
 interface EditableEventItem {
@@ -59,7 +62,7 @@ const createGameFormState = (game: Game): CreateGameInput => ({
 const getRoundSurfaceClassName = (roundNumber?: number) =>
   roundNumber && roundNumber % 2 === 0 ? "round-surface round-surface--even" : "round-surface round-surface--odd";
 
-export const GamePage = ({ gameId, onBack }: GamePageProps) => {
+export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProps) => {
   const {
     games,
     getGame,
@@ -69,6 +72,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     clearError,
     advanceGame,
     rewindLastTurn,
+    setTimerCorrections,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
@@ -91,6 +95,10 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const [noteDraft, setNoteDraft] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [entriesOpen, setEntriesOpen] = useState(false);
+  const [timerAdjustOpen, setTimerAdjustOpen] = useState(false);
+  const [timerAdjustTurnSeconds, setTimerAdjustTurnSeconds] = useState("0");
+  const [timerAdjustRoundSeconds, setTimerAdjustRoundSeconds] = useState("0");
+  const [timerAdjustTotalSeconds, setTimerAdjustTotalSeconds] = useState("0");
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const [roundChangePulse, setRoundChangePulse] = useState<number | null>(null);
   const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
@@ -266,7 +274,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   }, [roundChangePulse]);
 
   if (!game && isLoading) {
-    return <Layout title="Live Tracker" subtitle="Spiel wird geladen" />;
+    return <Layout title="Tracker" subtitle="Spiel wird geladen" />;
   }
 
   if (!game || !gameForm) {
@@ -289,17 +297,22 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const canGoBack = selectedTurnIndex > 0;
   const canGoForwardToExistingTurn =
     selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1;
+  const selectedRoundTurns =
+    selectedRound?.turns.filter((turn) =>
+      selectedTurn ? turn.turnNumber <= selectedTurn.turnNumber : true
+    ) ?? [];
   const selectedRoundDurationMs = selectedRound
-    ? selectedRound.turns
-        .filter((turn) =>
-          selectedTurn ? turn.turnNumber <= selectedTurn.turnNumber : true
-        )
-        .reduce((total, turn) => total + getTurnDurationMs(turn), 0)
+    ? Math.max(
+        selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
+          getRoundCorrectionMs(game, selectedRound.roundNumber),
+        0
+      )
     : 0;
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
   const isClosed = game.status === "completed";
+  const showOverview = isClosed || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isTimerRunning = !isClosed && hasActiveTurn && !isPaused;
@@ -425,6 +438,76 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     setNoteDraft("");
   };
 
+  const openTimerAdjustDialog = async () => {
+    if (!selectedTurn || !selectedRound) {
+      return;
+    }
+
+    if (isTimerRunning) {
+      await pauseActiveTimer(game.id, {
+        roundNumber: selectedTurn.roundNumber,
+        turnNumber: selectedTurn.turnNumber
+      });
+    }
+
+    setTimerAdjustTurnSeconds(String(Math.round(getTurnDurationMs(selectedTurn, game) / 1000)));
+    setTimerAdjustRoundSeconds(String(Math.round(selectedRoundDurationMs / 1000)));
+    setTimerAdjustTotalSeconds(String(Math.round(getGameDurationMs(game) / 1000)));
+    setTimerAdjustOpen(true);
+  };
+
+  const closeTimerAdjustDialog = () => {
+    setTimerAdjustOpen(false);
+  };
+
+  const handleSaveTimerAdjustments = async () => {
+    if (!selectedTurn || !selectedRound) {
+      return;
+    }
+
+    const targetTurnMs = Math.max(0, Math.round(Number(timerAdjustTurnSeconds) || 0) * 1000);
+    const targetRoundMs = Math.max(0, Math.round(Number(timerAdjustRoundSeconds) || 0) * 1000);
+    const targetTotalMs = Math.max(0, Math.round(Number(timerAdjustTotalSeconds) || 0) * 1000);
+    const turnBaseMs = getTurnBaseDurationMs(selectedTurn);
+    const roundBaseMs = selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0);
+    const totalBaseMs = Math.max(getGameDurationMs(game) - getTotalCorrectionMs(game), 0);
+
+    await setTimerCorrections({
+      gameId: game.id,
+      turnRef: {
+        roundNumber: selectedTurn.roundNumber,
+        turnNumber: selectedTurn.turnNumber
+      },
+      turnMs: targetTurnMs - turnBaseMs,
+      roundMs: targetRoundMs - roundBaseMs,
+      totalMs: targetTotalMs - totalBaseMs
+    });
+
+    closeTimerAdjustDialog();
+  };
+
+  const handleResetTimerAdjustments = async () => {
+    if (!selectedTurn) {
+      return;
+    }
+
+    await setTimerCorrections({
+      gameId: game.id,
+      turnRef: {
+        roundNumber: selectedTurn.roundNumber,
+        turnNumber: selectedTurn.turnNumber
+      },
+      turnMs: 0,
+      roundMs: 0,
+      totalMs: 0
+    });
+
+    setTimerAdjustTurnSeconds("0");
+    setTimerAdjustRoundSeconds("0");
+    setTimerAdjustTotalSeconds("0");
+    closeTimerAdjustDialog();
+  };
+
   const handleDeleteEvent = async (event: EditableEventItem) => {
     if (!window.confirm("Eintrag wirklich loeschen?")) {
       return;
@@ -453,6 +536,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
 
   const handleReopenGame = async () => {
     await reopenGame(game.id);
+    if (forceOverview) {
+      window.location.hash = `/game/${game.id}`;
+    }
   };
 
   const handleAdvance = async () => {
@@ -521,7 +607,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
             Runde {selectedRound?.roundNumber ?? 0} ({formatDuration(selectedRoundDurationMs)})
           </span>
           <span>
-            Zug {selectedTurn?.turnNumber ?? 0} ({formatDuration(selectedTurn ? getTurnDurationMs(selectedTurn) : 0)})
+            Zug {selectedTurn?.turnNumber ?? 0} ({formatDuration(selectedTurn ? getTurnDurationMs(selectedTurn, game) : 0)})
           </span>
           <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
         </div>
@@ -558,6 +644,15 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                   { label: "Spieldetails", onClick: openGameDetails },
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
+                  ...(!showOverview
+                    ? [
+                        {
+                          label: "Timer korrigieren",
+                          onClick: () => void openTimerAdjustDialog(),
+                          disabled: !selectedTurn
+                        }
+                      ]
+                    : []),
                   isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
@@ -593,6 +688,77 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           aria-hidden="true"
         />
       ) : null}
+      {timerAdjustOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Timer korrigieren</h2>
+                  <p className="muted-copy">
+                    Runde {selectedTurn?.roundNumber ?? "-"} / Zug {selectedTurn?.turnNumber ?? "-"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={closeTimerAdjustDialog}
+                >
+                  Schliessen
+                </button>
+              </div>
+              <label className="field">
+                <span>Zug in Sekunden</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={timerAdjustTurnSeconds}
+                  disabled={isMutating}
+                  onChange={(event) => setTimerAdjustTurnSeconds(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Runde in Sekunden</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={timerAdjustRoundSeconds}
+                  disabled={isMutating}
+                  onChange={(event) => setTimerAdjustRoundSeconds(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Gesamt in Sekunden</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={timerAdjustTotalSeconds}
+                  disabled={isMutating}
+                  onChange={(event) => setTimerAdjustTotalSeconds(event.target.value)}
+                />
+              </label>
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleSaveTimerAdjustments()}
+                >
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  className="danger-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleResetTimerAdjustments()}
+                >
+                  Zuruecksetzen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <section className={`stack game-page ${roundThemeClassName}`}>
         {errorMessage ? (
           <article className="notice-card notice-card--error">
@@ -608,7 +774,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           </article>
         ) : null}
 
-        {isClosed ? (
+        {showOverview ? (
           <GameOverview game={game} />
         ) : (
           <div className="stack">
@@ -1166,7 +1332,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         </div>
       ) : null}
 
-      {!isClosed ? (
+      {!showOverview ? (
         <div className="game-bottom-dock">
           <button
             type="button"

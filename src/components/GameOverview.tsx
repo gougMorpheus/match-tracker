@@ -1,6 +1,5 @@
 import type { Game } from "../types/game";
 import {
-  getGameDurationMs,
   getPlayerCommandPointsGained,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
@@ -53,7 +52,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   const roundRows = game.rounds.map((round) => ({
     id: round.id,
     label: `Runde ${round.roundNumber}`,
-    durationMs: getRoundDurationMs(round)
+    durationMs: getRoundDurationMs(round, game)
   }));
   const maxRoundDuration = Math.max(...roundRows.map((round) => round.durationMs), 1);
   const roundScoreRows: RoundScoreRow[] = game.rounds.map((round) => {
@@ -112,7 +111,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         return;
       }
 
-      values[turn.playerId] += getTurnDurationMs(turn);
+      values[turn.playerId] += getTurnDurationMs(turn, game);
     });
 
     return {
@@ -493,34 +492,30 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     <section className="stack game-overview">
       <article className="card stack">
         <div className="overview-summary-grid overview-summary-grid--compact">
-          <div>
+          <div className="overview-summary-item">
             <span>Datum</span>
             <strong>{game.scheduledDate || "-"}</strong>
           </div>
-          <div>
+          <div className="overview-summary-item">
             <span>Uhrzeit</span>
             <strong>{game.scheduledTime || "-"}</strong>
           </div>
-          <div>
+          <div className="overview-summary-item">
             <span>Punkte</span>
             <strong>{game.gamePoints}</strong>
           </div>
-          <div>
-            <span>Match-Zeit</span>
-            <strong>{formatDuration(getGameDurationMs(game))}</strong>
-          </div>
-          <div>
+          <div className="overview-summary-item">
             <span>Ende</span>
             <strong>{formatClockTime(game.endedAt)}</strong>
           </div>
           {game.deployment ? (
-            <div>
+            <div className="overview-summary-item">
               <span>Aufstellung</span>
               <strong>{game.deployment}</strong>
             </div>
           ) : null}
           {game.primaryMission ? (
-            <div>
+            <div className="overview-summary-item">
               <span>Primaermission</span>
               <strong>{game.primaryMission}</strong>
             </div>

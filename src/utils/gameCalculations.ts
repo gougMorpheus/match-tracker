@@ -15,6 +15,9 @@ const sumValues = <T extends { value: number }>(items: T[]): number =>
   items.reduce((total, item) => total + item.value, 0);
 
 const clampFloor = (value: number): number => Math.max(value, 0);
+const getRoundCorrectionKey = (roundNumber: number): string => String(roundNumber);
+const getTurnCorrectionKey = (roundNumber: number, turnNumber: number): string =>
+  `${roundNumber}:${turnNumber}`;
 
 export const getPlayerScoreEvents = (
   game: Game,
@@ -85,37 +88,52 @@ export const getPlayerCommandPointsGained = (game: Game, playerId: PlayerId): nu
 export const getPlayerCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
   sumValues(getPlayerCommandPointEvents(game, playerId, "spent"));
 
-export const getTurnDurationMs = (turn: Turn): number =>
-  (() => {
-    const totalDuration = getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
-    const pausedDuration = turn.timing.pauses.reduce(
-      (total, pause) => total + getDurationMs(pause.startedAt, pause.endedAt ?? new Date().toISOString()),
-      0
-    );
-    return Math.max(totalDuration - pausedDuration, 0);
-  })();
-
-export const getCompletedTurnDurationMs = (turn: Turn): number | null =>
-  turn.timing.startedAt && turn.timing.endedAt ? getTurnDurationMs(turn) : null;
-
-export const getRoundDurationMs = (round: Round): number => {
-  return round.turns.reduce((total, turn) => total + getTurnDurationMs(turn), 0);
+export const getTurnBaseDurationMs = (turn: Turn): number => {
+  const totalDuration = getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
+  const pausedDuration = turn.timing.pauses.reduce(
+    (total, pause) => total + getDurationMs(pause.startedAt, pause.endedAt ?? new Date().toISOString()),
+    0
+  );
+  return Math.max(totalDuration - pausedDuration, 0);
 };
 
-export const getCompletedRoundDurationMs = (round: Round): number | null =>
-  round.startedAt && round.endedAt ? getRoundDurationMs(round) : null;
+export const getTurnCorrectionMs = (game: Game, roundNumber: number, turnNumber: number): number =>
+  game.timerCorrections.turns[getTurnCorrectionKey(roundNumber, turnNumber)] ?? 0;
 
-export const getGameDurationMs = (game: Game): number => {
-  if (game.startedAt && game.endedAt) {
-    return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
-  }
+export const getRoundCorrectionMs = (game: Game, roundNumber: number): number =>
+  game.timerCorrections.rounds[getRoundCorrectionKey(roundNumber)] ?? 0;
 
-  if (game.startedAt && !game.endedAt) {
-    return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
-  }
+export const getTotalCorrectionMs = (game: Game): number => game.timerCorrections.totalMs ?? 0;
 
-  return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
-};
+export const getTurnDurationMs = (turn: Turn, game?: Game): number =>
+  clampFloor(
+    getTurnBaseDurationMs(turn) +
+      (game ? getTurnCorrectionMs(game, turn.roundNumber, turn.turnNumber) : 0)
+  );
+
+export const getCompletedTurnDurationMs = (turn: Turn, game?: Game): number | null =>
+  turn.timing.startedAt && turn.timing.endedAt ? getTurnDurationMs(turn, game) : null;
+
+export const getRoundBaseDurationMs = (round: Round): number =>
+  round.turns.reduce((total, turn) => total + getTurnBaseDurationMs(turn), 0);
+
+export const getRoundDurationMs = (round: Round, game?: Game): number =>
+  clampFloor(
+    round.turns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
+      (game ? getRoundCorrectionMs(game, round.roundNumber) : 0)
+  );
+
+export const getCompletedRoundDurationMs = (round: Round, game?: Game): number | null =>
+  round.startedAt && round.endedAt ? getRoundDurationMs(round, game) : null;
+
+export const getGameBaseDurationMs = (game: Game): number =>
+  game.rounds.reduce((total, round) => total + getRoundBaseDurationMs(round), 0);
+
+export const getGameDurationMs = (game: Game): number =>
+  clampFloor(
+    game.rounds.reduce((total, round) => total + getRoundDurationMs(round, game), 0) +
+      getTotalCorrectionMs(game)
+  );
 
 export const getCompletedGameDurationMs = (game: Game): number | null =>
   game.startedAt && game.endedAt ? getGameDurationMs(game) : null;
@@ -161,7 +179,7 @@ export const getPlayerTurnDurationTotalMs = (game: Game, playerId: PlayerId): nu
       total +
       round.turns.reduce(
         (turnTotal, turn) =>
-          turnTotal + (turn.playerId === playerId ? getTurnDurationMs(turn) : 0),
+          turnTotal + (turn.playerId === playerId ? getTurnDurationMs(turn, game) : 0),
         0
       ),
     0
@@ -621,7 +639,7 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
 
   games.forEach((game) => {
     game.rounds.forEach((round) => {
-      const duration = getCompletedRoundDurationMs(round);
+      const duration = getCompletedRoundDurationMs(round, game);
       if (duration === null) {
         return;
       }
@@ -651,7 +669,7 @@ export const getTurnRecords = (
       round.turns
         .map((turn) => {
           const player = game.players.find((entry) => entry.id === turn.playerId);
-          const durationMs = getCompletedTurnDurationMs(turn);
+          const durationMs = getCompletedTurnDurationMs(turn, game);
           if (!player || durationMs === null) {
             return null;
           }
