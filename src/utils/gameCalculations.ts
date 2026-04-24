@@ -99,14 +99,6 @@ export const getCompletedTurnDurationMs = (turn: Turn): number | null =>
   turn.timing.startedAt && turn.timing.endedAt ? getTurnDurationMs(turn) : null;
 
 export const getRoundDurationMs = (round: Round): number => {
-  if (round.startedAt && round.endedAt) {
-    return getDurationMs(round.startedAt, round.endedAt);
-  }
-
-  if (round.startedAt && !round.endedAt) {
-    return round.turns.reduce((total, turn) => total + getTurnDurationMs(turn), 0);
-  }
-
   return round.turns.reduce((total, turn) => total + getTurnDurationMs(turn), 0);
 };
 

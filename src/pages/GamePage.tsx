@@ -289,6 +289,31 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const canGoBack = selectedTurnIndex > 0;
   const canGoForwardToExistingTurn =
     selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1;
+  const selectedRoundDurationMs = selectedRound
+    ? selectedRound.turns
+        .filter((turn) =>
+          selectedTurn ? turn.turnNumber <= selectedTurn.turnNumber : true
+        )
+        .reduce((total, turn) => total + getTurnDurationMs(turn), 0)
+    : 0;
+  const selectedGameDurationMs = game.rounds.reduce((total, round) => {
+    if (!selectedRound || round.roundNumber < selectedRound.roundNumber) {
+      return total + getRoundDurationMs(round);
+    }
+
+    if (round.roundNumber > selectedRound.roundNumber) {
+      return total;
+    }
+
+    return (
+      total +
+      round.turns
+        .filter((turn) =>
+          selectedTurn ? turn.turnNumber <= selectedTurn.turnNumber : true
+        )
+        .reduce((turnTotal, turn) => turnTotal + getTurnDurationMs(turn), 0)
+    );
+  }, 0);
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
@@ -511,12 +536,12 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
       subtitle={
         <div className="game-header-stats">
           <span>
-            Runde {selectedRound?.roundNumber ?? 0} ({formatDuration(selectedRound ? getRoundDurationMs(selectedRound) : 0)})
+            Runde {selectedRound?.roundNumber ?? 0} ({formatDuration(selectedRoundDurationMs)})
           </span>
           <span>
             Zug {selectedTurn?.turnNumber ?? 0} ({formatDuration(selectedTurn ? getTurnDurationMs(selectedTurn) : 0)})
           </span>
-          <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
+          <span>Gesamt {formatDuration(selectedGameDurationMs)}</span>
         </div>
       }
       stickyHeader
