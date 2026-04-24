@@ -642,6 +642,12 @@ export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayloa
   ];
 };
 
+export const getSyncedEventPayload = (
+  game: Game,
+  eventId: string
+): CreateSupabaseEventPayload | null =>
+  createSyncedEventPayloads(game).find((event) => event.id === eventId) ?? null;
+
 const fetchEventsForGameIds = async (gameIds: string[]): Promise<SupabaseEventRecord[]> => {
   if (!gameIds.length) {
     return [];
@@ -754,6 +760,35 @@ export const gamesRepository = {
     return mapSupabaseGameToAppGame(data as SupabaseGameRecord, events);
   },
 
+  async upsertGameSnapshot(game: Game): Promise<Game> {
+    const supabase = getSupabaseClient();
+    const upsertPayload = createSyncedGamePayload(game);
+    let { data, error } = await supabase
+      .from("games")
+      .upsert(upsertPayload, {
+        onConflict: "id"
+      })
+      .select("*")
+      .single();
+
+    if (error && hasMissingScenarioColumnError(error.message)) {
+      ({ data, error } = await supabase
+        .from("games")
+        .upsert(stripOptionalScenarioFields(upsertPayload), {
+          onConflict: "id"
+        })
+        .select("*")
+        .single());
+    }
+
+    if (error) {
+      throw new Error(`Spiel konnte nicht synchronisiert werden: ${error.message}`);
+    }
+
+    const events = await fetchEventsForGameIds([game.id]);
+    return mapSupabaseGameToAppGame(data as SupabaseGameRecord, events);
+  },
+
   async syncGame(game: Game): Promise<Game> {
     const supabase = getSupabaseClient();
     const upsertPayload = createSyncedGamePayload(game);
@@ -814,6 +849,27 @@ export const gamesRepository = {
 
     if (error) {
       throw new Error(`Event konnte nicht gespeichert werden: ${error.message}`);
+    }
+
+    return data as SupabaseEventRecord;
+  },
+
+  async upsertEvent(payload: CreateSupabaseEventPayload): Promise<SupabaseEventRecord> {
+    const supabase = getSupabaseClient();
+    const upsertPayload: CreateSupabaseEventPayload = {
+      ...payload,
+      occurred_at: payload.occurred_at ?? getNowIso()
+    };
+    const { data, error } = await supabase
+      .from("events")
+      .upsert(upsertPayload, {
+        onConflict: "id"
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(`Event konnte nicht synchronisiert werden: ${error.message}`);
     }
 
     return data as SupabaseEventRecord;

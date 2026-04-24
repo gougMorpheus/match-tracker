@@ -450,6 +450,74 @@ export const updateLocalEvent = (
   });
 };
 
+export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game =>
+  syncDerivedGameState({
+    ...baseGame,
+    gamePoints: localGame.gamePoints,
+    scheduledDate: localGame.scheduledDate,
+    scheduledTime: localGame.scheduledTime,
+    deployment: localGame.deployment,
+    primaryMission: localGame.primaryMission,
+    defenderPlayerId: localGame.defenderPlayerId,
+    startingPlayerId: localGame.startingPlayerId,
+    currentPlayerId: localGame.currentPlayerId,
+    startedAt: localGame.startedAt,
+    endedAt: localGame.endedAt,
+    players: localGame.players
+  });
+
+export const upsertLocalEventFromSource = (
+  baseGame: Game,
+  sourceGame: Game,
+  eventId: string
+): Game => {
+  const scoreEvent = sourceGame.scoreEvents.find((event) => event.id === eventId);
+  if (scoreEvent) {
+    return syncDerivedGameState({
+      ...baseGame,
+      scoreEvents: [
+        ...baseGame.scoreEvents.filter((event) => event.id !== eventId),
+        scoreEvent
+      ]
+    });
+  }
+
+  const commandPointEvent = sourceGame.commandPointEvents.find((event) => event.id === eventId);
+  if (commandPointEvent) {
+    return syncDerivedGameState({
+      ...baseGame,
+      commandPointEvents: [
+        ...baseGame.commandPointEvents.filter((event) => event.id !== eventId),
+        commandPointEvent
+      ]
+    });
+  }
+
+  const noteEvent = sourceGame.noteEvents.find((event) => event.id === eventId);
+  if (noteEvent) {
+    return syncDerivedGameState({
+      ...baseGame,
+      noteEvents: [
+        ...baseGame.noteEvents.filter((event) => event.id !== eventId),
+        noteEvent
+      ]
+    });
+  }
+
+  const timeEvent = sourceGame.timeEvents.find((event) => event.id === eventId);
+  if (timeEvent) {
+    return syncDerivedGameState({
+      ...baseGame,
+      timeEvents: [
+        ...baseGame.timeEvents.filter((event) => event.id !== eventId),
+        timeEvent
+      ]
+    });
+  }
+
+  return baseGame;
+};
+
 export const mapPersistedGame = (value: unknown): Game | null => {
   if (!value || typeof value !== "object") {
     return null;
