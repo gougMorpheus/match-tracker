@@ -276,8 +276,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
+    if (isEditingGame) {
+      return;
+    }
+
     setGameForm(createGameFormState(game));
-  }, [game]);
+  }, [game, isEditingGame]);
 
   useEffect(() => {
     if (!game) {
