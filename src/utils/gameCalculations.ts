@@ -42,17 +42,31 @@ export const getPlayerPrimaryTotal = (game: Game, playerId: PlayerId): number =>
 export const getPlayerSecondaryTotal = (game: Game, playerId: PlayerId): number =>
   getPlayerScoreTotal(game, playerId, "secondary");
 
+export const getPlayerLegacyRoundTotal = (game: Game, playerId: PlayerId): number =>
+  getPlayerScoreTotal(game, playerId, "legacy-total");
+
+const hasLegacyRoundTotals = (game: Game): boolean =>
+  game.scoreEvents.some((event) => event.scoreType === "legacy-total");
+
 export const getPlayerTotalScore = (game: Game, playerId: PlayerId): number =>
   game.scoreDetailLevel === "total-only"
-    ? clampFloor(game.legacyScoreTotals[playerId] ?? 0)
+    ? clampFloor(
+        hasLegacyRoundTotals(game)
+          ? getPlayerLegacyRoundTotal(game, playerId)
+          : game.legacyScoreTotals[playerId] ?? 0
+      )
     : getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId);
 
 export const hasDetailedScoreData = (game: Game): boolean => game.scoreDetailLevel === "full";
 
 export const hasComparableTotalScoreData = (game: Game): boolean =>
   game.scoreDetailLevel === "total-only"
-    ? game.players.every((player) => typeof game.legacyScoreTotals[player.id] === "number")
+    ? hasLegacyRoundTotals(game) ||
+      game.players.every((player) => typeof game.legacyScoreTotals[player.id] === "number")
     : game.scoreDetailLevel === "full";
+
+export const hasLegacyRoundTotalScoreData = (game: Game): boolean =>
+  game.scoreDetailLevel === "total-only" && hasLegacyRoundTotals(game);
 
 export const getPlayerComparablePrimaryScore = (game: Game, playerId: PlayerId): number | null =>
   hasDetailedScoreData(game) ? getPlayerPrimaryTotal(game, playerId) : null;
@@ -88,7 +102,9 @@ export const getPlayerCurrentRoundSecondaryTotal = (game: Game, playerId: Player
   getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "secondary");
 
 export const getPlayerCurrentRoundTotalScore = (game: Game, playerId: PlayerId): number =>
-  getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game));
+  game.scoreDetailLevel === "total-only"
+    ? getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "legacy-total")
+    : getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game));
 
 export const getPlayerCommandPointEvents = (
   game: Game,
@@ -424,7 +440,7 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
         .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "secondary"))
         .map(({ game, player }) => getPlayerSecondaryTotal(game, player.id));
       const totalValues = playerGames
-        .filter(({ game, player }) => hasPlayerScoreData(game, player.id))
+        .filter(({ game, player }) => getPlayerComparableTotalScore(game, player.id) !== null)
         .map(({ game, player }) => getPlayerTotalScore(game, player.id));
       const durationValues = playerGames
         .filter(({ game }) => hasCompletedTimingData(game))
@@ -634,7 +650,7 @@ export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
         .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "secondary"))
         .map(({ game, player }) => getPlayerSecondaryTotal(game, player.id));
       const totalValues = armyGames
-        .filter(({ game, player }) => hasPlayerScoreData(game, player.id))
+        .filter(({ game, player }) => getPlayerComparableTotalScore(game, player.id) !== null)
         .map(({ game, player }) => getPlayerTotalScore(game, player.id));
 
       return {
@@ -765,7 +781,8 @@ export const getTurnRecords = (
                   (event) =>
                     event.playerId === turn.playerId &&
                     event.roundNumber === round.roundNumber &&
-                    event.turnNumber === turn.turnNumber
+                    event.turnNumber === turn.turnNumber &&
+                    event.scoreType !== "legacy-total"
                 )
                 .map((event) => ({ value: event.value }))
             )

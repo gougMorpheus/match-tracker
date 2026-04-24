@@ -8,6 +8,7 @@ import {
   getPlayerTurnDurationTotalMs,
   hasComparableCommandPointData,
   hasDetailedScoreData,
+  hasLegacyRoundTotalScoreData,
   getRoundDurationMs,
   getTurnDurationMs
 } from "../utils/gameCalculations";
@@ -25,6 +26,7 @@ interface RoundScoreRow {
     {
       primary: number;
       secondary: number;
+      legacyTotal: number;
       roundTotal: number;
       cumulativeTotal: number;
     }
@@ -65,6 +67,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         {
           primary: 0,
           secondary: 0,
+          legacyTotal: 0,
           roundTotal: 0,
           cumulativeTotal: 0
         }
@@ -83,8 +86,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
 
       if (event.scoreType === "primary") {
         nextValue.primary += event.value;
-      } else {
+      } else if (event.scoreType === "secondary") {
         nextValue.secondary += event.value;
+      } else {
+        nextValue.legacyTotal += event.value;
       }
       nextValue.roundTotal += event.value;
     });
@@ -133,7 +138,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   });
 
   const renderRoundScoreChart = () => {
-      if (!roundScoreRows.length || !hasDetailedScoreData(game)) {
+      if (
+        !roundScoreRows.length ||
+        (!hasDetailedScoreData(game) && !hasLegacyRoundTotalScoreData(game))
+      ) {
       return (
         <article className="card stack">
           <div className="list-row">
@@ -151,12 +159,14 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     const barWidth = Math.max(10, Math.min(18, groupWidth * 0.14));
     const playerGap = barWidth * 0.45;
     const groupCenterOffset = barWidth * 2 + playerGap / 2;
+    const showDetailedBars = hasDetailedScoreData(game);
     const maxRoundValue = Math.max(
       ...roundScoreRows.flatMap((roundRow) =>
-        orderedPlayers.flatMap((player) => [
-          roundRow.values[player.id]?.primary ?? 0,
-          roundRow.values[player.id]?.secondary ?? 0
-        ])
+        orderedPlayers.flatMap((player) =>
+          showDetailedBars
+            ? [roundRow.values[player.id]?.primary ?? 0, roundRow.values[player.id]?.secondary ?? 0]
+            : [roundRow.values[player.id]?.legacyTotal ?? 0]
+        )
       ),
       1
     );
@@ -192,20 +202,33 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         </div>
         <section className="overview-chart-card">
           <div className="overview-chart-card__head">
-            <strong>Runden-Score + Gesamt</strong>
+            <strong>{showDetailedBars ? "Runden-Score + Gesamt" : "Runden-Gesamt + Gesamt"}</strong>
             <div className="overview-chart-legend overview-chart-legend--score">
-              <span className="overview-chart-legend__item is-player-1 is-bar-primary">
-                {orderedPlayers[0]?.name} Prim
-              </span>
-              <span className="overview-chart-legend__item is-player-1 is-bar-secondary">
-                {orderedPlayers[0]?.name} Sek
-              </span>
-              <span className="overview-chart-legend__item is-player-2 is-bar-primary">
-                {orderedPlayers[1]?.name} Prim
-              </span>
-              <span className="overview-chart-legend__item is-player-2 is-bar-secondary">
-                {orderedPlayers[1]?.name} Sek
-              </span>
+              {showDetailedBars ? (
+                <>
+                  <span className="overview-chart-legend__item is-player-1 is-bar-primary">
+                    {orderedPlayers[0]?.name} Prim
+                  </span>
+                  <span className="overview-chart-legend__item is-player-1 is-bar-secondary">
+                    {orderedPlayers[0]?.name} Sek
+                  </span>
+                  <span className="overview-chart-legend__item is-player-2 is-bar-primary">
+                    {orderedPlayers[1]?.name} Prim
+                  </span>
+                  <span className="overview-chart-legend__item is-player-2 is-bar-secondary">
+                    {orderedPlayers[1]?.name} Sek
+                  </span>
+                </>
+              ) : (
+                orderedPlayers.map((player, playerIndex) => (
+                  <span
+                    key={`${player.id}-round-total`}
+                    className={`overview-chart-legend__item is-player-${playerIndex + 1} is-bar-total`}
+                  >
+                    {player.name} Runde
+                  </span>
+                ))
+              )}
               {orderedPlayers.map((player, playerIndex) => (
                 <span key={`${player.id}-line`} className={`overview-chart-legend__item is-player-${playerIndex + 1}`}>
                   {player.name} Gesamt
@@ -255,32 +278,50 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             />
             {roundScoreRows.map((roundRow, roundIndex) =>
               orderedPlayers.map((player, playerIndex) => {
-                const playerOffset = playerIndex === 0 ? -groupCenterOffset : playerGap / 2;
-                const primaryX =
-                  SCORE_CHART_PADDING + groupWidth * roundIndex + groupWidth / 2 + playerOffset;
-                const secondaryX = primaryX + barWidth;
-                const primaryHeight = ((roundRow.values[player.id]?.primary ?? 0) / maxRoundValue) * plotHeight;
-                const secondaryHeight = ((roundRow.values[player.id]?.secondary ?? 0) / maxRoundValue) * plotHeight;
+                if (showDetailedBars) {
+                  const playerOffset = playerIndex === 0 ? -groupCenterOffset : playerGap / 2;
+                  const primaryX =
+                    SCORE_CHART_PADDING + groupWidth * roundIndex + groupWidth / 2 + playerOffset;
+                  const secondaryX = primaryX + barWidth;
+                  const primaryHeight = ((roundRow.values[player.id]?.primary ?? 0) / maxRoundValue) * plotHeight;
+                  const secondaryHeight = ((roundRow.values[player.id]?.secondary ?? 0) / maxRoundValue) * plotHeight;
+
+                  return (
+                    <g key={`${roundRow.roundNumber}-${player.id}`}>
+                      <rect
+                        x={primaryX}
+                        y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - primaryHeight}
+                        width={barWidth - 1}
+                        height={Math.max(primaryHeight, 1)}
+                        rx="3"
+                        className={`overview-score-bar is-player-${playerIndex + 1} is-primary`}
+                      />
+                      <rect
+                        x={secondaryX}
+                        y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - secondaryHeight}
+                        width={barWidth - 1}
+                        height={Math.max(secondaryHeight, 1)}
+                        rx="3"
+                        className={`overview-score-bar is-player-${playerIndex + 1} is-secondary`}
+                      />
+                    </g>
+                  );
+                }
+
+                const singleGroupWidth = Math.max(18, Math.min(28, groupWidth * 0.28));
+                const baseOffset = playerIndex === 0 ? -(singleGroupWidth + playerGap / 2) : playerGap / 2;
+                const roundTotalHeight = ((roundRow.values[player.id]?.legacyTotal ?? 0) / maxRoundValue) * plotHeight;
 
                 return (
-                  <g key={`${roundRow.roundNumber}-${player.id}`}>
-                    <rect
-                      x={primaryX}
-                      y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - primaryHeight}
-                      width={barWidth - 1}
-                      height={Math.max(primaryHeight, 1)}
-                      rx="3"
-                      className={`overview-score-bar is-player-${playerIndex + 1} is-primary`}
-                    />
-                    <rect
-                      x={secondaryX}
-                      y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - secondaryHeight}
-                      width={barWidth - 1}
-                      height={Math.max(secondaryHeight, 1)}
-                      rx="3"
-                      className={`overview-score-bar is-player-${playerIndex + 1} is-secondary`}
-                    />
-                  </g>
+                  <rect
+                    key={`${roundRow.roundNumber}-${player.id}`}
+                    x={SCORE_CHART_PADDING + groupWidth * roundIndex + groupWidth / 2 + baseOffset}
+                    y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - roundTotalHeight}
+                    width={singleGroupWidth}
+                    height={Math.max(roundTotalHeight, 1)}
+                    rx="4"
+                    className={`overview-score-bar is-player-${playerIndex + 1} is-total`}
+                  />
                 );
               })
             )}
@@ -344,7 +385,9 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
                   <span className={`overview-chart-total__marker is-player-${playerIndex + 1}`} />
                   <span>{player.name}</span>
                   <strong>
-                    {roundValue?.primary ?? 0}P / {roundValue?.secondary ?? 0}S / {roundValue?.cumulativeTotal ?? 0} G
+                    {showDetailedBars
+                      ? `${roundValue?.primary ?? 0}P / ${roundValue?.secondary ?? 0}S / ${roundValue?.cumulativeTotal ?? 0} G`
+                      : `${roundValue?.legacyTotal ?? 0}R / ${roundValue?.cumulativeTotal ?? 0} G`}
                   </strong>
                 </div>
               );

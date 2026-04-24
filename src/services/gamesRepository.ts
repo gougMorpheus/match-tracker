@@ -26,7 +26,8 @@ export type UpdateSupabaseEventPayload = Database["public"]["Tables"]["events"][
 
 const scoreTypeByEventType = {
   "score-primary": "primary",
-  "score-secondary": "secondary"
+  "score-secondary": "secondary",
+  "score-total": "legacy-total"
 } as const;
 
 const cpTypeByEventType = {
@@ -705,7 +706,12 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
       player_slot: toPlayerSlot(event.playerId),
-      event_type: event.scoreType === "primary" ? "score-primary" : "score-secondary",
+      event_type:
+        event.scoreType === "primary"
+          ? "score-primary"
+          : event.scoreType === "secondary"
+            ? "score-secondary"
+            : "score-total",
       value_number: event.value,
       note: event.note ?? null,
       occurred_at: event.createdAt
@@ -792,7 +798,12 @@ export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayloa
         round_number: event.roundNumber ?? null,
         turn_number: event.turnNumber ?? null,
         player_slot: toPlayerSlot(event.playerId),
-        event_type: event.scoreType === "primary" ? "score-primary" : "score-secondary",
+        event_type:
+          event.scoreType === "primary"
+            ? "score-primary"
+            : event.scoreType === "secondary"
+              ? "score-secondary"
+              : "score-total",
         value_number: event.value,
         note: event.note ?? null,
         occurred_at: event.createdAt

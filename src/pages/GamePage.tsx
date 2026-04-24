@@ -221,7 +221,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               playerId: event.playerId,
               playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
               kind: "score" as const,
-              label: `${event.scoreType === "primary" ? "Primary" : "Secondary"} ${event.value < 0 ? "-" : "+"}`,
+              label: `${
+                event.scoreType === "primary"
+                  ? "Primary"
+                  : event.scoreType === "secondary"
+                    ? "Secondary"
+                    : "Gesamt"
+              } ${event.value < 0 ? "-" : "+"}`,
               value: event.value,
               displayValue: Math.abs(event.value),
               note: event.note,

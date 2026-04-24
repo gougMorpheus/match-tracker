@@ -977,6 +977,13 @@ textarea {
   color: #b6e7fb;
 }
 
+.overview-score-bar.is-player-1.is-total,
+.overview-chart-legend__item.is-player-1.is-bar-total {
+  fill: rgba(56, 189, 248, 0.82);
+  background: rgba(56, 189, 248, 0.16);
+  color: #d8f3ff;
+}
+
 .overview-score-bar.is-player-2.is-primary,
 .overview-chart-legend__item.is-player-2.is-bar-primary {
   fill: #34d399;
@@ -989,6 +996,13 @@ textarea {
   fill: rgba(52, 211, 153, 0.5);
   background: rgba(52, 211, 153, 0.1);
   color: #b7f3d8;
+}
+
+.overview-score-bar.is-player-2.is-total,
+.overview-chart-legend__item.is-player-2.is-bar-total {
+  fill: rgba(52, 211, 153, 0.82);
+  background: rgba(52, 211, 153, 0.16);
+  color: #d1fae5;
 }
 
 .overview-chart__line.is-player-1 {

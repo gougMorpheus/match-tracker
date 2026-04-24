@@ -1,6 +1,6 @@
 export type PlayerId = string;
 export type GameStatus = "active" | "completed";
-export type ScoreType = "primary" | "secondary";
+export type ScoreType = "primary" | "secondary" | "legacy-total";
 export type CommandPointType = "gained" | "spent";
 export type ScoreDetailLevel = "full" | "total-only" | "none";
 export type TimeEventAction =
