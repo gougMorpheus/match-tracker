@@ -4,34 +4,48 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren
 } from "react";
 import { getSupabaseConfigError } from "../lib/supabase";
-import {
-  createGameUpdatePayload,
-  createEventPayload,
-  createImportedEventPayloads,
-  createImportedGamePayload,
-  gamesRepository
-} from "../services/gamesRepository";
-import type { CreateSupabaseEventPayload } from "../services/gamesRepository";
+import { gamesRepository } from "../services/gamesRepository";
 import type { UpdateSupabaseEventPayload } from "../services/gamesRepository";
 import type {
   CommandPointType,
   CreateGameInput,
   Game,
   PlayerId,
-  ScoreType
+  ScoreType,
+  TimeEventAction
 } from "../types/game";
+import {
+  appendLocalCommandPointEvent,
+  appendLocalNoteEvent,
+  appendLocalScoreEvent,
+  appendLocalTimeEvents,
+  createLocalGame,
+  mapPersistedGame,
+  removeLocalEvent,
+  syncDerivedGameState,
+  updateLocalEvent,
+  updateLocalGameDetails
+} from "../utils/gameState";
 import {
   getLatestRound,
   getLatestTurn,
-  getPlayerTotalScore,
   isTurnPaused
 } from "../utils/gameCalculations";
+import {
+  createSyncQueueItem,
+  getSyncErrorMessage,
+  loadCachedGames,
+  loadSyncQueue,
+  saveCachedGames,
+  saveSyncQueue,
+  type SyncQueueItem
+} from "../utils/localSync";
 import { rememberPlayerNames } from "../utils/presets";
-import { normalizeSupabaseErrorMessage } from "../utils/supabaseErrors";
 import { getNowIso } from "../utils/time";
 
 interface EventPayload {
@@ -69,61 +83,104 @@ interface GameStoreValue {
 
 const GameStoreContext = createContext<GameStoreValue | null>(null);
 
-const getErrorMessage = (error: unknown): string => {
-  const rawMessage = error instanceof Error ? error.message : "Unbekannter Fehler.";
-  return normalizeSupabaseErrorMessage(rawMessage);
+const sortGames = (games: Game[]): Game[] =>
+  [...games].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+const mergeRemoteWithPending = (
+  remoteGames: Game[],
+  localGames: Game[],
+  queue: SyncQueueItem[]
+): Game[] => {
+  const pendingUpsertIds = new Set(
+    queue.filter((item) => item.type === "upsert-game").map((item) => item.gameId)
+  );
+  const pendingDeleteIds = new Set(
+    queue.filter((item) => item.type === "delete-game").map((item) => item.gameId)
+  );
+  const mergedGames = remoteGames
+    .filter((game) => !pendingDeleteIds.has(game.id) && !pendingUpsertIds.has(game.id))
+    .concat(localGames.filter((game) => pendingUpsertIds.has(game.id)));
+
+  return sortGames(mergedGames);
 };
 
-const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
-  const playerOneScore = getPlayerTotalScore(game, game.players[0].id);
-  const playerTwoScore = getPlayerTotalScore(game, game.players[1].id);
-
-  if (playerOneScore > playerTwoScore) {
-    return 1;
-  }
-
-  if (playerTwoScore > playerOneScore) {
-    return 2;
-  }
-
-  return null;
-};
+const getErrorMessage = (error: unknown): string => getSyncErrorMessage(error);
 
 export const GameStoreProvider = ({ children }: PropsWithChildren) => {
-  const [games, setGames] = useState<Game[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [games, setGames] = useState<Game[]>(() => sortGames(loadCachedGames()));
+  const [syncQueue, setSyncQueue] = useState<SyncQueueItem[]>(loadSyncQueue);
+  const [isLoading, setIsLoading] = useState(games.length === 0);
   const [isMutating, setIsMutating] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(getSupabaseConfigError());
-
-  const refreshGames = useCallback(async () => {
-    const configError = getSupabaseConfigError();
-    if (configError) {
-      setGames([]);
-      setErrorMessage(configError);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const nextGames = await gamesRepository.listGames();
-      setGames(nextGames);
-      setErrorMessage(null);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const gamesRef = useRef(games);
+  const queueRef = useRef(syncQueue);
+  const flushPromiseRef = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
-    void refreshGames();
-  }, [refreshGames]);
+    gamesRef.current = games;
+    saveCachedGames(games);
+  }, [games]);
+
+  useEffect(() => {
+    queueRef.current = syncQueue;
+    saveSyncQueue(syncQueue);
+  }, [syncQueue]);
 
   const getGame = useCallback(
-    (gameId: string) => games.find((game) => game.id === gameId),
-    [games]
+    (gameId: string) => gamesRef.current.find((game) => game.id === gameId),
+    []
   );
+
+  const replaceGame = useCallback((nextGame: Game) => {
+    const syncedGame = syncDerivedGameState(nextGame);
+    setGames((currentGames) =>
+      sortGames([syncedGame, ...currentGames.filter((game) => game.id !== syncedGame.id)])
+    );
+    return syncedGame;
+  }, []);
+
+  const removeGameLocally = useCallback((gameId: string) => {
+    setGames((currentGames) => currentGames.filter((game) => game.id !== gameId));
+  }, []);
+
+  const mutateGame = useCallback(
+    (gameId: string, mutator: (game: Game) => Game): Game => {
+      const currentGame = getGame(gameId);
+      if (!currentGame) {
+        throw new Error("Spiel nicht gefunden.");
+      }
+
+      return replaceGame(mutator(currentGame));
+    },
+    [getGame, replaceGame]
+  );
+
+  const enqueueUpsert = useCallback((gameId: string) => {
+    setSyncQueue((currentQueue) => {
+      const withoutDelete = currentQueue.filter(
+        (item) => !(item.type === "delete-game" && item.gameId === gameId)
+      );
+      if (withoutDelete.some((item) => item.type === "upsert-game" && item.gameId === gameId)) {
+        return withoutDelete;
+      }
+
+      return [
+        ...withoutDelete,
+        createSyncQueueItem("upsert-game", gameId, getNowIso())
+      ];
+    });
+  }, []);
+
+  const enqueueDelete = useCallback((gameId: string) => {
+    setSyncQueue((currentQueue) => [
+      ...currentQueue.filter((item) => item.gameId !== gameId),
+      createSyncQueueItem("delete-game", gameId, getNowIso())
+    ]);
+  }, []);
+
+  const dequeueItem = useCallback((queueItemId: string) => {
+    setSyncQueue((currentQueue) => currentQueue.filter((item) => item.id !== queueItemId));
+  }, []);
 
   const getActiveActionPlayerId = useCallback((game: Game): PlayerId => {
     const latestTurn = getLatestTurn(game);
@@ -134,58 +191,146 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     return game.currentPlayerId;
   }, []);
 
-  const refreshSingleGame = useCallback(async (gameId: string) => {
-    const freshGame = await gamesRepository.getGameById(gameId);
-    setGames((currentGames) => {
-      const withoutTarget = currentGames.filter((game) => game.id !== gameId);
-      return [freshGame, ...withoutTarget].sort(
-        (left, right) => right.createdAt.localeCompare(left.createdAt)
-      );
-    });
-  }, []);
+  const flushSyncQueue = useCallback(async (): Promise<boolean> => {
+    if (flushPromiseRef.current) {
+      return flushPromiseRef.current;
+    }
 
-  const runMutation = useCallback(
-    async function executeMutation<T>(operation: () => Promise<T>): Promise<T> {
+    flushPromiseRef.current = (async () => {
       const configError = getSupabaseConfigError();
       if (configError) {
         setErrorMessage(configError);
-        throw new Error(configError);
+        return false;
       }
 
-      setIsMutating(true);
-      setErrorMessage(null);
-      try {
-        return await operation();
-      } catch (error) {
-        const message = getErrorMessage(error);
-        setErrorMessage(message);
-        throw error instanceof Error ? error : new Error(message);
-      } finally {
-        setIsMutating(false);
+      while (queueRef.current.length) {
+        const nextItem = queueRef.current[0];
+        if (!nextItem) {
+          break;
+        }
+
+        try {
+          if (nextItem.type === "delete-game") {
+            await gamesRepository.deleteGame(nextItem.gameId);
+            dequeueItem(nextItem.id);
+            continue;
+          }
+
+          const snapshotGame = gamesRef.current.find((item) => item.id === nextItem.gameId);
+          if (!snapshotGame) {
+            dequeueItem(nextItem.id);
+            continue;
+          }
+
+          const syncedGame = await gamesRepository.syncGame(snapshotGame);
+          const latestLocalGame = gamesRef.current.find((item) => item.id === nextItem.gameId);
+          dequeueItem(nextItem.id);
+
+          if (!latestLocalGame) {
+            continue;
+          }
+
+          if (latestLocalGame.updatedAt !== snapshotGame.updatedAt) {
+            enqueueUpsert(latestLocalGame.id);
+            continue;
+          }
+
+          replaceGame(syncedGame);
+        } catch (error) {
+          setErrorMessage(getErrorMessage(error));
+          return false;
+        }
       }
-    },
-    []
-  );
+
+      setErrorMessage(null);
+      return true;
+    })().finally(() => {
+      flushPromiseRef.current = null;
+    });
+
+    return flushPromiseRef.current;
+  }, [dequeueItem, enqueueUpsert, replaceGame]);
+
+  const refreshGames = useCallback(async () => {
+    const configError = getSupabaseConfigError();
+    if (configError) {
+      setErrorMessage(configError);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(gamesRef.current.length === 0);
+    await flushSyncQueue();
+
+    try {
+      const remoteGames = await gamesRepository.listGames();
+      setGames(mergeRemoteWithPending(remoteGames, gamesRef.current, queueRef.current));
+      if (!queueRef.current.length) {
+        setErrorMessage(null);
+      }
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [flushSyncQueue]);
+
+  useEffect(() => {
+    void refreshGames();
+  }, [refreshGames]);
+
+  useEffect(() => {
+    if (!syncQueue.length) {
+      return;
+    }
+
+    void flushSyncQueue();
+  }, [flushSyncQueue, syncQueue.length]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      void flushSyncQueue().then(() => refreshGames());
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [flushSyncQueue, refreshGames]);
+
+  const runMutation = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
+    setIsMutating(true);
+    try {
+      return await operation();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setErrorMessage(message);
+      throw error instanceof Error ? error : new Error(message);
+    } finally {
+      setIsMutating(false);
+    }
+  }, []);
 
   const createGame = useCallback(
     async (input: CreateGameInput): Promise<Game> =>
       runMutation(async () => {
-        const createdGame = await gamesRepository.createGame(input);
+        const createdGame = createLocalGame(input);
         rememberPlayerNames([input.playerOneName, input.playerTwoName]);
-        setGames((currentGames) => [createdGame, ...currentGames]);
+        replaceGame(createdGame);
+        enqueueUpsert(createdGame.id);
+        void flushSyncQueue();
         return createdGame;
       }),
-    [runMutation]
+    [enqueueUpsert, flushSyncQueue, replaceGame, runMutation]
   );
 
   const updateGameDetails = useCallback(
     async (gameId: string, input: CreateGameInput) =>
       runMutation(async () => {
-        await gamesRepository.updateGame(gameId, createGameUpdatePayload(input));
+        const nextGame = mutateGame(gameId, (game) => updateLocalGameDetails(game, input));
         rememberPlayerNames([input.playerOneName, input.playerTwoName]);
-        await refreshSingleGame(gameId);
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, mutateGame, runMutation]
   );
 
   const addScoreEvent = useCallback(
@@ -198,19 +343,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
-        await gamesRepository.addEvent(
-          createEventPayload(game, {
+        const nextGame = mutateGame(gameId, (currentGame) =>
+          appendLocalScoreEvent(currentGame, {
             playerId,
-            roundNumber: latestRound?.roundNumber,
-            turnNumber: latestTurn?.turnNumber,
-            eventType: scoreType === "primary" ? "score-primary" : "score-secondary",
+            scoreType,
             value,
-            note
+            note,
+            roundNumber: latestRound?.roundNumber,
+            turnNumber: latestTurn?.turnNumber
           })
         );
-        await refreshSingleGame(gameId);
+
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const addCommandPointEvent = useCallback(
@@ -227,19 +374,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
-        await gamesRepository.addEvent(
-          createEventPayload(game, {
+        const nextGame = mutateGame(gameId, (currentGame) =>
+          appendLocalCommandPointEvent(currentGame, {
             playerId,
-            roundNumber: latestRound?.roundNumber,
-            turnNumber: latestTurn?.turnNumber,
-            eventType: cpType === "gained" ? "cp-gained" : "cp-spent",
+            cpType,
             value,
-            note
+            note,
+            roundNumber: latestRound?.roundNumber,
+            turnNumber: latestTurn?.turnNumber
           })
         );
-        await refreshSingleGame(gameId);
+
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getActiveActionPlayerId, getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getActiveActionPlayerId, getGame, mutateGame, runMutation]
   );
 
   const addNoteEvent = useCallback(
@@ -257,67 +406,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
-        await gamesRepository.addEvent(
-          createEventPayload(game, {
+        const nextGame = mutateGame(gameId, (currentGame) =>
+          appendLocalNoteEvent(currentGame, {
             playerId,
+            note: trimmedNote,
             roundNumber: latestRound?.roundNumber,
-            turnNumber: latestTurn?.turnNumber,
-            eventType: "note",
-            note: trimmedNote
-          })
-        );
-        await refreshSingleGame(gameId);
-      }),
-    [getGame, refreshSingleGame, runMutation]
-  );
-
-  const finishGame = useCallback(
-    async (gameId: string) =>
-      runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game) {
-          throw new Error("Spiel nicht gefunden.");
-        }
-
-        const latestRound = getLatestRound(game);
-        const latestTurn = getLatestTurn(game);
-        const payloads: CreateSupabaseEventPayload[] = [];
-        if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
-          payloads.push(
-            createEventPayload(game, {
-              playerId: latestTurn.playerId,
-              roundNumber: latestTurn.roundNumber,
-              turnNumber: latestTurn.turnNumber,
-              eventType: "turn-end"
-            })
-          );
-        }
-
-        if (latestRound && latestRound.startedAt && !latestRound.endedAt) {
-          payloads.push(
-            createEventPayload(game, {
-              playerId: game.currentPlayerId,
-              roundNumber: latestRound.roundNumber,
-              eventType: "round-end"
-            })
-          );
-        }
-
-        payloads.push(
-          createEventPayload(game, {
-            playerId: game.currentPlayerId,
-            eventType: "game-end"
+            turnNumber: latestTurn?.turnNumber
           })
         );
 
-        await gamesRepository.addEvents(payloads);
-        await gamesRepository.updateGame(gameId, {
-          ended_at: getNowIso(),
-          winner_player: getWinnerPlayerSlot(game)
-        });
-        await refreshSingleGame(gameId);
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const advanceGame = useCallback(
@@ -331,7 +432,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
         const now = getNowIso();
-        const payloads: CreateSupabaseEventPayload[] = [];
+        const eventsToAdd: Array<{
+          action: TimeEventAction;
+          playerId?: PlayerId;
+          roundNumber?: number;
+          turnNumber?: number;
+          createdAt?: string;
+        }> = [];
         const otherPlayerId =
           game.players.find((player) => player.id !== game.currentPlayerId)?.id ?? game.currentPlayerId;
 
@@ -339,123 +446,115 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
 
           if (!game.timeEvents.some((event) => event.action === "game-start")) {
-            payloads.push(
-              createEventPayload(game, {
-                playerId: game.startingPlayerId,
-                eventType: "game-start",
-                occurredAt: now
-              })
-            );
+            eventsToAdd.push({
+              playerId: game.startingPlayerId,
+              action: "game-start",
+              createdAt: now
+            });
           }
 
-          payloads.push(
-            createEventPayload(game, {
+          eventsToAdd.push(
+            {
               playerId: game.startingPlayerId,
               roundNumber: nextRoundNumber,
-              eventType: "round-start",
-              occurredAt: now
-            }),
-            createEventPayload(game, {
+              action: "round-start",
+              createdAt: now
+            },
+            {
               playerId: game.startingPlayerId,
               roundNumber: nextRoundNumber,
               turnNumber: 1,
-              eventType: "turn-start",
-              occurredAt: now
-            })
+              action: "turn-start",
+              createdAt: now
+            }
           );
         } else if (!latestTurn || latestTurn.timing.endedAt) {
           if (latestRound.turns.length >= 2) {
             const nextRoundNumber = latestRound.roundNumber + 1;
-            payloads.push(
-              createEventPayload(game, {
+            eventsToAdd.push(
+              {
                 playerId: latestRound.turns[latestRound.turns.length - 1]?.playerId ?? game.startingPlayerId,
                 roundNumber: latestRound.roundNumber,
-                eventType: "round-end",
-                occurredAt: now
-              }),
-              createEventPayload(game, {
+                action: "round-end",
+                createdAt: now
+              },
+              {
                 playerId: game.startingPlayerId,
                 roundNumber: nextRoundNumber,
-                eventType: "round-start",
-                occurredAt: now
-              }),
-              createEventPayload(game, {
+                action: "round-start",
+                createdAt: now
+              },
+              {
                 playerId: game.startingPlayerId,
                 roundNumber: nextRoundNumber,
                 turnNumber: 1,
-                eventType: "turn-start",
-                occurredAt: now
-              })
+                action: "turn-start",
+                createdAt: now
+              }
             );
           } else {
             const nextTurnNumber = latestRound.turns.length + 1;
-            const previousPlayerId = latestTurn?.playerId ?? latestRound.turns[latestRound.turns.length - 1]?.playerId;
+            const previousPlayerId =
+              latestTurn?.playerId ?? latestRound.turns[latestRound.turns.length - 1]?.playerId;
             const nextPlayerId =
               game.players.find((player) => player.id !== previousPlayerId)?.id ?? otherPlayerId;
 
-            payloads.push(
-              createEventPayload(game, {
-                playerId: nextPlayerId,
-                roundNumber: latestRound.roundNumber,
-                turnNumber: nextTurnNumber,
-                eventType: "turn-start",
-                occurredAt: now
-              })
-            );
+            eventsToAdd.push({
+              playerId: nextPlayerId,
+              roundNumber: latestRound.roundNumber,
+              turnNumber: nextTurnNumber,
+              action: "turn-start",
+              createdAt: now
+            });
           }
         } else {
-          payloads.push(
-            createEventPayload(game, {
-              playerId: latestTurn.playerId,
-              roundNumber: latestTurn.roundNumber,
-              turnNumber: latestTurn.turnNumber,
-              eventType: "turn-end",
-              occurredAt: now
-            })
-          );
+          eventsToAdd.push({
+            playerId: latestTurn.playerId,
+            roundNumber: latestTurn.roundNumber,
+            turnNumber: latestTurn.turnNumber,
+            action: "turn-end",
+            createdAt: now
+          });
 
           if (latestRound.turns.length >= 2) {
             const nextRoundNumber = latestRound.roundNumber + 1;
-            payloads.push(
-              createEventPayload(game, {
+            eventsToAdd.push(
+              {
                 playerId: latestTurn.playerId,
                 roundNumber: latestRound.roundNumber,
-                eventType: "round-end",
-                occurredAt: now
-              }),
-              createEventPayload(game, {
+                action: "round-end",
+                createdAt: now
+              },
+              {
                 playerId: game.startingPlayerId,
                 roundNumber: nextRoundNumber,
-                eventType: "round-start",
-                occurredAt: now
-              }),
-              createEventPayload(game, {
+                action: "round-start",
+                createdAt: now
+              },
+              {
                 playerId: game.startingPlayerId,
                 roundNumber: nextRoundNumber,
                 turnNumber: 1,
-                eventType: "turn-start",
-                occurredAt: now
-              })
+                action: "turn-start",
+                createdAt: now
+              }
             );
           } else {
-            payloads.push(
-              createEventPayload(game, {
-                playerId: otherPlayerId,
-                roundNumber: latestRound.roundNumber,
-                turnNumber: latestRound.turns.length + 1,
-                eventType: "turn-start",
-                occurredAt: now
-              })
-            );
+            eventsToAdd.push({
+              playerId: otherPlayerId,
+              roundNumber: latestRound.roundNumber,
+              turnNumber: latestRound.turns.length + 1,
+              action: "turn-start",
+              createdAt: now
+            });
           }
         }
 
-        if (payloads.length) {
-          await gamesRepository.addEvents(payloads);
-          await refreshSingleGame(gameId);
-        }
+        const nextGame = mutateGame(gameId, (currentGame) => appendLocalTimeEvents(currentGame, eventsToAdd));
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const rewindLastTurn = useCallback(
@@ -493,17 +592,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
 
         game.timeEvents.forEach((event) => {
-          if (
-            event.roundNumber === latestTurn.roundNumber &&
-            event.turnNumber === latestTurn.turnNumber
-          ) {
+          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
             eventIds.add(event.id);
           }
 
-          if (
-            event.action === "round-end" &&
-            event.roundNumber === latestRound.roundNumber
-          ) {
+          if (event.action === "round-end" && event.roundNumber === latestRound.roundNumber) {
             eventIds.add(event.id);
           }
 
@@ -516,13 +609,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         });
 
-        for (const eventId of eventIds) {
-          await gamesRepository.deleteEvent(eventId);
-        }
+        const nextGame = mutateGame(gameId, (currentGame) =>
+          Array.from(eventIds).reduce(
+            (updatedGame, eventId) => removeLocalEvent(updatedGame, eventId),
+            currentGame
+          )
+        );
 
-        await refreshSingleGame(gameId);
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const pauseActiveTimer = useCallback(
@@ -538,17 +635,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        await gamesRepository.addEvent(
-          createEventPayload(game, {
-            playerId: latestTurn.playerId,
-            roundNumber: latestTurn.roundNumber,
-            turnNumber: latestTurn.turnNumber,
-            eventType: "turn-pause"
-          })
+        const nextGame = mutateGame(gameId, (currentGame) =>
+          appendLocalTimeEvents(currentGame, [
+            {
+              playerId: latestTurn.playerId,
+              roundNumber: latestTurn.roundNumber,
+              turnNumber: latestTurn.turnNumber,
+              action: "turn-pause"
+            }
+          ])
         );
-        await refreshSingleGame(gameId);
+
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const startGameTimer = useCallback(
@@ -561,65 +662,69 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
+        let nextGame: Game | null = null;
 
         if (!latestRound || latestRound.endedAt) {
           const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
-          const payloads: CreateSupabaseEventPayload[] = [];
+          const eventsToAdd: Array<{
+            action: TimeEventAction;
+            playerId?: PlayerId;
+            roundNumber?: number;
+            turnNumber?: number;
+          }> = [];
 
           if (!game.timeEvents.some((event) => event.action === "game-start")) {
-            payloads.push(
-              createEventPayload(game, {
-                playerId: game.startingPlayerId,
-                eventType: "game-start"
-              })
-            );
+            eventsToAdd.push({
+              playerId: game.startingPlayerId,
+              action: "game-start"
+            });
           }
 
-          payloads.push(
-            createEventPayload(game, {
+          eventsToAdd.push(
+            {
               playerId: game.startingPlayerId,
               roundNumber: nextRoundNumber,
-              eventType: "round-start"
-            }),
-            createEventPayload(game, {
+              action: "round-start"
+            },
+            {
               playerId: game.startingPlayerId,
               roundNumber: nextRoundNumber,
               turnNumber: 1,
-              eventType: "turn-start"
-            })
+              action: "turn-start"
+            }
           );
 
-          await gamesRepository.addEvents(payloads);
-          await refreshSingleGame(gameId);
-          return;
+          nextGame = mutateGame(gameId, (currentGame) => appendLocalTimeEvents(currentGame, eventsToAdd));
+        } else if (!latestTurn) {
+          nextGame = mutateGame(gameId, (currentGame) =>
+            appendLocalTimeEvents(currentGame, [
+              {
+                playerId: game.currentPlayerId,
+                roundNumber: latestRound.roundNumber,
+                turnNumber: latestRound.turns.length + 1,
+                action: "turn-start"
+              }
+            ])
+          );
+        } else if (isTurnPaused(latestTurn)) {
+          nextGame = mutateGame(gameId, (currentGame) =>
+            appendLocalTimeEvents(currentGame, [
+              {
+                playerId: latestTurn.playerId,
+                roundNumber: latestTurn.roundNumber,
+                turnNumber: latestTurn.turnNumber,
+                action: "turn-resume"
+              }
+            ])
+          );
         }
 
-        if (!latestTurn) {
-          await gamesRepository.addEvent(
-            createEventPayload(game, {
-              playerId: game.currentPlayerId,
-              roundNumber: latestRound.roundNumber,
-              turnNumber: latestRound.turns.length + 1,
-              eventType: "turn-start"
-            })
-          );
-          await refreshSingleGame(gameId);
-          return;
-        }
-
-        if (isTurnPaused(latestTurn)) {
-          await gamesRepository.addEvent(
-            createEventPayload(game, {
-              playerId: latestTurn.playerId,
-              roundNumber: latestTurn.roundNumber,
-              turnNumber: latestTurn.turnNumber,
-              eventType: "turn-resume"
-            })
-          );
-          await refreshSingleGame(gameId);
+        if (nextGame) {
+          enqueueUpsert(nextGame.id);
+          void flushSyncQueue();
         }
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const reopenGame = useCallback(
@@ -634,69 +739,114 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           .filter((event) => event.action === "game-end")
           .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
 
-        if (latestGameEndEvent) {
-          await gamesRepository.deleteEvent(latestGameEndEvent.id);
-        }
+        const nextGame = latestGameEndEvent
+          ? mutateGame(gameId, (currentGame) => removeLocalEvent(currentGame, latestGameEndEvent.id))
+          : game;
 
-        await gamesRepository.updateGame(gameId, {
-          ended_at: null,
-          winner_player: null
-        });
-        await refreshSingleGame(gameId);
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [getGame, refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const updateGameEvent = useCallback(
     async (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) =>
       runMutation(async () => {
-        await gamesRepository.updateEvent(eventId, patch);
-        await refreshSingleGame(gameId);
+        const nextGame = mutateGame(gameId, (currentGame) =>
+          updateLocalEvent(currentGame, eventId, patch)
+        );
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, mutateGame, runMutation]
   );
 
   const deleteGameEvent = useCallback(
     async (gameId: string, eventId: string) =>
       runMutation(async () => {
-        await gamesRepository.deleteEvent(eventId);
-        await refreshSingleGame(gameId);
+        const nextGame = mutateGame(gameId, (currentGame) => removeLocalEvent(currentGame, eventId));
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
       }),
-    [refreshSingleGame, runMutation]
+    [enqueueUpsert, flushSyncQueue, mutateGame, runMutation]
+  );
+
+  const finishGame = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const latestRound = getLatestRound(game);
+        const latestTurn = getLatestTurn(game);
+        const eventsToAdd: Array<{
+          action: TimeEventAction;
+          playerId?: PlayerId;
+          roundNumber?: number;
+          turnNumber?: number;
+        }> = [];
+
+        if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
+          eventsToAdd.push({
+            playerId: latestTurn.playerId,
+            roundNumber: latestTurn.roundNumber,
+            turnNumber: latestTurn.turnNumber,
+            action: "turn-end"
+          });
+        }
+
+        if (latestRound && latestRound.startedAt && !latestRound.endedAt) {
+          eventsToAdd.push({
+            playerId: game.currentPlayerId,
+            roundNumber: latestRound.roundNumber,
+            action: "round-end"
+          });
+        }
+
+        eventsToAdd.push({
+          playerId: game.currentPlayerId,
+          action: "game-end"
+        });
+
+        const nextGame = mutateGame(gameId, (currentGame) => appendLocalTimeEvents(currentGame, eventsToAdd));
+        enqueueUpsert(nextGame.id);
+        void flushSyncQueue();
+      }),
+    [enqueueUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const deleteGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
-        await gamesRepository.deleteGame(gameId);
-        setGames((currentGames) => currentGames.filter((game) => game.id !== gameId));
+        removeGameLocally(gameId);
+        enqueueDelete(gameId);
+        void flushSyncQueue();
       }),
-    [runMutation]
+    [enqueueDelete, flushSyncQueue, removeGameLocally, runMutation]
   );
 
   const importGames = useCallback(
     async (importedGames: Game[]) =>
       runMutation(async () => {
-        for (const importedGame of importedGames) {
-          const createdGame = await gamesRepository.createGame(createImportedGamePayload(importedGame));
-          const eventPayloads = createImportedEventPayloads(createdGame, importedGame);
-          if (eventPayloads.length) {
-            await gamesRepository.addEvents(eventPayloads);
+        importedGames.forEach((game) => {
+          const normalizedGame = mapPersistedGame(game);
+          if (!normalizedGame) {
+            return;
           }
-          await gamesRepository.updateGame(createdGame.id, {
-            started_at: importedGame.startedAt ?? createdGame.createdAt,
-            ended_at: importedGame.endedAt ?? null,
-            winner_player: importedGame.endedAt ? getWinnerPlayerSlot(importedGame) : null
-          });
-          rememberPlayerNames(importedGame.players.map((player) => player.name));
-        }
 
-        await refreshGames();
+          replaceGame(normalizedGame);
+          rememberPlayerNames(game.players.map((player) => player.name));
+          enqueueUpsert(normalizedGame.id);
+        });
+
+        void flushSyncQueue();
       }),
-    [refreshGames, runMutation]
+    [enqueueUpsert, flushSyncQueue, replaceGame, runMutation]
   );
 
-  const exportGames = useCallback(() => games, [games]);
+  const exportGames = useCallback(() => gamesRef.current, []);
   const clearError = useCallback(() => setErrorMessage(null), []);
 
   const value = useMemo<GameStoreValue>(
@@ -743,12 +893,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       isLoading,
       isMutating,
       pauseActiveTimer,
+      refreshGames,
       reopenGame,
       rewindLastTurn,
       startGameTimer,
-      updateGameEvent,
       updateGameDetails,
-      refreshGames,
+      updateGameEvent
     ]
   );
 

@@ -174,10 +174,10 @@ export const StatsPage = ({ onBack }: StatsPageProps) => {
           </section>
         ) : null}
 
-        {isLoading ? (
+        {isLoading && !filteredGames.length ? (
           <article className="empty-state">
             <h2>Statistik wird geladen</h2>
-            <p>Spiele und Events werden aus Supabase gelesen.</p>
+            <p>Lokale Daten und Supabase werden abgeglichen.</p>
           </article>
         ) : filteredGames.length ? (
           <>

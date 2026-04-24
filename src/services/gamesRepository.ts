@@ -474,6 +474,8 @@ const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
 };
 
 export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload => ({
+  id: game.id,
+  created_at: game.createdAt,
   started_at: game.startedAt ?? game.createdAt,
   ended_at: game.endedAt ?? null,
   game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
@@ -500,6 +502,8 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
 
   importedGame.timeEvents.forEach((event) => {
     payloads.push({
+      id: event.id,
+      created_at: event.createdAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
@@ -511,6 +515,8 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
 
   importedGame.commandPointEvents.forEach((event) => {
     payloads.push({
+      id: event.id,
+      created_at: event.createdAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
@@ -524,6 +530,8 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
 
   importedGame.scoreEvents.forEach((event) => {
     payloads.push({
+      id: event.id,
+      created_at: event.createdAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
@@ -537,6 +545,8 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
 
   importedGame.noteEvents.forEach((event) => {
     payloads.push({
+      id: event.id,
+      created_at: event.createdAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
@@ -548,6 +558,88 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
   });
 
   return payloads;
+};
+
+export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload => ({
+  id: game.id,
+  created_at: game.createdAt,
+  started_at: game.startedAt ?? game.createdAt,
+  ended_at: game.endedAt ?? null,
+  game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
+  player1_name: game.players[0].name,
+  player1_army: game.players[0].army.name,
+  player1_max_points: game.gamePoints,
+  player2_name: game.players[1].name,
+  player2_army: game.players[1].army.name,
+  player2_max_points: game.gamePoints,
+  deployment: game.deployment || null,
+  primary_mission: game.primaryMission || null,
+  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
+  starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
+  winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
+  notes: null
+});
+
+export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayload[] => {
+  const playerOneId = game.players[0].id;
+  const toPlayerSlot = (playerId?: PlayerId): 1 | 2 =>
+    !playerId || playerId === playerOneId ? 1 : 2;
+
+  return [
+    ...game.timeEvents.map(
+      (event): CreateSupabaseEventPayload => ({
+        id: event.id,
+        created_at: event.createdAt,
+        game_id: game.id,
+        round_number: event.roundNumber ?? null,
+        turn_number: event.turnNumber ?? null,
+        player_slot: toPlayerSlot(event.playerId),
+        event_type: event.action,
+        occurred_at: event.createdAt
+      })
+    ),
+    ...game.commandPointEvents.map(
+      (event): CreateSupabaseEventPayload => ({
+        id: event.id,
+        created_at: event.createdAt,
+        game_id: game.id,
+        round_number: event.roundNumber ?? null,
+        turn_number: event.turnNumber ?? null,
+        player_slot: toPlayerSlot(event.playerId),
+        event_type: event.cpType === "gained" ? "cp-gained" : "cp-spent",
+        value_number: event.value,
+        note: event.note ?? null,
+        occurred_at: event.createdAt
+      })
+    ),
+    ...game.scoreEvents.map(
+      (event): CreateSupabaseEventPayload => ({
+        id: event.id,
+        created_at: event.createdAt,
+        game_id: game.id,
+        round_number: event.roundNumber ?? null,
+        turn_number: event.turnNumber ?? null,
+        player_slot: toPlayerSlot(event.playerId),
+        event_type: event.scoreType === "primary" ? "score-primary" : "score-secondary",
+        value_number: event.value,
+        note: event.note ?? null,
+        occurred_at: event.createdAt
+      })
+    ),
+    ...game.noteEvents.map(
+      (event): CreateSupabaseEventPayload => ({
+        id: event.id,
+        created_at: event.createdAt,
+        game_id: game.id,
+        round_number: event.roundNumber ?? null,
+        turn_number: event.turnNumber ?? null,
+        player_slot: toPlayerSlot(event.playerId),
+        event_type: "note",
+        note: event.note,
+        occurred_at: event.createdAt
+      })
+    )
+  ];
 };
 
 const fetchEventsForGameIds = async (gameIds: string[]): Promise<SupabaseEventRecord[]> => {
@@ -660,6 +752,39 @@ export const gamesRepository = {
 
     const events = await fetchEventsForGameIds([gameId]);
     return mapSupabaseGameToAppGame(data as SupabaseGameRecord, events);
+  },
+
+  async syncGame(game: Game): Promise<Game> {
+    const supabase = getSupabaseClient();
+    const upsertPayload = createSyncedGamePayload(game);
+    let { error } = await supabase.from("games").upsert(upsertPayload, {
+      onConflict: "id"
+    });
+
+    if (error && hasMissingScenarioColumnError(error.message)) {
+      ({ error } = await supabase.from("games").upsert(stripOptionalScenarioFields(upsertPayload), {
+        onConflict: "id"
+      }));
+    }
+
+    if (error) {
+      throw new Error(`Spiel konnte nicht synchronisiert werden: ${error.message}`);
+    }
+
+    const { error: deleteEventsError } = await supabase.from("events").delete().eq("game_id", game.id);
+    if (deleteEventsError) {
+      throw new Error(`Events konnten nicht ersetzt werden: ${deleteEventsError.message}`);
+    }
+
+    const eventPayloads = createSyncedEventPayloads(game);
+    if (eventPayloads.length) {
+      const { error: insertEventsError } = await supabase.from("events").insert(eventPayloads);
+      if (insertEventsError) {
+        throw new Error(`Events konnten nicht synchronisiert werden: ${insertEventsError.message}`);
+      }
+    }
+
+    return gamesRepository.getGameById(game.id);
   },
 
   async deleteGame(gameId: string): Promise<void> {

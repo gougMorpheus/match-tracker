@@ -190,10 +190,10 @@ export const GamesPage = ({ onOpenGame }: GamesPageProps) => {
           </article>
         ) : null}
 
-        {isLoading ? (
+        {isLoading && !games.length ? (
           <article className="empty-state">
             <h2>Spiele werden geladen</h2>
-            <p>Die Daten kommen direkt aus Supabase.</p>
+            <p>Lokale Daten und Supabase werden abgeglichen.</p>
           </article>
         ) : filteredGames.length ? (
           <div className="stack">
