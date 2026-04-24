@@ -804,6 +804,10 @@ textarea {
   gap: 0.35rem;
 }
 
+.overview-chart-legend--score {
+  gap: 0.3rem;
+}
+
 .overview-chart-legend__item,
 .overview-chart-total {
   padding: 0.25rem 0.5rem;
@@ -836,6 +840,10 @@ textarea {
   stroke-width: 1.4;
 }
 
+.overview-chart__axis--right {
+  stroke-opacity: 0.25;
+}
+
 .overview-chart__guide {
   stroke: rgba(148, 163, 184, 0.14);
   stroke-width: 1;
@@ -849,11 +857,6 @@ textarea {
   stroke-linejoin: round;
 }
 
-.overview-chart__dot {
-  stroke: rgba(11, 17, 32, 0.94);
-  stroke-width: 2;
-}
-
 .overview-chart__label,
 .overview-chart__scale {
   fill: var(--muted);
@@ -864,8 +867,39 @@ textarea {
   font-weight: 600;
 }
 
+.overview-score-bar {
+  stroke: none;
+}
+
+.overview-score-bar.is-player-1.is-primary,
+.overview-chart-legend__item.is-player-1.is-bar-primary {
+  fill: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+  color: #d8f3ff;
+}
+
+.overview-score-bar.is-player-1.is-secondary,
+.overview-chart-legend__item.is-player-1.is-bar-secondary {
+  fill: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.1);
+  color: #b6e7fb;
+}
+
+.overview-score-bar.is-player-2.is-primary,
+.overview-chart-legend__item.is-player-2.is-bar-primary {
+  fill: #34d399;
+  background: rgba(52, 211, 153, 0.18);
+  color: #d1fae5;
+}
+
+.overview-score-bar.is-player-2.is-secondary,
+.overview-chart-legend__item.is-player-2.is-bar-secondary {
+  fill: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.1);
+  color: #b7f3d8;
+}
+
 .overview-chart__line.is-player-1,
-.overview-chart__dot.is-player-1,
 .overview-chart-legend__item.is-player-1,
 .overview-chart-total__marker.is-player-1 {
   stroke: #38bdf8;
@@ -875,7 +909,6 @@ textarea {
 }
 
 .overview-chart__line.is-player-2,
-.overview-chart__dot.is-player-2,
 .overview-chart-legend__item.is-player-2,
 .overview-chart-total__marker.is-player-2 {
   stroke: #34d399;
@@ -1200,6 +1233,10 @@ textarea {
 
   .overview-chart-card {
     padding: 0.75rem;
+  }
+
+  .overview-chart-legend {
+    justify-content: flex-start;
   }
 }
 

@@ -98,6 +98,7 @@ const sortGames = (games: Game[]): Game[] =>
 
 const getErrorMessage = (error: unknown): string => getSyncErrorMessage(error);
 const clampNonNegative = (value: number): number => Math.max(value, 0);
+const MAX_ROUNDS = 5;
 
 const mergeRemoteWithPending = (
   remoteGames: Game[],
@@ -688,6 +689,44 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }> = [];
         const otherPlayerId =
           game.players.find((player) => player.id !== game.currentPlayerId)?.id ?? game.currentPlayerId;
+        const closeGameFromRound = (
+          playerId: PlayerId,
+          roundNumber: number,
+          turnNumber?: number,
+          includeTurnEnd = false
+        ) => {
+          if (includeTurnEnd && turnNumber) {
+            eventsToAdd.push({
+              playerId,
+              roundNumber,
+              turnNumber,
+              action: "turn-end",
+              createdAt: now
+            });
+          }
+
+          if (!latestRound?.endedAt) {
+            eventsToAdd.push({
+              playerId,
+              roundNumber,
+              action: "round-end",
+              createdAt: now
+            });
+          }
+
+          if (isSessionRunning(game)) {
+            eventsToAdd.push({
+              action: "session-end",
+              createdAt: now
+            });
+          }
+
+          eventsToAdd.push({
+            playerId,
+            action: "game-end",
+            createdAt: now
+          });
+        };
 
         if (!latestRound || latestRound.endedAt) {
           const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
@@ -717,6 +756,18 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           );
         } else if (!latestTurn || latestTurn.timing.endedAt) {
           if (latestRound.turns.length >= 2) {
+            if (latestRound.roundNumber >= MAX_ROUNDS) {
+              const closingPlayerId =
+                latestTurn?.playerId ??
+                latestRound.turns[latestRound.turns.length - 1]?.playerId ??
+                game.currentPlayerId;
+
+              closeGameFromRound(closingPlayerId, latestRound.roundNumber);
+              enqueueTimeEvents(game, eventsToAdd);
+              void flushSyncQueue();
+              return;
+            }
+
             const nextRoundNumber = latestRound.roundNumber + 1;
             eventsToAdd.push(
               {
@@ -755,37 +806,45 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
         } else {
-          eventsToAdd.push({
-            playerId: latestTurn.playerId,
-            roundNumber: latestTurn.roundNumber,
-            turnNumber: latestTurn.turnNumber,
-            action: "turn-end",
-            createdAt: now
-          });
-
           if (latestRound.turns.length >= 2) {
-            const nextRoundNumber = latestRound.roundNumber + 1;
-            eventsToAdd.push(
-              {
-                playerId: latestTurn.playerId,
-                roundNumber: latestRound.roundNumber,
-                action: "round-end",
-                createdAt: now
-              },
-              {
-                playerId: game.startingPlayerId,
-                roundNumber: nextRoundNumber,
-                action: "round-start",
-                createdAt: now
-              },
-              {
-                playerId: game.startingPlayerId,
-                roundNumber: nextRoundNumber,
-                turnNumber: 1,
-                action: "turn-start",
-                createdAt: now
-              }
-            );
+            if (latestRound.roundNumber >= MAX_ROUNDS) {
+              closeGameFromRound(
+                latestTurn.playerId,
+                latestRound.roundNumber,
+                latestTurn.turnNumber,
+                true
+              );
+            } else {
+              const nextRoundNumber = latestRound.roundNumber + 1;
+              eventsToAdd.push(
+                {
+                  playerId: latestTurn.playerId,
+                  roundNumber: latestTurn.roundNumber,
+                  turnNumber: latestTurn.turnNumber,
+                  action: "turn-end",
+                  createdAt: now
+                },
+                {
+                  playerId: latestTurn.playerId,
+                  roundNumber: latestRound.roundNumber,
+                  action: "round-end",
+                  createdAt: now
+                },
+                {
+                  playerId: game.startingPlayerId,
+                  roundNumber: nextRoundNumber,
+                  action: "round-start",
+                  createdAt: now
+                },
+                {
+                  playerId: game.startingPlayerId,
+                  roundNumber: nextRoundNumber,
+                  turnNumber: 1,
+                  action: "turn-start",
+                  createdAt: now
+                }
+              );
+            }
           } else {
             eventsToAdd.push({
               playerId: otherPlayerId,

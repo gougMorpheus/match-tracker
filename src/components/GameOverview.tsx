@@ -35,9 +35,26 @@ interface ChartPoint {
   values: Record<string, number>;
 }
 
+interface RoundScoreRow {
+  roundNumber: number;
+  label: string;
+  values: Record<
+    string,
+    {
+      primary: number;
+      secondary: number;
+      roundTotal: number;
+      cumulativeTotal: number;
+    }
+  >;
+}
+
 const CHART_WIDTH = 320;
 const CHART_HEIGHT = 150;
 const CHART_PADDING = 20;
+const SCORE_CHART_WIDTH = 360;
+const SCORE_CHART_HEIGHT = 190;
+const SCORE_CHART_PADDING = 24;
 const TURN_CHUNK_SIZE = 5;
 
 const chunkItems = <T,>(items: T[], size: number): T[][] => {
@@ -98,9 +115,51 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     durationMs: getRoundDurationMs(round)
   }));
   const maxRoundDuration = Math.max(...roundRows.map((round) => round.durationMs), 1);
+  const roundScoreRows: RoundScoreRow[] = game.rounds.map((round) => {
+    const values = Object.fromEntries(
+      orderedPlayers.map((player) => [
+        player.id,
+        {
+          primary: 0,
+          secondary: 0,
+          roundTotal: 0,
+          cumulativeTotal: 0
+        }
+      ])
+    ) as RoundScoreRow["values"];
 
-  const scoreTimeline = [...game.scoreEvents].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  const cpTimeline = [...game.commandPointEvents].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    game.scoreEvents.forEach((event) => {
+      if (event.roundNumber !== round.roundNumber) {
+        return;
+      }
+
+      const nextValue = values[event.playerId];
+      if (!nextValue) {
+        return;
+      }
+
+      if (event.scoreType === "primary") {
+        nextValue.primary += event.value;
+      } else {
+        nextValue.secondary += event.value;
+      }
+      nextValue.roundTotal += event.value;
+    });
+
+    return {
+      roundNumber: round.roundNumber,
+      label: `R${round.roundNumber}`,
+      values
+    };
+  });
+
+  orderedPlayers.forEach((player) => {
+    let runningTotal = 0;
+    roundScoreRows.forEach((roundRow) => {
+      runningTotal += roundRow.values[player.id]?.roundTotal ?? 0;
+      roundRow.values[player.id].cumulativeTotal = runningTotal;
+    });
+  });
 
   const buildChartSegments = (valueSelector: (turn: TurnRow) => number): ChartPoint[][] => {
     const runningTotals = Object.fromEntries(orderedPlayers.map((player) => [player.id, 0]));
@@ -115,8 +174,230 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     return chunkItems(points, TURN_CHUNK_SIZE);
   };
 
-  const scoreSegments = buildChartSegments((turn) => turn.total);
   const timeSegments = buildChartSegments((turn) => turn.durationMs);
+
+  const renderRoundScoreChart = () => {
+    if (!roundScoreRows.length) {
+      return (
+        <article className="card stack">
+          <div className="list-row">
+            <h2>Score-Verlauf</h2>
+            <span>0 Runden</span>
+          </div>
+          <p className="muted-copy">Noch keine abgeschlossenen Runden vorhanden.</p>
+        </article>
+      );
+    }
+
+    const plotWidth = SCORE_CHART_WIDTH - SCORE_CHART_PADDING * 2;
+    const plotHeight = SCORE_CHART_HEIGHT - SCORE_CHART_PADDING * 2;
+    const groupWidth = plotWidth / roundScoreRows.length;
+    const barWidth = Math.max(10, Math.min(18, groupWidth * 0.14));
+    const playerGap = barWidth * 0.45;
+    const groupCenterOffset = barWidth * 2 + playerGap / 2;
+    const maxRoundValue = Math.max(
+      ...roundScoreRows.flatMap((roundRow) =>
+        orderedPlayers.flatMap((player) => [
+          roundRow.values[player.id]?.primary ?? 0,
+          roundRow.values[player.id]?.secondary ?? 0
+        ])
+      ),
+      1
+    );
+    const maxTotalValue = Math.max(
+      ...roundScoreRows.flatMap((roundRow) =>
+        orderedPlayers.map((player) => roundRow.values[player.id]?.cumulativeTotal ?? 0)
+      ),
+      1
+    );
+
+    const lineSeries = orderedPlayers.map((player) => {
+      const points = roundScoreRows.map((roundRow, roundIndex) => ({
+        x: SCORE_CHART_PADDING + groupWidth * roundIndex + groupWidth / 2,
+        y:
+          SCORE_CHART_HEIGHT -
+          SCORE_CHART_PADDING -
+          ((roundRow.values[player.id]?.cumulativeTotal ?? 0) / maxTotalValue) * plotHeight,
+        value: roundRow.values[player.id]?.cumulativeTotal ?? 0
+      }));
+
+      return {
+        player,
+        path: buildLinePath(points),
+        points
+      };
+    });
+
+    return (
+      <article className="card stack">
+        <div className="list-row">
+          <h2>Score-Verlauf</h2>
+          <span>{roundScoreRows.length} Runden</span>
+        </div>
+        <section className="overview-chart-card">
+          <div className="overview-chart-card__head">
+            <strong>Runden-Score + Gesamt</strong>
+            <div className="overview-chart-legend overview-chart-legend--score">
+              <span className="overview-chart-legend__item is-player-1 is-bar-primary">
+                {orderedPlayers[0]?.name} Prim
+              </span>
+              <span className="overview-chart-legend__item is-player-1 is-bar-secondary">
+                {orderedPlayers[0]?.name} Sek
+              </span>
+              <span className="overview-chart-legend__item is-player-2 is-bar-primary">
+                {orderedPlayers[1]?.name} Prim
+              </span>
+              <span className="overview-chart-legend__item is-player-2 is-bar-secondary">
+                {orderedPlayers[1]?.name} Sek
+              </span>
+              {orderedPlayers.map((player, playerIndex) => (
+                <span key={`${player.id}-line`} className={`overview-chart-legend__item is-player-${playerIndex + 1}`}>
+                  {player.name} Gesamt
+                </span>
+              ))}
+            </div>
+          </div>
+          <svg
+            viewBox={`0 0 ${SCORE_CHART_WIDTH} ${SCORE_CHART_HEIGHT}`}
+            className="overview-chart overview-chart--score"
+            role="img"
+            aria-label="Score-Verlauf pro Runde mit Primary, Secondary und kumulierter Gesamtpunktzahl"
+          >
+            {[0.25, 0.5, 0.75].map((marker) => {
+              const y = SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - marker * plotHeight;
+              return (
+                <line
+                  key={marker}
+                  x1={SCORE_CHART_PADDING}
+                  y1={y}
+                  x2={SCORE_CHART_WIDTH - SCORE_CHART_PADDING}
+                  y2={y}
+                  className="overview-chart__guide"
+                />
+              );
+            })}
+            <line
+              x1={SCORE_CHART_PADDING}
+              y1={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING}
+              x2={SCORE_CHART_WIDTH - SCORE_CHART_PADDING}
+              y2={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING}
+              className="overview-chart__axis"
+            />
+            <line
+              x1={SCORE_CHART_PADDING}
+              y1={SCORE_CHART_PADDING}
+              x2={SCORE_CHART_PADDING}
+              y2={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING}
+              className="overview-chart__axis"
+            />
+            <line
+              x1={SCORE_CHART_WIDTH - SCORE_CHART_PADDING}
+              y1={SCORE_CHART_PADDING}
+              x2={SCORE_CHART_WIDTH - SCORE_CHART_PADDING}
+              y2={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING}
+              className="overview-chart__axis overview-chart__axis--right"
+            />
+            {roundScoreRows.map((roundRow, roundIndex) =>
+              orderedPlayers.map((player, playerIndex) => {
+                const playerOffset = playerIndex === 0 ? -groupCenterOffset : playerGap / 2;
+                const primaryX =
+                  SCORE_CHART_PADDING + groupWidth * roundIndex + groupWidth / 2 + playerOffset;
+                const secondaryX = primaryX + barWidth;
+                const primaryHeight = ((roundRow.values[player.id]?.primary ?? 0) / maxRoundValue) * plotHeight;
+                const secondaryHeight = ((roundRow.values[player.id]?.secondary ?? 0) / maxRoundValue) * plotHeight;
+
+                return (
+                  <g key={`${roundRow.roundNumber}-${player.id}`}>
+                    <rect
+                      x={primaryX}
+                      y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - primaryHeight}
+                      width={barWidth - 1}
+                      height={Math.max(primaryHeight, 1)}
+                      rx="3"
+                      className={`overview-score-bar is-player-${playerIndex + 1} is-primary`}
+                    />
+                    <rect
+                      x={secondaryX}
+                      y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING - secondaryHeight}
+                      width={barWidth - 1}
+                      height={Math.max(secondaryHeight, 1)}
+                      rx="3"
+                      className={`overview-score-bar is-player-${playerIndex + 1} is-secondary`}
+                    />
+                  </g>
+                );
+              })
+            )}
+            {lineSeries.map((series, playerIndex) => (
+              <path
+                key={`${series.player.id}-score-line`}
+                d={series.path}
+                className={`overview-chart__line is-player-${playerIndex + 1}`}
+              />
+            ))}
+            {roundScoreRows.map((roundRow, roundIndex) => (
+              <text
+                key={roundRow.roundNumber}
+                x={SCORE_CHART_PADDING + groupWidth * roundIndex + groupWidth / 2}
+                y={SCORE_CHART_HEIGHT - 5}
+                textAnchor="middle"
+                className="overview-chart__label"
+              >
+                {roundRow.label}
+              </text>
+            ))}
+            <text
+              x={SCORE_CHART_PADDING - 5}
+              y={SCORE_CHART_PADDING + 4}
+              textAnchor="end"
+              className="overview-chart__scale"
+            >
+              {maxRoundValue}
+            </text>
+            <text
+              x={SCORE_CHART_PADDING - 5}
+              y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING + 4}
+              textAnchor="end"
+              className="overview-chart__scale"
+            >
+              0
+            </text>
+            <text
+              x={SCORE_CHART_WIDTH - SCORE_CHART_PADDING + 5}
+              y={SCORE_CHART_PADDING + 4}
+              textAnchor="start"
+              className="overview-chart__scale"
+            >
+              {maxTotalValue}
+            </text>
+            <text
+              x={SCORE_CHART_WIDTH - SCORE_CHART_PADDING + 5}
+              y={SCORE_CHART_HEIGHT - SCORE_CHART_PADDING + 4}
+              textAnchor="start"
+              className="overview-chart__scale"
+            >
+              0
+            </text>
+          </svg>
+          <div className="overview-chart-card__totals">
+            {orderedPlayers.map((player, playerIndex) => {
+              const latestRound = roundScoreRows[roundScoreRows.length - 1];
+              const roundValue = latestRound?.values[player.id];
+              return (
+                <div key={player.id} className="overview-chart-total">
+                  <span className={`overview-chart-total__marker is-player-${playerIndex + 1}`} />
+                  <span>{player.name}</span>
+                  <strong>
+                    {roundValue?.primary ?? 0}P / {roundValue?.secondary ?? 0}S / {roundValue?.cumulativeTotal ?? 0} G
+                  </strong>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </article>
+    );
+  };
 
   const renderLineChart = (
     title: string,
@@ -221,18 +502,6 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
                     d={series.path}
                     className={`overview-chart__line is-player-${playerIndex + 1}`}
                   />
-                )}
-                {playerSeries.map((series, playerIndex) =>
-                  series.points.map((point) => (
-                    <g key={`${series.player.id}-${point.label}-${chunkIndex}`}>
-                      <circle
-                        cx={point.x}
-                        cy={point.y}
-                        r="4"
-                        className={`overview-chart__dot is-player-${playerIndex + 1}`}
-                      />
-                    </g>
-                  ))
                 )}
                 {segment.map((point, pointIndex) => (
                   <text
@@ -349,7 +618,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         ))}
       </div>
 
-      {renderLineChart("Score-Verlauf", scoreSegments, "Pkt", (value) => String(value))}
+      {renderRoundScoreChart()}
       {renderLineChart("Zeit-Verlauf", timeSegments, "", (value) => formatDuration(value))}
 
       <article className="card stack">
@@ -372,62 +641,6 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
               <span>{formatDuration(round.durationMs)}</span>
             </div>
           ))}
-        </div>
-      </article>
-
-      <article className="card stack">
-        <div className="list-row">
-          <h2>Score-Ereignisse</h2>
-          <span>{scoreTimeline.length}</span>
-        </div>
-        <div className="modal-list">
-          {scoreTimeline.map((event) => {
-            const playerName = game.players.find((player) => player.id === event.playerId)?.name ?? "-";
-            return (
-              <article key={event.id} className="event-editor">
-                <div className="event-editor__meta">
-                  <div>
-                    <strong>{playerName}</strong>
-                    <p>
-                      {event.scoreType === "primary" ? "Primary" : "Secondary"} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
-                    </p>
-                  </div>
-                  <span>{formatClockTime(event.createdAt)}</span>
-                </div>
-                <p className="muted-copy">
-                  {event.value} {event.note ? `| ${event.note}` : ""}
-                </p>
-              </article>
-            );
-          })}
-        </div>
-      </article>
-
-      <article className="card stack">
-        <div className="list-row">
-          <h2>CP-Ereignisse</h2>
-          <span>{cpTimeline.length}</span>
-        </div>
-        <div className="modal-list">
-          {cpTimeline.map((event) => {
-            const playerName = game.players.find((player) => player.id === event.playerId)?.name ?? "-";
-            return (
-              <article key={event.id} className="event-editor">
-                <div className="event-editor__meta">
-                  <div>
-                    <strong>{playerName}</strong>
-                    <p>
-                      {event.cpType === "gained" ? "CP +" : "CP -"} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
-                    </p>
-                  </div>
-                  <span>{formatClockTime(event.createdAt)}</span>
-                </div>
-                <p className="muted-copy">
-                  {event.value} {event.note ? `| ${event.note}` : ""}
-                </p>
-              </article>
-            );
-          })}
         </div>
       </article>
     </section>
