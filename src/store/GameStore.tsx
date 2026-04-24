@@ -63,6 +63,8 @@ interface EventPayload {
   playerId: PlayerId;
   value?: number;
   note?: string;
+  roundNumber?: number;
+  turnNumber?: number;
 }
 
 interface GameStoreValue {
@@ -532,7 +534,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const addScoreEvent = useCallback(
-    async ({ gameId, playerId, value = 0, note, scoreType }: EventPayload & { scoreType: ScoreType }) =>
+    async ({
+      gameId,
+      playerId,
+      value = 0,
+      note,
+      roundNumber,
+      turnNumber,
+      scoreType
+    }: EventPayload & { scoreType: ScoreType }) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game) {
@@ -557,8 +567,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             scoreType,
             value: safeValue,
             note,
-            roundNumber: latestRound?.roundNumber,
-            turnNumber: latestTurn?.turnNumber
+            roundNumber: roundNumber ?? latestRound?.roundNumber,
+            turnNumber: turnNumber ?? latestTurn?.turnNumber
           })
         );
 
@@ -572,7 +582,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const addCommandPointEvent = useCallback(
-    async ({ gameId, playerId, value = 0, note, cpType }: EventPayload & { cpType: CommandPointType }) =>
+    async ({
+      gameId,
+      playerId,
+      value = 0,
+      note,
+      roundNumber,
+      turnNumber,
+      cpType
+    }: EventPayload & { cpType: CommandPointType }) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game) {
@@ -595,8 +613,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             cpType,
             value: safeValue,
             note,
-            roundNumber: latestRound?.roundNumber,
-            turnNumber: latestTurn?.turnNumber
+            roundNumber: roundNumber ?? latestRound?.roundNumber,
+            turnNumber: turnNumber ?? latestTurn?.turnNumber
           })
         );
 
@@ -611,7 +629,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const addNoteEvent = useCallback(
-    async ({ gameId, playerId, note }: EventPayload) =>
+    async ({ gameId, playerId, note, roundNumber, turnNumber }: EventPayload) =>
       runMutation(async () => {
         const trimmedNote = note?.trim();
         if (!trimmedNote) {
@@ -629,8 +647,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           appendLocalNoteEvent(currentGame, {
             playerId,
             note: trimmedNote,
-            roundNumber: latestRound?.roundNumber,
-            turnNumber: latestTurn?.turnNumber
+            roundNumber: roundNumber ?? latestRound?.roundNumber,
+            turnNumber: turnNumber ?? latestTurn?.turnNumber
           })
         );
 

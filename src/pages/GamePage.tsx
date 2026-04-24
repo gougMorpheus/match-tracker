@@ -10,7 +10,6 @@ import { useGameStore } from "../store/GameStore";
 import type { CreateGameInput, Game, PlayerId } from "../types/game";
 import {
   getCurrentRoundNumber,
-  getCurrentTurnNumber,
   getGameDurationMs,
   getLatestTurn,
   getPlayerCommandPoints,
@@ -68,7 +67,6 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     errorMessage,
     clearError,
     advanceGame,
-    rewindLastTurn,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
@@ -93,12 +91,26 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const [entriesOpen, setEntriesOpen] = useState(false);
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const [roundChangePulse, setRoundChangePulse] = useState<number | null>(null);
+  const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
   const previousRoundRef = useRef<number | null>(null);
+  const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
   );
 
+  const allTurns = useMemo(
+    () =>
+      game
+        ? game.rounds.flatMap((round) =>
+            round.turns.map((turn) => ({
+              ...turn,
+              key: `${turn.roundNumber}:${turn.turnNumber}`
+            }))
+          )
+        : [],
+    [game]
+  );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
   const playerOptions = useMemo(
     () =>
@@ -176,11 +188,36 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   useEffect(() => {
     if (!game) {
       setGameForm(null);
+      setSelectedTurnKey(null);
       return;
     }
 
     setGameForm(createGameFormState(game));
   }, [game]);
+
+  useEffect(() => {
+    if (!game) {
+      return;
+    }
+
+    const latestKey = latestTurn ? `${latestTurn.roundNumber}:${latestTurn.turnNumber}` : null;
+    setSelectedTurnKey((current) => {
+      if (!latestKey) {
+        return null;
+      }
+
+      if (snapToLatestTurnRef.current) {
+        snapToLatestTurnRef.current = false;
+        return latestKey;
+      }
+
+      if (!current) {
+        return latestKey;
+      }
+
+      return allTurns.some((turn) => turn.key === current) ? current : latestKey;
+    });
+  }, [allTurns, game, latestTurn]);
 
   useEffect(() => {
     if (!actionFlash) {
@@ -239,12 +276,19 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   }
 
   const latestRound = game.rounds[game.rounds.length - 1];
+  const selectedTurn =
+    allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
+  const selectedTurnIndex = selectedTurn
+    ? allTurns.findIndex((turn) => turn.key === `${selectedTurn.roundNumber}:${selectedTurn.turnNumber}`)
+    : -1;
+  const selectedRound =
+    game.rounds.find((round) => round.roundNumber === selectedTurn?.roundNumber) ?? latestRound;
+  const canGoBack = selectedTurnIndex > 0;
+  const canGoForwardToExistingTurn =
+    selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1;
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
-  const activePlayerId =
-    latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt
-      ? latestTurn.playerId
-      : game.currentPlayerId;
+  const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
   const isClosed = game.status === "completed";
   const isPaused = isTurnPaused(latestTurn);
   const hasActiveTurn = Boolean(latestTurn?.timing.startedAt && !latestTurn.timing.endedAt);
@@ -370,7 +414,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     await addNoteEvent({
       gameId,
       playerId: noteDialogPlayerId,
-      note: noteDraft
+      note: noteDraft,
+      roundNumber: selectedRound?.roundNumber,
+      turnNumber: selectedTurn?.turnNumber
     });
     closeNoteDialog();
   };
@@ -379,16 +425,40 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     await reopenGame(game.id);
   };
 
+  const handleAdvance = async () => {
+    if (canGoForwardToExistingTurn) {
+      const nextTurn = allTurns[selectedTurnIndex + 1];
+      if (nextTurn) {
+        setSelectedTurnKey(nextTurn.key);
+      }
+      return;
+    }
+
+    snapToLatestTurnRef.current = true;
+    await advanceGame(game.id);
+  };
+
+  const handleGoBack = () => {
+    if (!canGoBack) {
+      return;
+    }
+
+    const previousTurn = allTurns[selectedTurnIndex - 1];
+    if (previousTurn) {
+      setSelectedTurnKey(previousTurn.key);
+    }
+  };
+
   return (
     <Layout
       title="Tracker"
       subtitle={
         <div className="game-header-stats">
           <span>
-            Runde {getCurrentRoundNumber(game)} ({formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)})
+            Runde {selectedRound?.roundNumber ?? 0} ({formatDuration(selectedRound ? getRoundDurationMs(selectedRound) : 0)})
           </span>
           <span>
-            Zug {getCurrentTurnNumber(game)} ({formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)})
+            Zug {selectedTurn?.turnNumber ?? 0} ({formatDuration(selectedTurn ? getTurnDurationMs(selectedTurn) : 0)})
           </span>
           <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
         </div>
@@ -522,7 +592,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                         gameId,
                         playerId,
                         value: safeAmount,
-                        cpType: direction === "plus" ? "gained" : "spent"
+                        cpType: direction === "plus" ? "gained" : "spent",
+                        roundNumber: selectedRound?.roundNumber,
+                        turnNumber: selectedTurn?.turnNumber
                       });
                       setActionFlash("cp");
                     }}
@@ -541,7 +613,9 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                         gameId,
                         playerId,
                         value: direction === "plus" ? safeAmount : safeAmount * -1,
-                        scoreType
+                        scoreType,
+                        roundNumber: selectedRound?.roundNumber,
+                        turnNumber: selectedTurn?.turnNumber
                       });
                       setActionFlash("score");
                     }}
@@ -1008,7 +1082,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           <button
             type="button"
             className="primary-button compact-button"
-            onClick={() => void advanceGame(game.id)}
+            onClick={() => void handleAdvance()}
             disabled={isMutating}
           >
             Weiter
@@ -1016,8 +1090,8 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           <button
             type="button"
             className="ghost-button compact-button"
-            onClick={() => void rewindLastTurn(game.id)}
-            disabled={isMutating || !latestTurn}
+            onClick={handleGoBack}
+            disabled={isMutating || !canGoBack}
           >
             Zurueck
           </button>

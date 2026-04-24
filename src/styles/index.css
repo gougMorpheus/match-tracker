@@ -993,23 +993,6 @@ textarea {
   font-size: 0.76rem;
 }
 
-.game-round-background {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 1;
-  transition: background 240ms ease, opacity 240ms ease;
-}
-
-.game-round-background--odd {
-  background: var(--game-round-bg-odd);
-}
-
-.game-round-background--even {
-  background: var(--game-round-bg-even);
-}
-
 .round-change-indicator {
   position: fixed;
   top: 4.35rem;
