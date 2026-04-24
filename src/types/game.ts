@@ -45,6 +45,11 @@ export interface Turn {
   timing: TurnTiming;
 }
 
+export interface TurnRef {
+  roundNumber: number;
+  turnNumber: number;
+}
+
 export interface Round {
   id: string;
   roundNumber: number;

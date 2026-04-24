@@ -201,6 +201,16 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
     const turn = ensureTurn(round, event.turn_number, playerId);
     if (event.event_type === "turn-start") {
       turn.playerId = playerId;
+      if (round.endedAt && round.endedAt <= event.occurred_at) {
+        round.endedAt = undefined;
+      }
+      if (turn.timing.endedAt && turn.timing.endedAt <= event.occurred_at) {
+        turn.timing.pauses.push({
+          startedAt: turn.timing.endedAt,
+          endedAt: event.occurred_at
+        });
+        turn.timing.endedAt = undefined;
+      }
       if (!turn.timing.startedAt) {
         turn.timing.startedAt = event.occurred_at;
       } else {
@@ -214,9 +224,18 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
 
     if (event.event_type === "turn-resume") {
       turn.playerId = playerId;
+      if (round.endedAt && round.endedAt <= event.occurred_at) {
+        round.endedAt = undefined;
+      }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
       if (latestPause && !latestPause.endedAt) {
         latestPause.endedAt = event.occurred_at;
+      } else if (turn.timing.endedAt && turn.timing.endedAt <= event.occurred_at) {
+        turn.timing.pauses.push({
+          startedAt: turn.timing.endedAt,
+          endedAt: event.occurred_at
+        });
+        turn.timing.endedAt = undefined;
       }
       return;
     }

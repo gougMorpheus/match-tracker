@@ -532,7 +532,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         {orderedPlayers.map((player) => (
           <article key={player.id} className="card stack overview-player-card">
             <div className="overview-player-card__head">
-              <div>
+              <div className="overview-player-card__identity">
                 <strong>{player.name}</strong>
                 <p>{player.army.name}</p>
               </div>

@@ -292,11 +292,11 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
   const isClosed = game.status === "completed";
-  const isPaused = isTurnPaused(latestTurn);
-  const hasActiveTurn = Boolean(latestTurn?.timing.startedAt && !latestTurn.timing.endedAt);
+  const isPaused = isTurnPaused(selectedTurn);
+  const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isTimerRunning = !isClosed && hasActiveTurn && !isPaused;
   const timerStatusLabel = isTimerRunning ? "Laeuft" : "Gestoppt";
-  const currentRoundNumber = getCurrentRoundNumber(game);
+  const currentRoundNumber = selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
   const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
       ? "game-page--round-even"
@@ -329,7 +329,15 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     }
 
     if (isTimerRunning) {
-      await pauseActiveTimer(game.id);
+      await pauseActiveTimer(
+        game.id,
+        selectedTurn
+          ? {
+              roundNumber: selectedTurn.roundNumber,
+              turnNumber: selectedTurn.turnNumber
+            }
+          : undefined
+      );
     }
 
     setDetailsOpen(true);
@@ -349,7 +357,15 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
 
   const openEditor = async (event: EditableEventItem) => {
     if (isTimerRunning) {
-      await pauseActiveTimer(game.id);
+      await pauseActiveTimer(
+        game.id,
+        selectedTurn
+          ? {
+              roundNumber: selectedTurn.roundNumber,
+              turnNumber: selectedTurn.turnNumber
+            }
+          : undefined
+      );
     }
     setEditingEventId(event.id);
     setEditingValue(typeof event.displayValue === "number" ? String(event.displayValue) : "");
@@ -435,22 +451,55 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     if (canGoForwardToExistingTurn) {
       const nextTurn = allTurns[selectedTurnIndex + 1];
       if (nextTurn) {
+        if (isTimerRunning) {
+          await advanceGame(
+            game.id,
+            selectedTurn
+              ? {
+                  roundNumber: selectedTurn.roundNumber,
+                  turnNumber: selectedTurn.turnNumber
+                }
+              : undefined,
+            true
+          );
+        }
         setSelectedTurnKey(nextTurn.key);
       }
       return;
     }
 
     snapToLatestTurnRef.current = true;
-    await advanceGame(game.id);
+    await advanceGame(
+      game.id,
+      selectedTurn
+        ? {
+            roundNumber: selectedTurn.roundNumber,
+            turnNumber: selectedTurn.turnNumber
+          }
+        : undefined,
+      isTimerRunning
+    );
   };
 
-  const handleGoBack = () => {
+  const handleGoBack = async () => {
     if (!canGoBack) {
       return;
     }
 
     const previousTurn = allTurns[selectedTurnIndex - 1];
     if (previousTurn) {
+      if (isTimerRunning) {
+        await rewindLastTurn(
+          game.id,
+          selectedTurn
+            ? {
+                roundNumber: selectedTurn.roundNumber,
+                turnNumber: selectedTurn.turnNumber
+              }
+            : undefined,
+          true
+        );
+      }
       setSelectedTurnKey(previousTurn.key);
     }
   };
@@ -567,14 +616,22 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                     type="button"
                     className="ghost-button compact-button scoreboard__note-button"
                     disabled={isMutating}
-                    onClick={() => {
-                      void (async () => {
-                        if (isTimerRunning) {
-                          await pauseActiveTimer(game.id);
-                        }
-                        setNoteDialogPlayerId(player.id);
-                      })();
-                    }}
+                      onClick={() => {
+                        void (async () => {
+                          if (isTimerRunning) {
+                            await pauseActiveTimer(
+                              game.id,
+                              selectedTurn
+                                ? {
+                                    roundNumber: selectedTurn.roundNumber,
+                                    turnNumber: selectedTurn.turnNumber
+                                  }
+                                : undefined
+                            );
+                          }
+                          setNoteDialogPlayerId(player.id);
+                        })();
+                      }}
                   >
                     Notiz
                   </button>
@@ -1114,7 +1171,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           <button
             type="button"
             className="ghost-button compact-button"
-            onClick={handleGoBack}
+            onClick={() => void handleGoBack()}
             disabled={isMutating || !canGoBack}
           >
             Zurueck
@@ -1123,7 +1180,27 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
             type="button"
             className="secondary-button compact-button"
             onClick={() =>
-              void (isTimerRunning ? pauseActiveTimer(game.id) : startGameTimer(game.id))
+              void (
+                isTimerRunning
+                  ? pauseActiveTimer(
+                      game.id,
+                      selectedTurn
+                        ? {
+                            roundNumber: selectedTurn.roundNumber,
+                            turnNumber: selectedTurn.turnNumber
+                          }
+                        : undefined
+                    )
+                  : startGameTimer(
+                      game.id,
+                      selectedTurn
+                        ? {
+                            roundNumber: selectedTurn.roundNumber,
+                            turnNumber: selectedTurn.turnNumber
+                          }
+                        : undefined
+                    )
+              )
             }
             disabled={isMutating}
           >

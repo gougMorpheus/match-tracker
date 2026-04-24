@@ -20,7 +20,8 @@ import type {
   Game,
   PlayerId,
   ScoreType,
-  TimeEventAction
+  TimeEventAction,
+  TurnRef
 } from "../types/game";
 import {
   appendLocalCommandPointEvent,
@@ -79,10 +80,10 @@ interface GameStoreValue {
   addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
-  advanceGame: (gameId: string) => Promise<void>;
-  rewindLastTurn: (gameId: string) => Promise<void>;
-  pauseActiveTimer: (gameId: string) => Promise<void>;
-  startGameTimer: (gameId: string) => Promise<void>;
+  advanceGame: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
+  rewindLastTurn: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
+  pauseActiveTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
+  startGameTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   reopenGame: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   deleteGameEvent: (gameId: string, eventId: string) => Promise<void>;
@@ -101,6 +102,9 @@ const sortGames = (games: Game[]): Game[] =>
 const getErrorMessage = (error: unknown): string => getSyncErrorMessage(error);
 const clampNonNegative = (value: number): number => Math.max(value, 0);
 const MAX_ROUNDS = 5;
+
+const getTurnKey = (turnRef?: TurnRef | null): string | null =>
+  turnRef ? `${turnRef.roundNumber}:${turnRef.turnNumber}` : null;
 
 const mergeRemoteWithPending = (
   remoteGames: Game[],
@@ -165,6 +169,47 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     (gameId: string) => gamesRef.current.find((game) => game.id === gameId),
     []
   );
+
+  const getTurnByRef = useCallback((game: Game, turnRef?: TurnRef) => {
+    if (!turnRef) {
+      return getLatestTurn(game);
+    }
+
+    return game.rounds
+      .flatMap((round) => round.turns)
+      .find(
+        (turn) =>
+          turn.roundNumber === turnRef.roundNumber && turn.turnNumber === turnRef.turnNumber
+      );
+  }, []);
+
+  const getPreviousTurnByRef = useCallback((game: Game, turnRef?: TurnRef) => {
+    const turns = game.rounds.flatMap((round) => round.turns);
+    const currentKey = getTurnKey(turnRef);
+    const currentIndex = currentKey
+      ? turns.findIndex((turn) => getTurnKey(turn) === currentKey)
+      : turns.length - 1;
+
+    if (currentIndex <= 0) {
+      return null;
+    }
+
+    return turns[currentIndex - 1] ?? null;
+  }, []);
+
+  const getNextTurnByRef = useCallback((game: Game, turnRef?: TurnRef) => {
+    const turns = game.rounds.flatMap((round) => round.turns);
+    const currentKey = getTurnKey(turnRef);
+    const currentIndex = currentKey
+      ? turns.findIndex((turn) => getTurnKey(turn) === currentKey)
+      : turns.length - 1;
+
+    if (currentIndex < 0 || currentIndex >= turns.length - 1) {
+      return null;
+    }
+
+    return turns[currentIndex + 1] ?? null;
+  }, []);
 
   const replaceGame = useCallback((nextGame: Game) => {
     const syncedGame = syncDerivedGameState(nextGame);
@@ -675,16 +720,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const advanceGame = useCallback(
-    async (gameId: string) =>
+    async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
           return;
         }
 
-        const latestRound = getLatestRound(game);
-        const latestTurn = getLatestTurn(game);
         const now = getNowIso();
+        const currentTurn = getTurnByRef(game, turnRef);
+        const currentRound = currentTurn
+          ? game.rounds.find((round) => round.roundNumber === currentTurn.roundNumber)
+          : getLatestRound(game);
+        const nextExistingTurn = getNextTurnByRef(game, turnRef);
         const eventsToAdd: Array<{
           action: TimeEventAction;
           playerId?: PlayerId;
@@ -692,28 +740,151 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           turnNumber?: number;
           createdAt?: string;
         }> = [];
-        const otherPlayerId =
-          game.players.find((player) => player.id !== game.currentPlayerId)?.id ?? game.currentPlayerId;
-        const closeGameFromRound = (
-          playerId: PlayerId,
-          roundNumber: number,
-          turnNumber?: number,
-          includeTurnEnd = false
-        ) => {
-          if (includeTurnEnd && turnNumber) {
+        const runningTurns = game.rounds
+          .flatMap((round) => round.turns)
+          .filter(
+            (turn) =>
+              turn.timing.startedAt &&
+              !turn.timing.endedAt &&
+              !isTurnPaused(turn)
+          );
+        const currentTurnIsRunning = Boolean(
+          currentTurn?.timing.startedAt &&
+          !currentTurn.timing.endedAt &&
+          !isTurnPaused(currentTurn)
+        );
+        const pushPauseForRunningTurns = (excludeKey?: string | null) => {
+          runningTurns.forEach((turn) => {
+            if (getTurnKey(turn) === excludeKey) {
+              return;
+            }
+
             eventsToAdd.push({
-              playerId,
-              roundNumber,
-              turnNumber,
+              playerId: turn.playerId,
+              roundNumber: turn.roundNumber,
+              turnNumber: turn.turnNumber,
+              action: "turn-pause",
+              createdAt: now
+            });
+          });
+        };
+        const pushStartStateForTurn = (
+          targetTurn: NonNullable<ReturnType<typeof getTurnByRef>>,
+          shouldRun: boolean
+        ) => {
+          const targetRound = game.rounds.find(
+            (round) => round.roundNumber === targetTurn.roundNumber
+          );
+          if (!game.timeEvents.some((event) => event.action === "game-start")) {
+            eventsToAdd.push({
+              playerId: game.startingPlayerId,
+              action: "game-start",
+              createdAt: now
+            });
+          }
+
+          if (targetRound && !targetRound.startedAt) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              action: "round-start",
+              createdAt: now
+            });
+          }
+
+          if (!targetTurn.timing.startedAt) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              turnNumber: targetTurn.turnNumber,
+              action: "turn-start",
+              createdAt: now
+            });
+          } else if (shouldRun) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              turnNumber: targetTurn.turnNumber,
+              action: "turn-resume",
+              createdAt: now
+            });
+          }
+
+          if (!shouldRun) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              turnNumber: targetTurn.turnNumber,
+              action: "turn-pause",
+              createdAt: now
+            });
+          }
+        };
+
+        if (nextExistingTurn) {
+          if (keepTimerRunning) {
+            pushPauseForRunningTurns(getTurnKey(nextExistingTurn));
+            pushStartStateForTurn(nextExistingTurn, true);
+            enqueueTimeEvents(game, eventsToAdd);
+            void flushSyncQueue();
+          }
+          return;
+        }
+
+        if (!currentRound) {
+          const firstRoundNumber = 1;
+          const shouldRun = keepTimerRunning;
+          eventsToAdd.push(
+            {
+              playerId: game.startingPlayerId,
+              action: "game-start",
+              createdAt: now
+            },
+            {
+              playerId: game.startingPlayerId,
+              roundNumber: firstRoundNumber,
+              action: "round-start",
+              createdAt: now
+            },
+            {
+              playerId: game.startingPlayerId,
+              roundNumber: firstRoundNumber,
+              turnNumber: 1,
+              action: "turn-start",
+              createdAt: now
+            }
+          );
+
+          if (!shouldRun) {
+            eventsToAdd.push({
+              playerId: game.startingPlayerId,
+              roundNumber: firstRoundNumber,
+              turnNumber: 1,
+              action: "turn-pause",
+              createdAt: now
+            });
+          }
+
+          enqueueTimeEvents(game, eventsToAdd);
+          void flushSyncQueue();
+          return;
+        }
+
+        const closeCurrentGame = () => {
+          if (currentTurn?.timing.startedAt && !currentTurn.timing.endedAt) {
+            eventsToAdd.push({
+              playerId: currentTurn.playerId,
+              roundNumber: currentTurn.roundNumber,
+              turnNumber: currentTurn.turnNumber,
               action: "turn-end",
               createdAt: now
             });
           }
 
-          if (!latestRound?.endedAt) {
+          if (currentRound.startedAt && !currentRound.endedAt) {
             eventsToAdd.push({
-              playerId,
-              roundNumber,
+              playerId: currentTurn?.playerId ?? game.currentPlayerId,
+              roundNumber: currentRound.roundNumber,
               action: "round-end",
               createdAt: now
             });
@@ -727,29 +898,38 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
 
           eventsToAdd.push({
-            playerId,
+            playerId: currentTurn?.playerId ?? game.currentPlayerId,
             action: "game-end",
             createdAt: now
           });
         };
 
-        if (!latestRound || latestRound.endedAt) {
-          const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
+        const currentRoundHasTwoTurns = currentRound.turns.length >= 2 && (currentTurn?.turnNumber ?? 0) >= 2;
+        if (currentRound.roundNumber >= MAX_ROUNDS && currentRoundHasTwoTurns) {
+          closeCurrentGame();
+          enqueueTimeEvents(game, eventsToAdd);
+          void flushSyncQueue();
+          return;
+        }
 
-          if (latestRound && latestRound.roundNumber >= MAX_ROUNDS) {
-            const closingPlayerId =
-              latestRound.turns[latestRound.turns.length - 1]?.playerId ?? game.currentPlayerId;
-
-            closeGameFromRound(closingPlayerId, latestRound.roundNumber);
-            enqueueTimeEvents(game, eventsToAdd);
-            void flushSyncQueue();
-            return;
+        const shouldRunNextTurn = keepTimerRunning;
+        if (currentRoundHasTwoTurns) {
+          const nextRoundNumber = currentRound.roundNumber + 1;
+          if (currentTurn?.timing.startedAt && !currentTurn.timing.endedAt) {
+            eventsToAdd.push({
+              playerId: currentTurn.playerId,
+              roundNumber: currentTurn.roundNumber,
+              turnNumber: currentTurn.turnNumber,
+              action: "turn-end",
+              createdAt: now
+            });
           }
 
-          if (!game.timeEvents.some((event) => event.action === "game-start")) {
+          if (currentRound.startedAt && !currentRound.endedAt) {
             eventsToAdd.push({
-              playerId: game.startingPlayerId,
-              action: "game-start",
+              playerId: currentTurn?.playerId ?? game.currentPlayerId,
+              roundNumber: currentRound.roundNumber,
+              action: "round-end",
               createdAt: now
             });
           }
@@ -769,103 +949,45 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
               createdAt: now
             }
           );
-        } else if (!latestTurn || latestTurn.timing.endedAt) {
-          if (latestRound.turns.length >= 2) {
-            if (latestRound.roundNumber >= MAX_ROUNDS) {
-              const closingPlayerId =
-                latestTurn?.playerId ??
-                latestRound.turns[latestRound.turns.length - 1]?.playerId ??
-                game.currentPlayerId;
 
-              closeGameFromRound(closingPlayerId, latestRound.roundNumber);
-              enqueueTimeEvents(game, eventsToAdd);
-              void flushSyncQueue();
-              return;
-            }
-
-            const nextRoundNumber = latestRound.roundNumber + 1;
-            eventsToAdd.push(
-              {
-                playerId: latestRound.turns[latestRound.turns.length - 1]?.playerId ?? game.startingPlayerId,
-                roundNumber: latestRound.roundNumber,
-                action: "round-end",
-                createdAt: now
-              },
-              {
-                playerId: game.startingPlayerId,
-                roundNumber: nextRoundNumber,
-                action: "round-start",
-                createdAt: now
-              },
-              {
-                playerId: game.startingPlayerId,
-                roundNumber: nextRoundNumber,
-                turnNumber: 1,
-                action: "turn-start",
-                createdAt: now
-              }
-            );
-          } else {
-            const nextTurnNumber = latestRound.turns.length + 1;
-            const previousPlayerId =
-              latestTurn?.playerId ?? latestRound.turns[latestRound.turns.length - 1]?.playerId;
-            const nextPlayerId =
-              game.players.find((player) => player.id !== previousPlayerId)?.id ?? otherPlayerId;
-
+          if (!shouldRunNextTurn) {
             eventsToAdd.push({
-              playerId: nextPlayerId,
-              roundNumber: latestRound.roundNumber,
-              turnNumber: nextTurnNumber,
-              action: "turn-start",
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              turnNumber: 1,
+              action: "turn-pause",
               createdAt: now
             });
           }
         } else {
-          if (latestRound.turns.length >= 2) {
-            if (latestRound.roundNumber >= MAX_ROUNDS) {
-              closeGameFromRound(
-                latestTurn.playerId,
-                latestRound.roundNumber,
-                latestTurn.turnNumber,
-                true
-              );
-            } else {
-              const nextRoundNumber = latestRound.roundNumber + 1;
-              eventsToAdd.push(
-                {
-                  playerId: latestTurn.playerId,
-                  roundNumber: latestTurn.roundNumber,
-                  turnNumber: latestTurn.turnNumber,
-                  action: "turn-end",
-                  createdAt: now
-                },
-                {
-                  playerId: latestTurn.playerId,
-                  roundNumber: latestRound.roundNumber,
-                  action: "round-end",
-                  createdAt: now
-                },
-                {
-                  playerId: game.startingPlayerId,
-                  roundNumber: nextRoundNumber,
-                  action: "round-start",
-                  createdAt: now
-                },
-                {
-                  playerId: game.startingPlayerId,
-                  roundNumber: nextRoundNumber,
-                  turnNumber: 1,
-                  action: "turn-start",
-                  createdAt: now
-                }
-              );
-            }
-          } else {
+          const nextPlayerId =
+            game.players.find((player) => player.id !== (currentTurn?.playerId ?? game.currentPlayerId))?.id ??
+            game.currentPlayerId;
+
+          if (currentTurn?.timing.startedAt && !currentTurn.timing.endedAt) {
             eventsToAdd.push({
-              playerId: otherPlayerId,
-              roundNumber: latestRound.roundNumber,
-              turnNumber: latestRound.turns.length + 1,
-              action: "turn-start",
+              playerId: currentTurn.playerId,
+              roundNumber: currentTurn.roundNumber,
+              turnNumber: currentTurn.turnNumber,
+              action: "turn-end",
+              createdAt: now
+            });
+          }
+
+          eventsToAdd.push({
+            playerId: nextPlayerId,
+            roundNumber: currentRound.roundNumber,
+            turnNumber: 2,
+            action: "turn-start",
+            createdAt: now
+          });
+
+          if (!shouldRunNextTurn) {
+            eventsToAdd.push({
+              playerId: nextPlayerId,
+              roundNumber: currentRound.roundNumber,
+              turnNumber: 2,
+              action: "turn-pause",
               createdAt: now
             });
           }
@@ -874,159 +996,74 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         enqueueTimeEvents(game, eventsToAdd);
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation]
   );
 
   const rewindLastTurn = useCallback(
-    async (gameId: string) =>
+    async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
           return;
         }
 
-        const latestRound = getLatestRound(game);
-        const latestTurn = getLatestTurn(game);
-        if (!latestRound || !latestTurn) {
+        const targetTurn = getPreviousTurnByRef(game, turnRef);
+        if (!targetTurn || !keepTimerRunning) {
           return;
         }
 
-        const eventIds = new Set<string>();
-
-        game.commandPointEvents.forEach((event) => {
-          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
-            eventIds.add(event.id);
-          }
-        });
-
-        game.scoreEvents.forEach((event) => {
-          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
-            eventIds.add(event.id);
-          }
-        });
-
-        game.noteEvents.forEach((event) => {
-          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
-            eventIds.add(event.id);
-          }
-        });
-
-        game.timeEvents.forEach((event) => {
-          if (event.roundNumber === latestTurn.roundNumber && event.turnNumber === latestTurn.turnNumber) {
-            eventIds.add(event.id);
-          }
-
-          if (event.action === "round-end" && event.roundNumber === latestRound.roundNumber) {
-            eventIds.add(event.id);
-          }
-
-          if (
-            latestRound.turns.length === 1 &&
-            event.action === "round-start" &&
-            event.roundNumber === latestRound.roundNumber
-          ) {
-            eventIds.add(event.id);
-          }
-        });
-
-        const nextGame = mutateGame(gameId, (currentGame) =>
-          Array.from(eventIds).reduce(
-            (updatedGame, eventId) => removeLocalEvent(updatedGame, eventId),
-            currentGame
-          )
-        );
-
-        enqueueGameUpsert(nextGame.id);
-        Array.from(eventIds).forEach((eventId) => enqueueEventDelete(nextGame.id, eventId));
-        void flushSyncQueue();
-      }),
-    [enqueueEventDelete, enqueueGameUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
-  );
-
-  const pauseActiveTimer = useCallback(
-    async (gameId: string) =>
-      runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game || game.status === "completed") {
-          return;
-        }
-
-        const latestTurn = getLatestTurn(game);
-        if (!latestTurn || !latestTurn.timing.startedAt || latestTurn.timing.endedAt || isTurnPaused(latestTurn)) {
-          return;
-        }
-
-        enqueueTimeEvents(game, [
-          {
-            playerId: latestTurn.playerId,
-            roundNumber: latestTurn.roundNumber,
-            turnNumber: latestTurn.turnNumber,
-            action: "turn-pause"
-          }
-        ]);
-        void flushSyncQueue();
-      }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, runMutation]
-  );
-
-  const startGameTimer = useCallback(
-    async (gameId: string) =>
-      runMutation(async () => {
-        const game = getGame(gameId);
-        if (!game || game.status === "completed") {
-          return;
-        }
-
-        const latestRound = getLatestRound(game);
-        const latestTurn = getLatestTurn(game);
-        let eventsToAdd: Array<{
+        const now = getNowIso();
+        const currentTurn = getTurnByRef(game, turnRef);
+        const eventsToAdd: Array<{
           action: TimeEventAction;
           playerId?: PlayerId;
           roundNumber?: number;
           turnNumber?: number;
+          createdAt?: string;
         }> = [];
+        const runningTurns = game.rounds
+          .flatMap((round) => round.turns)
+          .filter(
+            (turn) =>
+              turn.timing.startedAt &&
+              !turn.timing.endedAt &&
+              !isTurnPaused(turn)
+          );
 
-        if (!latestRound || latestRound.endedAt) {
-          const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
-
-          if (!game.timeEvents.some((event) => event.action === "game-start")) {
-            eventsToAdd.push({
-              playerId: game.startingPlayerId,
-              action: "game-start"
-            });
+        runningTurns.forEach((turn) => {
+          if (getTurnKey(turn) === getTurnKey(targetTurn)) {
+            return;
           }
 
-          eventsToAdd.push(
-            {
-              playerId: game.startingPlayerId,
-              roundNumber: nextRoundNumber,
-              action: "round-start"
-            },
-            {
-              playerId: game.startingPlayerId,
-              roundNumber: nextRoundNumber,
-              turnNumber: 1,
-              action: "turn-start"
-            }
-          );
-        } else if (!latestTurn) {
-          eventsToAdd = [
-            {
-              playerId: game.currentPlayerId,
-              roundNumber: latestRound.roundNumber,
-              turnNumber: latestRound.turns.length + 1,
-              action: "turn-start"
-            }
-          ];
-        } else if (isTurnPaused(latestTurn)) {
-          eventsToAdd = [
-            {
-              playerId: latestTurn.playerId,
-              roundNumber: latestTurn.roundNumber,
-              turnNumber: latestTurn.turnNumber,
-              action: "turn-resume"
-            }
-          ];
+          eventsToAdd.push({
+            playerId: turn.playerId,
+            roundNumber: turn.roundNumber,
+            turnNumber: turn.turnNumber,
+            action: "turn-pause",
+            createdAt: now
+          });
+        });
+
+        if (!targetTurn.timing.startedAt) {
+          eventsToAdd.push({
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "turn-start",
+            createdAt: now
+          });
+        } else if (
+          targetTurn.timing.endedAt ||
+          isTurnPaused(targetTurn) ||
+          getTurnKey(currentTurn) !== getTurnKey(targetTurn)
+        ) {
+          eventsToAdd.push({
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "turn-resume",
+            createdAt: now
+          });
         }
 
         if (eventsToAdd.length) {
@@ -1034,7 +1071,138 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           void flushSyncQueue();
         }
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getPreviousTurnByRef, getTurnByRef, runMutation]
+  );
+
+  const pauseActiveTimer = useCallback(
+    async (gameId: string, turnRef?: TurnRef) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed") {
+          return;
+        }
+
+        const targetTurn = getTurnByRef(game, turnRef);
+        if (!targetTurn || !targetTurn.timing.startedAt || targetTurn.timing.endedAt || isTurnPaused(targetTurn)) {
+          return;
+        }
+
+        enqueueTimeEvents(game, [
+          {
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "turn-pause"
+          }
+        ]);
+        void flushSyncQueue();
+      }),
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+  );
+
+  const startGameTimer = useCallback(
+    async (gameId: string, turnRef?: TurnRef) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed") {
+          return;
+        }
+
+        const now = getNowIso();
+        const targetTurn = getTurnByRef(game, turnRef);
+        const targetRound = turnRef
+          ? game.rounds.find((round) => round.roundNumber === turnRef.roundNumber)
+          : getLatestRound(game);
+        const eventsToAdd: Array<{
+          action: TimeEventAction;
+          playerId?: PlayerId;
+          roundNumber?: number;
+          turnNumber?: number;
+          createdAt?: string;
+        }> = [];
+        const runningTurns = game.rounds
+          .flatMap((round) => round.turns)
+          .filter(
+            (turn) =>
+              turn.timing.startedAt &&
+              !turn.timing.endedAt &&
+              !isTurnPaused(turn)
+          );
+
+        runningTurns.forEach((turn) => {
+          if (getTurnKey(turn) === getTurnKey(targetTurn)) {
+            return;
+          }
+
+          eventsToAdd.push({
+            playerId: turn.playerId,
+            roundNumber: turn.roundNumber,
+            turnNumber: turn.turnNumber,
+            action: "turn-pause",
+            createdAt: now
+          });
+        });
+
+        if (!game.timeEvents.some((event) => event.action === "game-start")) {
+          eventsToAdd.push({
+            playerId: game.startingPlayerId,
+            action: "game-start",
+            createdAt: now
+          });
+        }
+
+        if (targetTurn) {
+          if (targetRound && !targetRound.startedAt) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              action: "round-start",
+              createdAt: now
+            });
+          }
+
+          if (!targetTurn.timing.startedAt) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              turnNumber: targetTurn.turnNumber,
+              action: "turn-start",
+              createdAt: now
+            });
+          } else if (targetTurn.timing.endedAt || isTurnPaused(targetTurn)) {
+            eventsToAdd.push({
+              playerId: targetTurn.playerId,
+              roundNumber: targetTurn.roundNumber,
+              turnNumber: targetTurn.turnNumber,
+              action: "turn-resume",
+              createdAt: now
+            });
+          }
+        } else {
+          const nextRoundNumber = (targetRound?.roundNumber ?? 0) + 1;
+          eventsToAdd.push(
+            {
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              action: "round-start",
+              createdAt: now
+            },
+            {
+              playerId: game.startingPlayerId,
+              roundNumber: nextRoundNumber,
+              turnNumber: 1,
+              action: "turn-start",
+              createdAt: now
+            }
+          );
+        }
+
+        if (eventsToAdd.length) {
+          enqueueTimeEvents(game, eventsToAdd);
+          void flushSyncQueue();
+        }
+      }),
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
   );
 
   const reopenGame = useCallback(

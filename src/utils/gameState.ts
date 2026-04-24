@@ -79,6 +79,16 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
     const turn = ensureTurn(round, event.turnNumber, event.playerId);
     if (event.action === "turn-start") {
       turn.playerId = event.playerId;
+      if (round.endedAt && round.endedAt <= event.createdAt) {
+        round.endedAt = undefined;
+      }
+      if (turn.timing.endedAt && turn.timing.endedAt <= event.createdAt) {
+        turn.timing.pauses.push({
+          startedAt: turn.timing.endedAt,
+          endedAt: event.createdAt
+        });
+        turn.timing.endedAt = undefined;
+      }
       if (!turn.timing.startedAt) {
         turn.timing.startedAt = event.createdAt;
       } else {
@@ -92,9 +102,18 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
 
     if (event.action === "turn-resume") {
       turn.playerId = event.playerId;
+      if (round.endedAt && round.endedAt <= event.createdAt) {
+        round.endedAt = undefined;
+      }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
       if (latestPause && !latestPause.endedAt) {
         latestPause.endedAt = event.createdAt;
+      } else if (turn.timing.endedAt && turn.timing.endedAt <= event.createdAt) {
+        turn.timing.pauses.push({
+          startedAt: turn.timing.endedAt,
+          endedAt: event.createdAt
+        });
+        turn.timing.endedAt = undefined;
       }
       return;
     }

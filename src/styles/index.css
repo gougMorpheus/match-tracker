@@ -803,6 +803,33 @@ textarea {
   gap: 0.6rem;
 }
 
+.overview-player-card__head {
+  align-items: flex-start;
+  min-height: 2.8rem;
+}
+
+.overview-player-card__identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.overview-player-card__identity strong,
+.overview-player-card__identity p {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overview-player-card__identity strong {
+  line-height: 1.1;
+}
+
+.overview-player-card__identity p {
+  margin: 0.18rem 0 0;
+  line-height: 1.05;
+}
+
 .overview-player-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
