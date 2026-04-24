@@ -73,12 +73,25 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
       title="Statistik"
       actions={
         <FloatingMenu
-          items={[
-            { label: "Spiele", onClick: onBack },
-            { label: "Neues Spiel", onClick: onCreateGame },
+          fixed
+          ariaLabel="Hauptmenue"
+          sections={[
             {
-              label: filtersOpen ? "Filter schliessen" : "Filter",
-              onClick: () => setFiltersOpen((current) => !current)
+              label: "Navigation",
+              items: [
+                { label: "Main", onClick: onBack },
+                { label: "Neues Spiel", onClick: onCreateGame },
+                { label: "Statistik", onClick: () => window.location.hash = "/stats" }
+              ]
+            },
+            {
+              label: "Optionen",
+              items: [
+                {
+                  label: filtersOpen ? "Filter schliessen" : "Filter",
+                  onClick: () => setFiltersOpen((current) => !current)
+                }
+              ]
             }
           ]}
         />

@@ -189,6 +189,8 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   }
 
   const latestRound = game.rounds[game.rounds.length - 1];
+  const orderedPlayers =
+    game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId =
     latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt
       ? latestTurn.playerId
@@ -324,7 +326,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
 
   return (
     <Layout
-      title="Live Tracker"
+      title="Tracker"
       stickyHeader
       actions={
         <div className="page-tools page-tools--game">
@@ -337,27 +339,40 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
             </span>
           </div>
           <FloatingMenu
-            items={[
-              { label: "Spiele", onClick: onBack },
-              { label: "Spieldetails", onClick: openGameDetails },
-              { label: "Verlauf", onClick: () => setEntriesOpen(true) },
-              { label: "Notizen", onClick: () => setNotesOpen(true) },
-              isClosed
-                ? {
-                    label: "Spiel wieder eroeffnen",
-                    onClick: () => void handleReopenGame()
-                  }
-                : {
-                    label: "Spiel beenden",
-                    onClick: () => void finishGame(game.id),
+            ariaLabel="Spielmenue"
+            sections={[
+              {
+                label: "Navigation",
+                items: [
+                  { label: "Main", onClick: onBack },
+                  { label: "Neues Spiel", onClick: () => (window.location.hash = "/new") },
+                  { label: "Statistik", onClick: () => (window.location.hash = "/stats") }
+                ]
+              },
+              {
+                label: "Optionen",
+                items: [
+                  { label: "Spieldetails", onClick: openGameDetails },
+                  { label: "Verlauf", onClick: () => setEntriesOpen(true) },
+                  { label: "Notizen", onClick: () => setNotesOpen(true) },
+                  isClosed
+                    ? {
+                        label: "Spiel wieder eroeffnen",
+                        onClick: () => void handleReopenGame()
+                      }
+                    : {
+                        label: "Spiel beenden",
+                        onClick: () => void finishGame(game.id),
+                        disabled: isMutating,
+                        danger: true
+                      },
+                  {
+                    label: "Spiel loeschen",
+                    onClick: () => void handleDeleteGame(),
                     disabled: isMutating,
                     danger: true
-                  },
-              {
-                label: "Spiel loeschen",
-                onClick: () => void handleDeleteGame(),
-                disabled: isMutating,
-                danger: true
+                  }
+                ]
               }
             ]}
           />
@@ -379,43 +394,54 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
           </article>
         ) : null}
 
-        <article className="tracker-summary">
-          <div>
-            <span>Runde</span>
-            <strong>{getCurrentRoundNumber(game)}</strong>
-          </div>
-          <div>
-            <span>Zug</span>
-            <strong>{getCurrentTurnNumber(game)}</strong>
-          </div>
-          <div>
-            <span>Aktiv</span>
-            <strong>
-              {game.players.find((player) => player.id === activePlayerId)?.name ?? "-"}
-            </strong>
-          </div>
-          <div>
-            <span>Gesamtzeit</span>
-            <strong>{formatDuration(getGameDurationMs(game))}</strong>
-          </div>
-          <div>
-            <span>Rundenzeit</span>
-            <strong>{formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}</strong>
-          </div>
-          <div>
-            <span>Zugzeit</span>
-            <strong>{formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}</strong>
-          </div>
+        <article className="tracker-summary tracker-summary--inline">
+          <span>
+            <strong>R</strong> {getCurrentRoundNumber(game)}
+          </span>
+          <span>
+            <strong>Z</strong> {getCurrentTurnNumber(game)}
+          </span>
+          <span>
+            <strong>Aktiv</strong> {game.players.find((player) => player.id === activePlayerId)?.name ?? "-"}
+          </span>
+          <span>
+            <strong>Gesamt</strong> {formatDuration(getGameDurationMs(game))}
+          </span>
+          <span>
+            <strong>Runde</strong> {formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}
+          </span>
+          <span>
+            <strong>Zug</strong> {formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}
+          </span>
         </article>
 
         <div className="stack">
-          {game.players.map((player) => (
+          {orderedPlayers.map((player) => (
             <PlayerScoreboard
               key={player.id}
               game={game}
               player={player}
               emphasized={activePlayerId === player.id}
               defender={game.defenderPlayerId === player.id}
+              noteAction={
+                !isClosed ? (
+                  <button
+                    type="button"
+                    className="ghost-button compact-button scoreboard__note-button"
+                    disabled={isMutating}
+                    onClick={() => {
+                      void (async () => {
+                        if (isTimerRunning) {
+                          await pauseActiveTimer(game.id);
+                        }
+                        setNoteDialogPlayerId(player.id);
+                      })();
+                    }}
+                  >
+                    Notiz
+                  </button>
+                ) : null
+              }
               controls={
                 <QuickAdjustControls
                   player={player}
@@ -456,18 +482,6 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                       value: direction === "plus" ? safeAmount : safeAmount * -1,
                       scoreType
                     });
-                  }}
-                  onAddNote={(playerId) => {
-                    if (isClosed) {
-                      return;
-                    }
-
-                    void (async () => {
-                      if (isTimerRunning) {
-                        await pauseActiveTimer(game.id);
-                      }
-                      setNoteDialogPlayerId(playerId);
-                    })();
                   }}
                 />
               }

@@ -15,6 +15,7 @@ interface PlayerScoreboardProps {
   emphasized?: boolean;
   defender?: boolean;
   controls?: ReactNode;
+  noteAction?: ReactNode;
 }
 
 export const PlayerScoreboard = ({
@@ -22,7 +23,8 @@ export const PlayerScoreboard = ({
   player,
   emphasized = false,
   defender = false,
-  controls
+  controls,
+  noteAction
 }: PlayerScoreboardProps) => {
   const primary = getPlayerPrimaryTotal(game, player.id);
   const secondary = getPlayerSecondaryTotal(game, player.id);
@@ -39,26 +41,27 @@ export const PlayerScoreboard = ({
           <p>{player.army.name}</p>
         </div>
         <div className="scoreboard__meta">
+          {noteAction}
           {defender ? <span className="meta-chip">Defender</span> : null}
           {emphasized ? <span className="meta-chip meta-chip--accent">Aktiv</span> : null}
         </div>
       </div>
-      <div className="scoreboard__grid">
+      <div className="scoreboard__grid scoreboard__grid--compact">
         <div>
-          <span>CP Saldo</span>
+          <span>CP</span>
           <strong>{cp}</strong>
           <p>+{cpGained} / -{cpSpent}</p>
         </div>
         <div>
-          <span>Primary</span>
+          <span>Prim</span>
           <strong>{primary}</strong>
         </div>
         <div>
-          <span>Secondary</span>
+          <span>Sek</span>
           <strong>{secondary}</strong>
         </div>
         <div>
-          <span>Gesamt</span>
+          <span>Ges</span>
           <strong>{total}</strong>
         </div>
       </div>

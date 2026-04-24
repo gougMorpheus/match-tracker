@@ -53,23 +53,36 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
       title="Spiele"
       actions={
         <FloatingMenu
-          items={[
-            { label: "Neues Spiel", onClick: onCreateGame },
-            { label: "Statistik", onClick: onOpenStats },
+          fixed
+          ariaLabel="Hauptmenue"
+          sections={[
             {
-              label: filtersOpen ? "Filter schliessen" : "Filter",
-              onClick: () => setFiltersOpen((current) => !current)
-            },
-            { label: "Import", onClick: () => fileInputRef.current?.click(), disabled: isMutating },
-            {
-              label: "Export",
-              onClick: () => exportGamesAsJson(games),
-              disabled: !games.length || isLoading
+              label: "Navigation",
+              items: [
+                { label: "Main", onClick: () => window.location.hash = "/games" },
+                { label: "Neues Spiel", onClick: onCreateGame },
+                { label: "Statistik", onClick: onOpenStats }
+              ]
             },
             {
-              label: "Update",
-              onClick: () => void refreshGames(),
-              disabled: isLoading || isMutating
+              label: "Optionen",
+              items: [
+                {
+                  label: filtersOpen ? "Filter schliessen" : "Filter",
+                  onClick: () => setFiltersOpen((current) => !current)
+                },
+                { label: "Import", onClick: () => fileInputRef.current?.click(), disabled: isMutating },
+                {
+                  label: "Export",
+                  onClick: () => exportGamesAsJson(games),
+                  disabled: !games.length || isLoading
+                },
+                {
+                  label: "Update",
+                  onClick: () => void refreshGames(),
+                  disabled: isLoading || isMutating
+                }
+              ]
             }
           ]}
         />

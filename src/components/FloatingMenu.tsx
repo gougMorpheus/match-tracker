@@ -7,39 +7,61 @@ export interface FloatingMenuItem {
   danger?: boolean;
 }
 
-interface FloatingMenuProps {
-  label?: string;
+export interface FloatingMenuSection {
+  label: string;
   items: FloatingMenuItem[];
 }
 
-export const FloatingMenu = ({ label = "Menue", items }: FloatingMenuProps) => {
+interface FloatingMenuProps {
+  sections: FloatingMenuSection[];
+  fixed?: boolean;
+  ariaLabel?: string;
+}
+
+export const FloatingMenu = ({
+  sections,
+  fixed = false,
+  ariaLabel = "Navigation"
+}: FloatingMenuProps) => {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="floating-menu">
+    <div className={`floating-menu ${fixed ? "floating-menu--fixed" : ""}`}>
       <button
         type="button"
         className="ghost-button compact-button floating-menu__trigger"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
+        aria-label={ariaLabel}
       >
-        {label}
+        <span className="floating-menu__burger" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
       </button>
       {open ? (
         <div className="floating-menu__panel">
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={`floating-menu__item ${item.danger ? "is-danger" : ""}`}
-              disabled={item.disabled}
-              onClick={() => {
-                setOpen(false);
-                item.onClick();
-              }}
-            >
-              {item.label}
-            </button>
+          {sections.map((section) => (
+            <div key={section.label} className="floating-menu__section">
+              <p className="floating-menu__section-label">{section.label}</p>
+              <div className="floating-menu__section-items">
+                {section.items.map((item) => (
+                  <button
+                    key={`${section.label}-${item.label}`}
+                    type="button"
+                    className={`floating-menu__item ${item.danger ? "is-danger" : ""}`}
+                    disabled={item.disabled}
+                    onClick={() => {
+                      setOpen(false);
+                      item.onClick();
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : null}

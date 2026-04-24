@@ -15,7 +15,6 @@ interface QuickAdjustControlsProps {
     direction: "plus" | "minus",
     amount: number
   ) => Promise<void>;
-  onAddNote: (playerId: string) => void;
 }
 
 const CP_AMOUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -29,8 +28,7 @@ export const QuickAdjustControls = ({
   isSubmitting = false,
   canSpendCommandPoints = true,
   onCommandPointChange,
-  onScoreChange,
-  onAddNote
+  onScoreChange
 }: QuickAdjustControlsProps) => {
   const [cpAmount, setCpAmount] = useState(1);
   const [primaryAmount, setPrimaryAmount] = useState(1);
@@ -139,14 +137,6 @@ export const QuickAdjustControls = ({
           </button>
         </div>
       </div>
-      <button
-        type="button"
-        className="mini-button mini-button--accent"
-        disabled={isSubmitting}
-        onClick={() => onAddNote(player.id)}
-      >
-        Notiz hinzufuegen
-      </button>
     </div>
   );
 };
