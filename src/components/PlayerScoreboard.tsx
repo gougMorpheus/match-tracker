@@ -47,22 +47,32 @@ export const PlayerScoreboard = ({
         </div>
       </div>
       <div className="scoreboard__grid scoreboard__grid--compact">
-        <div>
-          <span>CP</span>
-          <strong>{cp}</strong>
-          <p>+{cpGained} / -{cpSpent}</p>
+        <div className="scoreboard-stat scoreboard-stat--cp">
+          <div className="scoreboard-stat__top">
+            <span>CP</span>
+            <strong>{cp}</strong>
+          </div>
+          <span className="scoreboard-stat__meta">
+            +{cpGained} / -{cpSpent}
+          </span>
         </div>
-        <div>
-          <span>Prim</span>
-          <strong>{primary}</strong>
+        <div className="scoreboard-stat">
+          <div className="scoreboard-stat__top">
+            <span>Prim</span>
+            <strong>{primary}</strong>
+          </div>
         </div>
-        <div>
-          <span>Sek</span>
-          <strong>{secondary}</strong>
+        <div className="scoreboard-stat">
+          <div className="scoreboard-stat__top">
+            <span>Sek</span>
+            <strong>{secondary}</strong>
+          </div>
         </div>
-        <div>
-          <span>Ges</span>
-          <strong>{total}</strong>
+        <div className="scoreboard-stat scoreboard-stat--accent">
+          <div className="scoreboard-stat__top">
+            <span>Ges</span>
+            <strong>{total}</strong>
+          </div>
         </div>
       </div>
       {controls ? <div className="scoreboard__controls">{controls}</div> : null}

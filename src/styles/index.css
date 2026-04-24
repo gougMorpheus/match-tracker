@@ -291,7 +291,7 @@ textarea {
   gap: 0.25rem;
 }
 
-.scoreboard__grid div,
+.scoreboard__grid > div,
 .tracker-summary div {
   background: var(--bg-soft);
   border-radius: 18px;
@@ -311,7 +311,7 @@ textarea {
   color: var(--muted);
 }
 
-.scoreboard__grid--compact div {
+.scoreboard__grid--compact > div {
   display: grid;
   gap: 0.12rem;
 }
@@ -320,6 +320,37 @@ textarea {
   margin: 0;
   font-size: 0.64rem;
   line-height: 1;
+}
+
+.scoreboard-stat {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.scoreboard-stat__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.scoreboard-stat__top strong {
+  display: inline;
+  margin: 0;
+  line-height: 1;
+}
+
+.scoreboard-stat__meta {
+  display: block;
+  font-size: 0.58rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
+.scoreboard-stat--accent {
+  border-color: rgba(56, 189, 248, 0.16);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(30, 41, 59, 0.82));
 }
 
 .button-grid {
@@ -576,26 +607,26 @@ textarea {
 }
 
 .game-page .tracker-summary div,
-.game-page .scoreboard__grid div {
-  padding: 0.35rem 0.4rem;
-  border-radius: 12px;
+.game-page .scoreboard__grid > div {
+  padding: 0.22rem 0.36rem;
+  border-radius: 11px;
 }
 
 .game-page .tracker-summary strong,
 .game-page .scoreboard__grid strong {
-  font-size: 0.9rem;
-  margin-top: 0.12rem;
+  font-size: 0.86rem;
+  margin-top: 0;
 }
 
 .game-page .tracker-summary span,
 .game-page .scoreboard__grid span,
 .game-page .scoreboard__grid p {
-  font-size: 0.68rem;
-  line-height: 1.1;
+  font-size: 0.62rem;
+  line-height: 1;
 }
 
 .game-page .scoreboard {
-  padding: 0.55rem;
+  padding: 0.48rem;
 }
 
 .game-page .scoreboard__head {
@@ -618,12 +649,24 @@ textarea {
 
 .game-page .scoreboard__grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.3rem;
+  gap: 0.24rem;
 }
 
 .game-page .scoreboard__controls {
-  margin-top: 0.45rem;
-  padding-top: 0.45rem;
+  margin-top: 0.32rem;
+  padding-top: 0.32rem;
+}
+
+.game-page .scoreboard-stat {
+  gap: 0.08rem;
+}
+
+.game-page .scoreboard-stat__top {
+  gap: 0.22rem;
+}
+
+.game-page .scoreboard-stat__meta {
+  font-size: 0.52rem;
 }
 
 .game-page .quick-controls {
