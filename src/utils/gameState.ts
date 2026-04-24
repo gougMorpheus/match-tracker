@@ -173,6 +173,7 @@ const syncPlayers = (players: [Player, Player], gamePoints: number): [Player, Pl
 
 export const syncDerivedGameState = (game: Game): Game => {
   const sortedTimeEvents = sortByCreatedAt(game.timeEvents);
+  const hasTimeEvents = sortedTimeEvents.length > 0;
   const rounds = buildRoundsFromTimeEvents(sortedTimeEvents);
   const timestamps = [
     game.createdAt,
@@ -184,11 +185,12 @@ export const syncDerivedGameState = (game: Game): Game => {
   const startedAt =
     sortedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
     sortedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
-    game.startedAt;
+    (hasTimeEvents ? undefined : game.startedAt);
   const endedAt =
     [...sortedTimeEvents]
       .reverse()
-      .find((event) => event.action === "game-end")?.createdAt ?? game.endedAt;
+      .find((event) => event.action === "game-end")?.createdAt ??
+    (hasTimeEvents ? undefined : game.endedAt);
 
   return {
     ...game,
