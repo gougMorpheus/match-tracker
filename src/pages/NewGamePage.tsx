@@ -15,8 +15,10 @@ interface NewGamePageProps {
 const createDefaultFormState = (): CreateGameInput => ({
   playerOneName: "",
   playerOneArmy: "",
+  playerOneDetachment: "",
   playerTwoName: "",
   playerTwoArmy: "",
+  playerTwoDetachment: "",
   gamePoints: 1000,
   scheduledDate: toLocalDateInput(),
   scheduledTime: toLocalTimeInput(),
@@ -56,6 +58,53 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
 
     return armyByName;
   }, [games]);
+  const latestDetachmentByPlayerArmy = useMemo(() => {
+    const detachmentByCombo = new Map<string, string>();
+    [...games]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .forEach((game) => {
+        game.players.forEach((player) => {
+          const comboKey = `${player.name.trim().toLocaleLowerCase()}::${player.army.name.trim().toLocaleLowerCase()}`;
+          const detachment = player.army.detachment.trim();
+          if (!comboKey || detachmentByCombo.has(comboKey) || !detachment) {
+            return;
+          }
+
+          detachmentByCombo.set(comboKey, detachment);
+        });
+      });
+
+    return detachmentByCombo;
+  }, [games]);
+  const detachmentOptionsByArmy = useMemo(() => {
+    const detachments = new Map<string, string[]>();
+    games.forEach((game) => {
+      game.players.forEach((player) => {
+        const armyName = player.army.name.trim();
+        const detachment = player.army.detachment.trim();
+        if (!armyName || !detachment) {
+          return;
+        }
+
+        const current = detachments.get(armyName) ?? [];
+        if (!current.includes(detachment)) {
+          detachments.set(armyName, [...current, detachment].sort((left, right) => left.localeCompare(right)));
+        }
+      });
+    });
+
+    return detachments;
+  }, [games]);
+
+  const getPlayerArmyComboKey = (playerName: string, armyName: string): string | null => {
+    const normalizedPlayerName = playerName.trim().toLocaleLowerCase();
+    const normalizedArmyName = armyName.trim().toLocaleLowerCase();
+    if (!normalizedPlayerName || !normalizedArmyName) {
+      return null;
+    }
+
+    return `${normalizedPlayerName}::${normalizedArmyName}`;
+  };
 
   function updateField<K extends keyof CreateGameInput>(key: K, value: CreateGameInput[K]) {
     setFormState((current) => ({
@@ -67,13 +116,38 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   function applyRememberedPlayerName(slot: "player1" | "player2", value: string) {
     const armyField = slot === "player1" ? "playerOneArmy" : "playerTwoArmy";
     const nameField = slot === "player1" ? "playerOneName" : "playerTwoName";
+    const detachmentField = slot === "player1" ? "playerOneDetachment" : "playerTwoDetachment";
     const rememberedArmy = latestArmyByPlayerName.get(value.trim());
 
-    setFormState((current) => ({
-      ...current,
-      [nameField]: value,
-      [armyField]: rememberedArmy || current[armyField]
-    }));
+    setFormState((current) => {
+      const nextArmy = rememberedArmy || current[armyField];
+      const comboKey = getPlayerArmyComboKey(value, String(nextArmy));
+      const rememberedDetachment = comboKey ? latestDetachmentByPlayerArmy.get(comboKey) : undefined;
+
+      return {
+        ...current,
+        [nameField]: value,
+        [armyField]: nextArmy,
+        [detachmentField]: rememberedDetachment || current[detachmentField]
+      };
+    });
+  }
+
+  function applyArmySelection(slot: "player1" | "player2", army: string) {
+    const nameField = slot === "player1" ? "playerOneName" : "playerTwoName";
+    const armyField = slot === "player1" ? "playerOneArmy" : "playerTwoArmy";
+    const detachmentField = slot === "player1" ? "playerOneDetachment" : "playerTwoDetachment";
+
+    setFormState((current) => {
+      const comboKey = getPlayerArmyComboKey(String(current[nameField]), army);
+      const rememberedDetachment = comboKey ? latestDetachmentByPlayerArmy.get(comboKey) : undefined;
+
+      return {
+        ...current,
+        [armyField]: army,
+        [detachmentField]: rememberedDetachment || current[detachmentField]
+      };
+    });
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -122,7 +196,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
             <select
               required
               value={formState.playerOneArmy}
-              onChange={(event) => updateField("playerOneArmy", event.target.value)}
+              onChange={(event) => applyArmySelection("player1", event.target.value)}
               disabled={isMutating}
             >
               <option value="">Armee waehlen</option>
@@ -132,6 +206,21 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="field">
+            <span>Detachment (optional)</span>
+            <input
+              list="player-one-detachment-options"
+              value={formState.playerOneDetachment}
+              onChange={(event) => updateField("playerOneDetachment", event.target.value)}
+              disabled={isMutating}
+              placeholder="Offen oder vorhandenes waehlen"
+            />
+            <datalist id="player-one-detachment-options">
+              {(detachmentOptionsByArmy.get(formState.playerOneArmy) ?? []).map((detachment) => (
+                <option key={detachment} value={detachment} />
+              ))}
+            </datalist>
           </label>
         </section>
 
@@ -150,7 +239,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
             <select
               required
               value={formState.playerTwoArmy}
-              onChange={(event) => updateField("playerTwoArmy", event.target.value)}
+              onChange={(event) => applyArmySelection("player2", event.target.value)}
               disabled={isMutating}
             >
               <option value="">Armee waehlen</option>
@@ -160,6 +249,21 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="field">
+            <span>Detachment (optional)</span>
+            <input
+              list="player-two-detachment-options"
+              value={formState.playerTwoDetachment}
+              onChange={(event) => updateField("playerTwoDetachment", event.target.value)}
+              disabled={isMutating}
+              placeholder="Offen oder vorhandenes waehlen"
+            />
+            <datalist id="player-two-detachment-options">
+              {(detachmentOptionsByArmy.get(formState.playerTwoArmy) ?? []).map((detachment) => (
+                <option key={detachment} value={detachment} />
+              ))}
+            </datalist>
           </label>
         </section>
 

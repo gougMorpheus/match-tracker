@@ -7,6 +7,7 @@ Diese Vorlage ist fuer alte Spiele gedacht, bei denen nur der Endstand bekannt i
 Wofuer sie geeignet ist:
 - Spielername
 - Armee
+- Detachment
 - Datum / Uhrzeit
 - Spielpunkte
 - Defender / Startspieler
@@ -26,6 +27,7 @@ Wofuer sie nicht gedacht ist:
   - `player-1`
   - `player-2`
 - Verwende dieselben IDs auch in `legacyScoreTotals`.
+- Setze `army.detachment` auf den echten Detachment-Namen oder `""`, wenn unbekannt.
 - Setze `scoreDetailLevel` immer auf `"total-only"`.
 - Lasse `rounds`, `scoreEvents`, `commandPointEvents`, `noteEvents` und `timeEvents` leer, wenn dazu keine sicheren Daten vorliegen.
 - Wenn `deployment` oder `primaryMission` unbekannt sind, setze `""`.
@@ -60,7 +62,8 @@ Wofuer sie nicht gedacht ist:
           "name": "Alice",
           "army": {
             "name": "Necrons",
-            "maxPoints": 1000
+            "maxPoints": 1000,
+            "detachment": "Awakened Dynasty"
           }
         },
         {
@@ -68,7 +71,8 @@ Wofuer sie nicht gedacht ist:
           "name": "Bob",
           "army": {
             "name": "Astra Militarum",
-            "maxPoints": 1000
+            "maxPoints": 1000,
+            "detachment": ""
           }
         }
       ],

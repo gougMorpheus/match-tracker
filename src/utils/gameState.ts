@@ -248,7 +248,8 @@ export const createLocalGame = (input: CreateGameInput): Game => {
       name: input.playerOneName.trim(),
       army: {
         name: input.playerOneArmy.trim(),
-        maxPoints: input.gamePoints
+        maxPoints: input.gamePoints,
+        detachment: input.playerOneDetachment.trim()
       }
     },
     {
@@ -256,7 +257,8 @@ export const createLocalGame = (input: CreateGameInput): Game => {
       name: input.playerTwoName.trim(),
       army: {
         name: input.playerTwoArmy.trim(),
-        maxPoints: input.gamePoints
+        maxPoints: input.gamePoints,
+        detachment: input.playerTwoDetachment.trim()
       }
     }
   ];
@@ -312,7 +314,8 @@ export const updateLocalGameDetails = (game: Game, input: CreateGameInput): Game
         army: {
           ...game.players[0].army,
           name: input.playerOneArmy.trim(),
-          maxPoints: input.gamePoints
+          maxPoints: input.gamePoints,
+          detachment: input.playerOneDetachment.trim()
         }
       },
       {
@@ -321,7 +324,8 @@ export const updateLocalGameDetails = (game: Game, input: CreateGameInput): Game
         army: {
           ...game.players[1].army,
           name: input.playerTwoArmy.trim(),
-          maxPoints: input.gamePoints
+          maxPoints: input.gamePoints,
+          detachment: input.playerTwoDetachment.trim()
         }
       }
     ]
@@ -593,11 +597,19 @@ export const mapPersistedGame = (value: unknown): Game | null => {
     players: [
       {
         ...rawGame.players[0],
-        id: playerOneId
+        id: playerOneId,
+        army: {
+          ...rawGame.players[0].army,
+          detachment: rawGame.players[0].army?.detachment ?? ""
+        }
       },
       {
         ...rawGame.players[1],
-        id: playerTwoId
+        id: playerTwoId,
+        army: {
+          ...rawGame.players[1].army,
+          detachment: rawGame.players[1].army?.detachment ?? ""
+        }
       }
     ],
     scoreEvents: rawGame.scoreEvents.map((event) => ({

@@ -19,6 +19,7 @@ export type GameResult = "win" | "loss" | "tie";
 export interface Army {
   name: string;
   maxPoints: number;
+  detachment: string;
 }
 
 export interface Player {
@@ -153,8 +154,10 @@ export interface GameSummary {
 export interface CreateGameInput {
   playerOneName: string;
   playerOneArmy: string;
+  playerOneDetachment: string;
   playerTwoName: string;
   playerTwoArmy: string;
+  playerTwoDetachment: string;
   gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;

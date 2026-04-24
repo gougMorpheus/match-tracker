@@ -101,6 +101,16 @@ const createDefaultScoreMeta = (): {
   legacyScoreTotals: {}
 });
 
+const createDefaultPlayerDetachments = (): Record<string, string> => ({
+  "player-1": "",
+  "player-2": ""
+});
+
+const createPlayerDetachmentsFromInput = (payload: CreateGameInput): Record<string, string> => ({
+  "player-1": payload.playerOneDetachment.trim(),
+  "player-2": payload.playerTwoDetachment.trim()
+});
+
 const parseTimerCorrections = (value: string | null): TimerCorrections => {
   if (!value) {
     return createEmptyTimerCorrections();
@@ -158,18 +168,42 @@ const parseScoreMeta = (
   }
 };
 
+const parsePlayerMeta = (value: string | null): Record<string, string> => {
+  if (!value) {
+    return createDefaultPlayerDetachments();
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      playerMeta?: {
+        detachments?: Record<string, string>;
+      };
+    };
+    return {
+      ...createDefaultPlayerDetachments(),
+      ...Object.fromEntries(
+        Object.entries(parsed?.playerMeta?.detachments ?? {}).filter(([, detachment]) => typeof detachment === "string")
+      )
+    };
+  } catch {
+    return createDefaultPlayerDetachments();
+  }
+};
+
 const serializeGameNotes = (
   timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
-  legacyScoreTotals: Record<string, number>
+  legacyScoreTotals: Record<string, number>,
+  playerDetachments: Record<string, string>
 ): string | null => {
   const hasCorrections =
     Boolean(timerCorrections.totalMs) ||
     Object.keys(timerCorrections.rounds).length > 0 ||
     Object.keys(timerCorrections.turns).length > 0;
   const hasScoreMeta = scoreDetailLevel !== "full" || Object.keys(legacyScoreTotals).length > 0;
+  const hasPlayerMeta = Object.values(playerDetachments).some((value) => value.trim().length > 0);
 
-  if (!hasCorrections && !hasScoreMeta) {
+  if (!hasCorrections && !hasScoreMeta && !hasPlayerMeta) {
     return null;
   }
 
@@ -178,6 +212,9 @@ const serializeGameNotes = (
     scoreMeta: {
       scoreDetailLevel,
       legacyScoreTotals
+    },
+    playerMeta: {
+      detachments: playerDetachments
     }
   });
 };
@@ -502,6 +539,7 @@ export const mapSupabaseGameToAppGame = (
   const startedAt = getDerivedStartedAt(row, mappedEvents.timeEvents);
   const endedAt = getDerivedEndedAt(row, mappedEvents.timeEvents);
   const scoreMeta = parseScoreMeta(row.notes);
+  const playerDetachments = parsePlayerMeta(row.notes);
 
   return {
     id: row.id,
@@ -525,7 +563,8 @@ export const mapSupabaseGameToAppGame = (
         name: row.player1_name,
         army: {
           name: row.player1_army,
-          maxPoints: row.player1_max_points
+          maxPoints: row.player1_max_points,
+          detachment: playerDetachments["player-1"] ?? ""
         }
       },
       {
@@ -533,7 +572,8 @@ export const mapSupabaseGameToAppGame = (
         name: row.player2_name,
         army: {
           name: row.player2_army,
-          maxPoints: row.player2_max_points
+          maxPoints: row.player2_max_points,
+          detachment: playerDetachments["player-2"] ?? ""
         }
       }
     ],
@@ -562,7 +602,12 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
-  notes: null
+  notes: serializeGameNotes(
+    createEmptyTimerCorrections(),
+    "full",
+    {},
+    createPlayerDetachmentsFromInput(payload)
+  )
 });
 
 export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabaseGamePayload => ({
@@ -611,7 +656,10 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: getWinnerPlayerSlot(game),
-  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals)
+  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
+    "player-1": game.players[0].army.detachment,
+    "player-2": game.players[1].army.detachment
+  })
 });
 
 export const createImportedEventPayloads = (persistedGame: Game, importedGame: Game): CreateSupabaseEventPayload[] => {
@@ -698,7 +746,10 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
-  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals)
+  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
+    "player-1": game.players[0].army.detachment,
+    "player-2": game.players[1].army.detachment
+  })
 });
 
 export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayload[] => {

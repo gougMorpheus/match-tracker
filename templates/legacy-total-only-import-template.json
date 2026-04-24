@@ -22,7 +22,8 @@
           "name": "__PLAYER_ONE_NAME__",
           "army": {
             "name": "__PLAYER_ONE_ARMY__",
-            "maxPoints": 1000
+            "maxPoints": 1000,
+            "detachment": "__PLAYER_ONE_DETACHMENT__"
           }
         },
         {
@@ -30,7 +31,8 @@
           "name": "__PLAYER_TWO_NAME__",
           "army": {
             "name": "__PLAYER_TWO_ARMY__",
-            "maxPoints": 1000
+            "maxPoints": 1000,
+            "detachment": "__PLAYER_TWO_DETACHMENT__"
           }
         }
       ],

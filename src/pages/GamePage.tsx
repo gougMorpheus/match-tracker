@@ -48,8 +48,10 @@ interface EditableEventItem {
 const createGameFormState = (game: Game): CreateGameInput => ({
   playerOneName: game.players[0].name,
   playerOneArmy: game.players[0].army.name,
+  playerOneDetachment: game.players[0].army.detachment,
   playerTwoName: game.players[1].name,
   playerTwoArmy: game.players[1].army.name,
+  playerTwoDetachment: game.players[1].army.detachment,
   gamePoints: game.gamePoints,
   scheduledDate: game.scheduledDate,
   scheduledTime: game.scheduledTime,
@@ -133,6 +135,70 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       ).sort((left, right) => left.localeCompare(right)),
     [games]
   );
+  const latestArmyByPlayerName = useMemo(() => {
+    const armyByName = new Map<string, string>();
+    [...games]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .forEach((entry) => {
+        entry.players.forEach((player) => {
+          const normalizedName = player.name.trim();
+          if (!normalizedName || armyByName.has(normalizedName)) {
+            return;
+          }
+
+          armyByName.set(normalizedName, player.army.name);
+        });
+      });
+
+    return armyByName;
+  }, [games]);
+  const latestDetachmentByPlayerArmy = useMemo(() => {
+    const detachmentByCombo = new Map<string, string>();
+    [...games]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .forEach((entry) => {
+        entry.players.forEach((player) => {
+          const comboKey = `${player.name.trim().toLocaleLowerCase()}::${player.army.name.trim().toLocaleLowerCase()}`;
+          const detachment = player.army.detachment.trim();
+          if (!comboKey || detachmentByCombo.has(comboKey) || !detachment) {
+            return;
+          }
+
+          detachmentByCombo.set(comboKey, detachment);
+        });
+      });
+
+    return detachmentByCombo;
+  }, [games]);
+  const detachmentOptionsByArmy = useMemo(() => {
+    const detachments = new Map<string, string[]>();
+    games.forEach((entry) => {
+      entry.players.forEach((player) => {
+        const armyName = player.army.name.trim();
+        const detachment = player.army.detachment.trim();
+        if (!armyName || !detachment) {
+          return;
+        }
+
+        const current = detachments.get(armyName) ?? [];
+        if (!current.includes(detachment)) {
+          detachments.set(armyName, [...current, detachment].sort((left, right) => left.localeCompare(right)));
+        }
+      });
+    });
+
+    return detachments;
+  }, [games]);
+
+  const getPlayerArmyComboKey = (playerName: string, armyName: string): string | null => {
+    const normalizedPlayerName = playerName.trim().toLocaleLowerCase();
+    const normalizedArmyName = armyName.trim().toLocaleLowerCase();
+    if (!normalizedPlayerName || !normalizedArmyName) {
+      return null;
+    }
+
+    return `${normalizedPlayerName}::${normalizedArmyName}`;
+  };
   const editableEvents = useMemo<EditableEventItem[]>(
     () =>
       game
@@ -343,6 +409,50 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           }
         : current
     );
+  };
+
+  const applyRememberedGamePlayerName = (slot: "player1" | "player2", value: string) => {
+    const nameField = slot === "player1" ? "playerOneName" : "playerTwoName";
+    const armyField = slot === "player1" ? "playerOneArmy" : "playerTwoArmy";
+    const detachmentField = slot === "player1" ? "playerOneDetachment" : "playerTwoDetachment";
+
+    setGameForm((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextArmy = latestArmyByPlayerName.get(value.trim()) || String(current[armyField]);
+      const comboKey = getPlayerArmyComboKey(value, nextArmy);
+      const rememberedDetachment = comboKey ? latestDetachmentByPlayerArmy.get(comboKey) : undefined;
+
+      return {
+        ...current,
+        [nameField]: value,
+        [armyField]: nextArmy,
+        [detachmentField]: rememberedDetachment || current[detachmentField]
+      };
+    });
+  };
+
+  const applyGameFormArmySelection = (slot: "player1" | "player2", army: string) => {
+    const nameField = slot === "player1" ? "playerOneName" : "playerTwoName";
+    const armyField = slot === "player1" ? "playerOneArmy" : "playerTwoArmy";
+    const detachmentField = slot === "player1" ? "playerOneDetachment" : "playerTwoDetachment";
+
+    setGameForm((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const comboKey = getPlayerArmyComboKey(String(current[nameField]), army);
+      const rememberedDetachment = comboKey ? latestDetachmentByPlayerArmy.get(comboKey) : undefined;
+
+      return {
+        ...current,
+        [armyField]: army,
+        [detachmentField]: rememberedDetachment || current[detachmentField]
+      };
+    });
   };
 
   const openGameEditor = async () => {
@@ -931,13 +1041,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       options={playerOptions}
                       disabled={isMutating}
                       onChange={(value) => updateGameField("playerOneName", value)}
+                      onSelectRemembered={(value) => applyRememberedGamePlayerName("player1", value)}
                     />
                     <label className="field">
                       <span>Armee 1</span>
                       <select
                         required
                         value={gameForm.playerOneArmy}
-                        onChange={(editEvent) => updateGameField("playerOneArmy", editEvent.target.value)}
+                        onChange={(editEvent) => applyGameFormArmySelection("player1", editEvent.target.value)}
                         disabled={isMutating}
                       >
                         <option value="">Armee waehlen</option>
@@ -948,19 +1059,35 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         ))}
                       </select>
                     </label>
+                    <label className="field">
+                      <span>Detachment 1 (optional)</span>
+                      <input
+                        list="game-player-one-detachment-options"
+                        value={gameForm.playerOneDetachment}
+                        onChange={(editEvent) => updateGameField("playerOneDetachment", editEvent.target.value)}
+                        disabled={isMutating}
+                        placeholder="Offen oder vorhandenes waehlen"
+                      />
+                      <datalist id="game-player-one-detachment-options">
+                        {(detachmentOptionsByArmy.get(gameForm.playerOneArmy) ?? []).map((detachment) => (
+                          <option key={detachment} value={detachment} />
+                        ))}
+                      </datalist>
+                    </label>
                     <RememberedNameField
                       label="Spieler 2"
                       value={gameForm.playerTwoName}
                       options={playerOptions}
                       disabled={isMutating}
                       onChange={(value) => updateGameField("playerTwoName", value)}
+                      onSelectRemembered={(value) => applyRememberedGamePlayerName("player2", value)}
                     />
                     <label className="field">
                       <span>Armee 2</span>
                       <select
                         required
                         value={gameForm.playerTwoArmy}
-                        onChange={(editEvent) => updateGameField("playerTwoArmy", editEvent.target.value)}
+                        onChange={(editEvent) => applyGameFormArmySelection("player2", editEvent.target.value)}
                         disabled={isMutating}
                       >
                         <option value="">Armee waehlen</option>
@@ -970,6 +1097,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                           </option>
                         ))}
                       </select>
+                    </label>
+                    <label className="field">
+                      <span>Detachment 2 (optional)</span>
+                      <input
+                        list="game-player-two-detachment-options"
+                        value={gameForm.playerTwoDetachment}
+                        onChange={(editEvent) => updateGameField("playerTwoDetachment", editEvent.target.value)}
+                        disabled={isMutating}
+                        placeholder="Offen oder vorhandenes waehlen"
+                      />
+                      <datalist id="game-player-two-detachment-options">
+                        {(detachmentOptionsByArmy.get(gameForm.playerTwoArmy) ?? []).map((detachment) => (
+                          <option key={detachment} value={detachment} />
+                        ))}
+                      </datalist>
                     </label>
                   </section>
 
@@ -1095,11 +1237,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     <span>Spieler 1</span>
                     <strong>{game.players[0].name}</strong>
                     <p>{game.players[0].army.name}</p>
+                    <p>{game.players[0].army.detachment || "-"}</p>
                   </div>
                   <div>
                     <span>Spieler 2</span>
                     <strong>{game.players[1].name}</strong>
                     <p>{game.players[1].army.name}</p>
+                    <p>{game.players[1].army.detachment || "-"}</p>
                   </div>
                   <div>
                     <span>Datum</span>

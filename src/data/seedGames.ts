@@ -26,7 +26,8 @@ export const seedGames: Game[] = [
         name: "Nora",
         army: {
           name: "Adepta Sororitas",
-          maxPoints: 1000
+          maxPoints: 1000,
+          detachment: "Hallowed Martyrs"
         }
       },
       {
@@ -34,7 +35,8 @@ export const seedGames: Game[] = [
         name: "Tim",
         army: {
           name: "Necrons",
-          maxPoints: 1000
+          maxPoints: 1000,
+          detachment: "Awakened Dynasty"
         }
       }
     ],
