@@ -633,6 +633,7 @@ textarea {
 
 .game-page .scoreboard {
   padding: 0.48rem;
+  transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .game-page .scoreboard__head {
@@ -673,6 +674,20 @@ textarea {
 
 .game-page .scoreboard-stat__meta {
   font-size: 0.52rem;
+}
+
+.game-page--round-odd .scoreboard {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.88));
+}
+
+.game-page--round-even .scoreboard {
+  background: linear-gradient(180deg, rgba(21, 31, 49, 0.96), rgba(16, 24, 39, 0.9));
+  border-color: rgba(94, 234, 212, 0.16);
+}
+
+.game-page--round-even .scoreboard.is-emphasized {
+  border-color: rgba(94, 234, 212, 0.38);
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.14), rgba(15, 23, 42, 0.95));
 }
 
 .game-page .quick-controls {
@@ -993,6 +1008,32 @@ textarea {
 
 .game-round-background--even {
   background: var(--game-round-bg-even);
+}
+
+.round-change-indicator {
+  position: fixed;
+  top: 4.35rem;
+  left: 50%;
+  z-index: 33;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: round-change-indicator 1.5s ease-out forwards;
+}
+
+.round-change-indicator span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(94, 234, 212, 0.3);
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 14px 28px rgba(8, 15, 28, 0.36);
+  color: #ccfbf1;
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .game-page .primary-button--large {
@@ -1371,6 +1412,28 @@ textarea {
 
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes round-change-indicator {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.96);
+  }
+
+  16% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  74% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.98);
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { FloatingMenu } from "../components/FloatingMenu";
 import { GameOverview } from "../components/GameOverview";
 import { Layout } from "../components/Layout";
@@ -92,6 +92,8 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const [notesOpen, setNotesOpen] = useState(false);
   const [entriesOpen, setEntriesOpen] = useState(false);
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
+  const [roundChangePulse, setRoundChangePulse] = useState<number | null>(null);
+  const previousRoundRef = useRef<number | null>(null);
   const game = getGame(gameId);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
@@ -192,6 +194,37 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     return () => window.clearTimeout(timeout);
   }, [actionFlash]);
 
+  useEffect(() => {
+    if (!game) {
+      previousRoundRef.current = null;
+      return;
+    }
+
+    const nextRound = getCurrentRoundNumber(game);
+    if (previousRoundRef.current === null) {
+      previousRoundRef.current = nextRound;
+      return;
+    }
+
+    if (nextRound > 0 && previousRoundRef.current !== nextRound) {
+      setRoundChangePulse(nextRound);
+    }
+
+    previousRoundRef.current = nextRound;
+  }, [game]);
+
+  useEffect(() => {
+    if (roundChangePulse === null) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setRoundChangePulse(null);
+    }, 1500);
+
+    return () => window.clearTimeout(timeout);
+  }, [roundChangePulse]);
+
   if (!game && isLoading) {
     return <Layout title="Live Tracker" subtitle="Spiel wird geladen" />;
   }
@@ -218,10 +251,10 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const isTimerRunning = !isClosed && hasActiveTurn && !isPaused;
   const timerStatusLabel = isTimerRunning ? "Laeuft" : "Gestoppt";
   const currentRoundNumber = getCurrentRoundNumber(game);
-  const roundBackgroundClassName =
+  const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
-      ? "game-round-background game-round-background--even"
-      : "game-round-background game-round-background--odd";
+      ? "game-page--round-even"
+      : "game-page--round-odd";
   const selectedNotePlayer = noteDialogPlayerId
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
@@ -415,14 +448,18 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         </>
       }
     >
-      {!isClosed ? <div className={roundBackgroundClassName} aria-hidden="true" /> : null}
+      {roundChangePulse !== null ? (
+        <div className="round-change-indicator" aria-hidden="true">
+          <span>Runde {roundChangePulse}</span>
+        </div>
+      ) : null}
       {actionFlash ? (
         <div
           className={`action-feedback-flash action-feedback-flash--${actionFlash}`}
           aria-hidden="true"
         />
       ) : null}
-      <section className="stack game-page">
+      <section className={`stack game-page ${roundThemeClassName}`}>
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">
