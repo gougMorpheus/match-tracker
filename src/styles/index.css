@@ -346,6 +346,12 @@ textarea {
   line-height: 1;
 }
 
+.scoreboard-stat__top strong small {
+  font-size: 0.58em;
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .scoreboard-stat__meta {
   display: block;
   font-size: 0.58rem;
@@ -673,6 +679,10 @@ textarea {
 
 .game-page .scoreboard-stat__meta {
   font-size: 0.52rem;
+}
+
+.game-page .scoreboard-stat__top strong small {
+  font-size: 0.56em;
 }
 
 .game-page .quick-controls {

@@ -265,15 +265,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     setSyncQueue((currentQueue) => currentQueue.filter((item) => item.id !== queueItemId));
   }, []);
 
-  const getActiveActionPlayerId = useCallback((game: Game): PlayerId => {
-    const latestTurn = getLatestTurn(game);
-    if (latestTurn?.timing.startedAt && !latestTurn.timing.endedAt) {
-      return latestTurn.playerId;
-    }
-
-    return game.currentPlayerId;
-  }, []);
-
   const normalizeEventPatch = useCallback(
     (game: Game, eventId: string, patch: UpdateSupabaseEventPayload): UpdateSupabaseEventPayload => {
       const scoreEvent = game.scoreEvents.find((event) => event.id === eventId);
@@ -588,10 +579,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           throw new Error("Spiel nicht gefunden.");
         }
 
-        if (cpType === "spent" && playerId !== getActiveActionPlayerId(game)) {
-          throw new Error("CP koennen nur vom aktiven Spieler im aktuellen Zug ausgegeben werden.");
-        }
-
         const safeValue =
           cpType === "spent"
             ? Math.min(clampNonNegative(value), getPlayerCommandPoints(game, playerId))
@@ -620,7 +607,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
         void flushSyncQueue();
       }),
-    [enqueueEventUpsert, flushSyncQueue, getActiveActionPlayerId, getGame, mutateGame, runMutation]
+    [enqueueEventUpsert, flushSyncQueue, getGame, mutateGame, runMutation]
   );
 
   const addNoteEvent = useCallback(

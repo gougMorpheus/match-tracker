@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import {
   getPlayerCommandPoints,
   getPlayerCommandPointsGained,
+  getPlayerCurrentRoundPrimaryTotal,
+  getPlayerCurrentRoundSecondaryTotal,
+  getPlayerCurrentRoundTotalScore,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
@@ -29,6 +32,9 @@ export const PlayerScoreboard = ({
   const primary = getPlayerPrimaryTotal(game, player.id);
   const secondary = getPlayerSecondaryTotal(game, player.id);
   const total = getPlayerTotalScore(game, player.id);
+  const currentRoundPrimary = getPlayerCurrentRoundPrimaryTotal(game, player.id);
+  const currentRoundSecondary = getPlayerCurrentRoundSecondaryTotal(game, player.id);
+  const currentRoundTotal = getPlayerCurrentRoundTotalScore(game, player.id);
   const cp = getPlayerCommandPoints(game, player.id);
   const cpGained = getPlayerCommandPointsGained(game, player.id);
   const cpSpent = getPlayerCommandPointsSpent(game, player.id);
@@ -59,19 +65,25 @@ export const PlayerScoreboard = ({
         <div className="scoreboard-stat">
           <div className="scoreboard-stat__top">
             <span>Prim</span>
-            <strong>{primary}</strong>
+            <strong>
+              {primary} <small>({currentRoundPrimary})</small>
+            </strong>
           </div>
         </div>
         <div className="scoreboard-stat">
           <div className="scoreboard-stat__top">
             <span>Sek</span>
-            <strong>{secondary}</strong>
+            <strong>
+              {secondary} <small>({currentRoundSecondary})</small>
+            </strong>
           </div>
         </div>
         <div className="scoreboard-stat scoreboard-stat--accent">
           <div className="scoreboard-stat__top">
             <span>Ges</span>
-            <strong>{total}</strong>
+            <strong>
+              {total} <small>({currentRoundTotal})</small>
+            </strong>
           </div>
         </div>
       </div>

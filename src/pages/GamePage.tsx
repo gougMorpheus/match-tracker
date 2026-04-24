@@ -472,7 +472,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                     currentPrimary={getPlayerPrimaryTotal(game, player.id)}
                     currentSecondary={getPlayerSecondaryTotal(game, player.id)}
                     isSubmitting={isMutating || isClosed}
-                    canSpendCommandPoints={activePlayerId === player.id}
+                    canSpendCommandPoints
                     onCommandPointChange={async (playerId, direction, amount) => {
                       const currentCommandPoints = getPlayerCommandPoints(game, playerId);
                       const safeAmount =

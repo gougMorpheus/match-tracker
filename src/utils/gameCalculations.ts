@@ -40,6 +40,30 @@ export const getPlayerSecondaryTotal = (game: Game, playerId: PlayerId): number 
 export const getPlayerTotalScore = (game: Game, playerId: PlayerId): number =>
   getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId);
 
+export const getPlayerRoundScoreTotal = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber: number,
+  scoreType?: ScoreEvent["scoreType"]
+): number =>
+  sumValues(
+    game.scoreEvents.filter(
+      (event) =>
+        event.playerId === playerId &&
+        event.roundNumber === roundNumber &&
+        (!scoreType || event.scoreType === scoreType)
+    )
+  );
+
+export const getPlayerCurrentRoundPrimaryTotal = (game: Game, playerId: PlayerId): number =>
+  getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "primary");
+
+export const getPlayerCurrentRoundSecondaryTotal = (game: Game, playerId: PlayerId): number =>
+  getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "secondary");
+
+export const getPlayerCurrentRoundTotalScore = (game: Game, playerId: PlayerId): number =>
+  getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game));
+
 export const getPlayerCommandPointEvents = (
   game: Game,
   playerId: PlayerId,
