@@ -731,6 +731,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         if (!latestRound || latestRound.endedAt) {
           const nextRoundNumber = (latestRound?.roundNumber ?? 0) + 1;
 
+          if (latestRound && latestRound.roundNumber >= MAX_ROUNDS) {
+            const closingPlayerId =
+              latestRound.turns[latestRound.turns.length - 1]?.playerId ?? game.currentPlayerId;
+
+            closeGameFromRound(closingPlayerId, latestRound.roundNumber);
+            enqueueTimeEvents(game, eventsToAdd);
+            void flushSyncQueue();
+            return;
+          }
+
           if (!game.timeEvents.some((event) => event.action === "game-start")) {
             eventsToAdd.push({
               playerId: game.startingPlayerId,

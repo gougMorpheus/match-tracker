@@ -8,6 +8,8 @@
   --bg: #0f172a;
   --bg-raised: rgba(15, 23, 42, 0.92);
   --bg-soft: rgba(30, 41, 59, 0.7);
+  --game-round-bg-odd: radial-gradient(circle at top, #25314b 0%, #111827 48%, #0b1120 100%);
+  --game-round-bg-even: radial-gradient(circle at top, #202b41 0%, #0f1625 48%, #09101d 100%);
   --round-surface-odd: rgba(15, 23, 42, 0.82);
   --round-surface-even: rgba(24, 34, 52, 0.9);
   --border: rgba(148, 163, 184, 0.18);
@@ -62,6 +64,8 @@ textarea {
 }
 
 .app-shell {
+  position: relative;
+  isolation: isolate;
   max-width: 780px;
   margin: 0 auto;
   padding: 1rem 1rem 6rem;
@@ -966,6 +970,23 @@ textarea {
   min-height: 31px;
   padding: 0.4rem 0.5rem;
   font-size: 0.76rem;
+}
+
+.game-round-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 1;
+  transition: background 240ms ease, opacity 240ms ease;
+}
+
+.game-round-background--odd {
+  background: var(--game-round-bg-odd);
+}
+
+.game-round-background--even {
+  background: var(--game-round-bg-even);
 }
 
 .game-page .primary-button--large {

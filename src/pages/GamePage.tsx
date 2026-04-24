@@ -217,6 +217,11 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const hasActiveTurn = Boolean(latestTurn?.timing.startedAt && !latestTurn.timing.endedAt);
   const isTimerRunning = !isClosed && hasActiveTurn && !isPaused;
   const timerStatusLabel = isTimerRunning ? "Laeuft" : "Gestoppt";
+  const currentRoundNumber = getCurrentRoundNumber(game);
+  const roundBackgroundClassName =
+    currentRoundNumber > 0 && currentRoundNumber % 2 === 0
+      ? "game-round-background game-round-background--even"
+      : "game-round-background game-round-background--odd";
   const selectedNotePlayer = noteDialogPlayerId
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
@@ -410,6 +415,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         </>
       }
     >
+      {!isClosed ? <div className={roundBackgroundClassName} aria-hidden="true" /> : null}
       {actionFlash ? (
         <div
           className={`action-feedback-flash action-feedback-flash--${actionFlash}`}
