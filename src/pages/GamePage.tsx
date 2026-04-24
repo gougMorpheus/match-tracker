@@ -68,6 +68,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     errorMessage,
     clearError,
     advanceGame,
+    rewindLastTurn,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
