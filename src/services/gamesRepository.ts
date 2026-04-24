@@ -513,7 +513,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
-  notes: serializeTimerCorrections(game.timerCorrections)
+  notes: null
 });
 
 export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabaseGamePayload => ({
