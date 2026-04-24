@@ -64,3 +64,15 @@ export const formatClockTime = (iso?: string): string => {
     minute: "2-digit"
   });
 };
+
+export const formatClockTimeWithSeconds = (iso?: string): string => {
+  if (!iso) {
+    return "-";
+  }
+
+  return new Date(iso).toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+};

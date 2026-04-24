@@ -21,7 +21,7 @@ import {
   isTurnPaused
 } from "../utils/gameCalculations";
 import { loadRememberedPlayerNames } from "../utils/presets";
-import { formatClockTime, formatDateLabel, formatDuration } from "../utils/time";
+import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
   gameId: string;
@@ -170,7 +170,8 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   );
 
   useEffect(() => {
-    const runningTurn = game ? getLatestTurn(game) : undefined;
+    const runningTurn =
+      allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
     if (
       !runningTurn?.timing.startedAt ||
       runningTurn.timing.endedAt ||
@@ -184,7 +185,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [game]);
+  }, [allTurns, latestTurn, selectedTurnKey]);
 
   useEffect(() => {
     if (!game) {
@@ -964,12 +965,15 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                           className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
                         >
                           <div className="event-editor__meta">
-                            <div>
+                            <div className="event-editor__summary">
                               <strong>{playerName}</strong>
-                              <p>
+                              <p className="event-editor__context">
                                 R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
                               </p>
                             </div>
+                            <span className="event-editor__stamp">
+                              {formatClockTimeWithSeconds(event.createdAt)}
+                            </span>
                           </div>
                           <p className="muted-copy">{event.note}</p>
                         </article>
@@ -1012,14 +1016,16 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                       className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
                     >
                       <div className="event-editor__meta">
-                        <div>
+                        <div className="event-editor__summary">
                           <strong>{event.playerName}</strong>
-                          <p>
+                          <p className="event-editor__context">
                             {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
                           </p>
                         </div>
-                        <span>{formatClockTime(event.createdAt)}</span>
-                        <div className="button-row button-row--compact">
+                        <span className="event-editor__stamp">
+                          {formatClockTimeWithSeconds(event.createdAt)}
+                        </span>
+                        <div className="button-row button-row--compact event-editor__actions">
                           <button
                             type="button"
                             className="ghost-button compact-button"
