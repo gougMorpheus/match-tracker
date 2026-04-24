@@ -330,36 +330,28 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
       title="Tracker"
       stickyHeader
       actions={
-        <div className="page-tools page-tools--game">
-          <div className="game-status-strip">
-            <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
-              Spiel: {isClosed ? "zu" : "offen"}
-            </span>
-            <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
-              Timer: {timerStatusLabel}
-            </span>
-          </div>
-          <div className="tracker-summary tracker-summary--inline tracker-summary--floating">
-            <span>
-              <strong>Runde</strong> {getCurrentRoundNumber(game)}
-            </span>
-            <span>
-              <strong>Zug</strong> {getCurrentTurnNumber(game)}
-            </span>
-            <span>
-              <strong>Aktiv</strong> {game.players.find((player) => player.id === activePlayerId)?.name ?? "-"}
-            </span>
-            <span>
-              <strong>Gesamt</strong> {formatDuration(getGameDurationMs(game))}
-            </span>
-            <span>
-              <strong>Runde</strong> {formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}
-            </span>
-            <span>
-              <strong>Zug</strong> {formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}
-            </span>
+        <>
+          <div className="game-header-meta">
+            <div className="game-status-strip">
+              <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
+                Spiel: {isClosed ? "zu" : "offen"}
+              </span>
+              <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
+                Timer: {timerStatusLabel}
+              </span>
+            </div>
+            <div className="tracker-summary tracker-summary--textline">
+              <span>
+                Runden {getCurrentRoundNumber(game)} ({formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)})
+              </span>
+              <span>
+                Zug {getCurrentTurnNumber(game)} ({formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)})
+              </span>
+              <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
+            </div>
           </div>
           <FloatingMenu
+            fixed
             ariaLabel="Spielmenue"
             sections={[
               {
@@ -397,7 +389,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               }
             ]}
           />
-        </div>
+        </>
       }
     >
       <section className="stack game-page">

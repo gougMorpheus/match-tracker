@@ -255,12 +255,6 @@ textarea {
 .page-tools--game {
   width: 100%;
   justify-content: flex-end;
-  position: fixed;
-  top: 0.75rem;
-  right: 1rem;
-  z-index: 28;
-  flex-direction: column;
-  align-items: flex-end;
 }
 
 .game-status-strip {
@@ -530,6 +524,27 @@ textarea {
 
 .tracker-summary--floating {
   margin-top: 0.1rem;
+}
+
+.game-header-meta {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: end;
+  width: min(100%, 26rem);
+}
+
+.tracker-summary--textline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem 0.6rem;
+  width: 100%;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.tracker-summary--textline span {
+  white-space: nowrap;
 }
 
 .tracker-summary--inline span {
@@ -1032,11 +1047,20 @@ textarea {
     min-width: 4.4rem;
   }
 
+  .game-header-meta {
+    width: min(100%, 15rem);
+    padding-right: 2.9rem;
+  }
+
+  .tracker-summary--textline {
+    justify-content: flex-start;
+    gap: 0.15rem 0.45rem;
+  }
+
   .floating-menu__trigger {
     min-width: 2.5rem;
   }
 
-  .page-tools--game,
   .floating-menu--fixed {
     right: 0.85rem;
   }
