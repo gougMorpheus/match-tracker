@@ -64,6 +64,18 @@ const combineScheduledDateTime = (date: string, time: string): string | null => 
   return new Date(`${date}T${time}:00`).toISOString();
 };
 
+const normalizeOptionalTimestamp = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : null;
+};
+
+const normalizeRequiredTimestamp = (value: string | null | undefined, fallback: string): string =>
+  normalizeOptionalTimestamp(value) ?? fallback;
+
 const getScheduledDateParts = (value: string | null): { date: string; time: string } => {
   if (!value) {
     return {
@@ -642,9 +654,9 @@ const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
 
 export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload => ({
   id: game.id,
-  created_at: game.createdAt,
-  started_at: game.startedAt ?? game.createdAt,
-  ended_at: game.endedAt ?? null,
+  created_at: normalizeRequiredTimestamp(game.createdAt, getNowIso()),
+  started_at: normalizeRequiredTimestamp(game.startedAt, normalizeRequiredTimestamp(game.createdAt, getNowIso())),
+  ended_at: normalizeOptionalTimestamp(game.endedAt),
   game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
   player1_name: game.players[0].name,
   player1_army: game.players[0].army.name,
@@ -667,26 +679,29 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
   const importedPlayerOneId = importedGame.players[0].id;
   const toPlayerSlot = (playerId?: PlayerId): 1 | 2 =>
     !playerId || playerId === importedPlayerOneId ? 1 : 2;
+  const defaultOccurredAt = normalizeRequiredTimestamp(importedGame.createdAt, getNowIso());
 
   const payloads: CreateSupabaseEventPayload[] = [];
 
   importedGame.timeEvents.forEach((event) => {
+    const occurredAt = normalizeRequiredTimestamp(event.createdAt, defaultOccurredAt);
     payloads.push({
       id: event.id,
-      created_at: event.createdAt,
+      created_at: occurredAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
       player_slot: toPlayerSlot(event.playerId),
       event_type: event.action,
-      occurred_at: event.createdAt
+      occurred_at: occurredAt
     });
   });
 
   importedGame.commandPointEvents.forEach((event) => {
+    const occurredAt = normalizeRequiredTimestamp(event.createdAt, defaultOccurredAt);
     payloads.push({
       id: event.id,
-      created_at: event.createdAt,
+      created_at: occurredAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
@@ -694,14 +709,15 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
       event_type: event.cpType === "gained" ? "cp-gained" : "cp-spent",
       value_number: event.value,
       note: event.note ?? null,
-      occurred_at: event.createdAt
+      occurred_at: occurredAt
     });
   });
 
   importedGame.scoreEvents.forEach((event) => {
+    const occurredAt = normalizeRequiredTimestamp(event.createdAt, defaultOccurredAt);
     payloads.push({
       id: event.id,
-      created_at: event.createdAt,
+      created_at: occurredAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
@@ -714,21 +730,22 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
             : "score-total",
       value_number: event.value,
       note: event.note ?? null,
-      occurred_at: event.createdAt
+      occurred_at: occurredAt
     });
   });
 
   importedGame.noteEvents.forEach((event) => {
+    const occurredAt = normalizeRequiredTimestamp(event.createdAt, defaultOccurredAt);
     payloads.push({
       id: event.id,
-      created_at: event.createdAt,
+      created_at: occurredAt,
       game_id: persistedGame.id,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
       player_slot: toPlayerSlot(event.playerId),
       event_type: "note",
       note: event.note,
-      occurred_at: event.createdAt
+      occurred_at: occurredAt
     });
   });
 
@@ -737,9 +754,9 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
 
 export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload => ({
   id: game.id,
-  created_at: game.createdAt,
-  started_at: game.startedAt ?? game.createdAt,
-  ended_at: game.endedAt ?? null,
+  created_at: normalizeRequiredTimestamp(game.createdAt, getNowIso()),
+  started_at: normalizeRequiredTimestamp(game.startedAt, normalizeRequiredTimestamp(game.createdAt, getNowIso())),
+  ended_at: normalizeOptionalTimestamp(game.endedAt),
   game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
   player1_name: game.players[0].name,
   player1_army: game.players[0].army.name,

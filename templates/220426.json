@@ -1,0 +1,74 @@
+{
+  "games": [
+    {
+      "id": "__GAME_ID__",
+      "createdAt": "2026-04-24T18:00:00.000Z",
+      "updatedAt": "2026-04-24T18:00:00.000Z",
+      "status": "completed",
+      "scoreDetailLevel": "total-only",
+      "gamePoints": 1000,
+      "scheduledDate": "2026-04-24",
+      "scheduledTime": "19:30",
+      "deployment": "",
+      "primaryMission": "",
+      "defenderPlayerId": "player-1",
+      "startingPlayerId": "player-1",
+      "currentPlayerId": "player-1",
+      "startedAt": "",
+      "endedAt": "",
+      "players": [
+        {
+          "id": "player-1",
+          "name": "__PLAYER_ONE_NAME__",
+          "army": {
+            "name": "__PLAYER_ONE_ARMY__",
+            "maxPoints": 1000,
+            "detachment": "__PLAYER_ONE_DETACHMENT__"
+          }
+        },
+        {
+          "id": "player-2",
+          "name": "__PLAYER_TWO_NAME__",
+          "army": {
+            "name": "__PLAYER_TWO_ARMY__",
+            "maxPoints": 1000,
+            "detachment": "__PLAYER_TWO_DETACHMENT__"
+          }
+        }
+      ],
+      "rounds": [],
+      "scoreEvents": [
+        {
+          "id": "__SCORE_EVENT_1__",
+          "type": "score",
+          "playerId": "player-1",
+          "scoreType": "legacy-total",
+          "value": 10,
+          "roundNumber": 1,
+          "createdAt": "2026-04-24T18:30:00.000Z"
+        },
+        {
+          "id": "__SCORE_EVENT_2__",
+          "type": "score",
+          "playerId": "player-2",
+          "scoreType": "legacy-total",
+          "value": 5,
+          "roundNumber": 1,
+          "createdAt": "2026-04-24T18:31:00.000Z"
+        }
+      ],
+      "commandPointEvents": [],
+      "noteEvents": [],
+      "timeEvents": [],
+      "timerCorrections": {
+        "totalMs": 0,
+        "rounds": {},
+        "turns": {}
+      },
+      "legacyScoreTotals": {
+        "player-1": 78,
+        "player-2": 64
+      }
+    }
+  ]
+}
