@@ -75,9 +75,12 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 18;
-  margin: 0 -0.2rem;
-  padding: 0.75rem 0.2rem 0.9rem;
-  background: linear-gradient(180deg, rgba(11, 17, 32, 0.96), rgba(11, 17, 32, 0.82));
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(11, 17, 32, 0.94);
+  box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
 }
 
@@ -111,13 +114,8 @@ textarea {
 }
 
 .app-shell--sticky-header .subtitle {
-  margin: 0.1rem 0 0;
-  font-size: 0.7rem;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 0.1rem;
+  margin: 0.2rem 0 0;
+  padding-top: 0.15rem;
 }
 
 .subtitle,
@@ -540,6 +538,24 @@ textarea {
   display: flex;
   justify-content: flex-end;
   width: auto;
+  margin-right: 0.45rem;
+}
+
+.game-header-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  font-size: 0.7rem;
+}
+
+.game-header-stats span {
+  display: flex;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--muted);
 }
 
 .tracker-summary--inline span {
@@ -1030,6 +1046,11 @@ textarea {
     padding-bottom: 6.5rem;
   }
 
+  .app-shell--sticky-header .app-header {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
   .header-title-row {
     gap: 0.45rem;
   }
@@ -1044,6 +1065,11 @@ textarea {
 
   .game-header-meta {
     padding-right: 2.9rem;
+    margin-right: 0.2rem;
+  }
+
+  .game-header-stats {
+    font-size: 0.78rem;
   }
 
   .floating-menu__trigger {

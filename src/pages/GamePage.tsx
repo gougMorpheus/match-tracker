@@ -328,7 +328,17 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   return (
     <Layout
       title="Tracker"
-      subtitle={`Runden ${getCurrentRoundNumber(game)} (${formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)}) Zug ${getCurrentTurnNumber(game)} (${formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}) Gesamt ${formatDuration(getGameDurationMs(game))}`}
+      subtitle={
+        <div className="game-header-stats">
+          <span>
+            Runde {getCurrentRoundNumber(game)} ({formatDuration(latestRound ? getRoundDurationMs(latestRound) : 0)})
+          </span>
+          <span>
+            Zug {getCurrentTurnNumber(game)} ({formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)})
+          </span>
+          <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
+        </div>
+      }
       stickyHeader
       actions={
         <>

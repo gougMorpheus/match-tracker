@@ -2,7 +2,7 @@ import type { PropsWithChildren, ReactNode } from "react";
 
 interface LayoutProps extends PropsWithChildren {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   actions?: ReactNode;
   footer?: ReactNode;
   onBack?: () => void;
@@ -33,7 +33,7 @@ export const Layout = ({
           <h1>{title}</h1>
           {actions ? <div className="header-actions">{actions}</div> : null}
         </div>
-        {subtitle ? <p className="subtitle">{subtitle}</p> : null}
+        {subtitle ? <div className="subtitle">{subtitle}</div> : null}
       </div>
     </header>
     <main className="app-main">{children}</main>
