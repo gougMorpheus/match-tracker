@@ -577,6 +577,12 @@ export const mapPersistedGame = (value: unknown): Game | null => {
   ]);
   const mapPlayerId = (playerId?: string): PlayerId | undefined =>
     playerId ? playerIdMap.get(playerId) ?? playerId : undefined;
+  const nextLegacyScoreTotals = Object.fromEntries(
+    Object.entries(rawGame.legacyScoreTotals ?? {}).map(([playerId, value]) => [
+      mapPlayerId(playerId) ?? playerId,
+      value
+    ])
+  );
 
   return syncDerivedGameState({
     ...rawGame,
@@ -609,6 +615,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
       id: isUuid(event.id) ? event.id : createUuid(),
       playerId: mapPlayerId(event.playerId) ?? playerOneId
     })),
+    legacyScoreTotals: nextLegacyScoreTotals,
     timerCorrections: rawGame.timerCorrections ?? createEmptyTimerCorrections(),
     timeEvents: rawGame.timeEvents.map((event) => ({
       ...event,
