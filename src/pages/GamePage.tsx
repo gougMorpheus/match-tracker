@@ -56,6 +56,9 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
 });
 
+const getRoundSurfaceClassName = (roundNumber?: number) =>
+  roundNumber && roundNumber % 2 === 0 ? "round-surface round-surface--even" : "round-surface round-surface--odd";
+
 export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const {
     games,
@@ -88,6 +91,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
   const [noteDraft, setNoteDraft] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [entriesOpen, setEntriesOpen] = useState(false);
+  const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const game = getGame(gameId);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
@@ -175,6 +179,18 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
 
     setGameForm(createGameFormState(game));
   }, [game]);
+
+  useEffect(() => {
+    if (!actionFlash) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setActionFlash(null);
+    }, 380);
+
+    return () => window.clearTimeout(timeout);
+  }, [actionFlash]);
 
   if (!game && isLoading) {
     return <Layout title="Live Tracker" subtitle="Spiel wird geladen" />;
@@ -394,6 +410,12 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         </>
       }
     >
+      {actionFlash ? (
+        <div
+          className={`action-feedback-flash action-feedback-flash--${actionFlash}`}
+          aria-hidden="true"
+        />
+      ) : null}
       <section className="stack game-page">
         {errorMessage ? (
           <article className="notice-card notice-card--error">
@@ -459,6 +481,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                         value: safeAmount,
                         cpType: direction === "plus" ? "gained" : "spent"
                       });
+                      setActionFlash("cp");
                     }}
                     onScoreChange={async (playerId, scoreType, direction, amount) => {
                       const currentScore =
@@ -477,6 +500,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                         value: direction === "plus" ? safeAmount : safeAmount * -1,
                         scoreType
                       });
+                      setActionFlash("score");
                     }}
                   />
                 }
@@ -800,7 +824,10 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                       const playerName =
                         game.players.find((player) => player.id === event.playerId)?.name ?? "-";
                       return (
-                        <article key={event.id} className="event-editor">
+                        <article
+                          key={event.id}
+                          className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
+                        >
                           <div className="event-editor__meta">
                             <div>
                               <strong>{playerName}</strong>
@@ -845,7 +872,10 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
               {editableEvents.length ? (
                 <div className="stack modal-list">
                   {editableEvents.map((event) => (
-                    <article key={event.id} className="event-editor">
+                    <article
+                      key={event.id}
+                      className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
+                    >
                       <div className="event-editor__meta">
                         <div>
                           <strong>{event.playerName}</strong>

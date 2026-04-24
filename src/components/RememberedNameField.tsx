@@ -4,6 +4,7 @@ interface RememberedNameFieldProps {
   options: string[];
   disabled?: boolean;
   onChange: (value: string) => void;
+  onSelectRemembered?: (value: string) => void;
 }
 
 export const RememberedNameField = ({
@@ -11,7 +12,8 @@ export const RememberedNameField = ({
   value,
   options,
   disabled = false,
-  onChange
+  onChange,
+  onSelectRemembered
 }: RememberedNameFieldProps) => (
   <label className="field">
     <span>{label}</span>
@@ -24,6 +26,7 @@ export const RememberedNameField = ({
           onChange={(event) => {
             if (event.target.value) {
               onChange(event.target.value);
+              onSelectRemembered?.(event.target.value);
             }
           }}
         >

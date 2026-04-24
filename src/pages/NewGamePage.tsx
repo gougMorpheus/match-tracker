@@ -39,11 +39,40 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
       ).sort((left, right) => left.localeCompare(right)),
     [games]
   );
+  const latestArmyByPlayerName = useMemo(() => {
+    const armyByName = new Map<string, string>();
+    [...games]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .forEach((game) => {
+        game.players.forEach((player) => {
+          const normalizedName = player.name.trim();
+          if (!normalizedName || armyByName.has(normalizedName)) {
+            return;
+          }
+
+          armyByName.set(normalizedName, player.army.name);
+        });
+      });
+
+    return armyByName;
+  }, [games]);
 
   function updateField<K extends keyof CreateGameInput>(key: K, value: CreateGameInput[K]) {
     setFormState((current) => ({
       ...current,
       [key]: value
+    }));
+  }
+
+  function applyRememberedPlayerName(slot: "player1" | "player2", value: string) {
+    const armyField = slot === "player1" ? "playerOneArmy" : "playerTwoArmy";
+    const nameField = slot === "player1" ? "playerOneName" : "playerTwoName";
+    const rememberedArmy = latestArmyByPlayerName.get(value.trim());
+
+    setFormState((current) => ({
+      ...current,
+      [nameField]: value,
+      [armyField]: rememberedArmy || current[armyField]
     }));
   }
 
@@ -86,6 +115,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
             options={playerOptions}
             disabled={isMutating}
             onChange={(value) => updateField("playerOneName", value)}
+            onSelectRemembered={(value) => applyRememberedPlayerName("player1", value)}
           />
           <label className="field">
             <span>Armee</span>
@@ -113,6 +143,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
             options={playerOptions}
             disabled={isMutating}
             onChange={(value) => updateField("playerTwoName", value)}
+            onSelectRemembered={(value) => applyRememberedPlayerName("player2", value)}
           />
           <label className="field">
             <span>Armee</span>
