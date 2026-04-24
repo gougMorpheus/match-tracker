@@ -716,6 +716,131 @@ textarea {
   gap: 0.5rem;
 }
 
+.overview-chart-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.overview-chart-card {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--border);
+}
+
+.overview-chart-card__head,
+.overview-chart-card__totals,
+.overview-chart-total {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.overview-chart-card__head,
+.overview-chart-card__totals {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.overview-chart-card__head strong {
+  font-size: 0.88rem;
+}
+
+.overview-chart {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.overview-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.overview-chart-legend__item,
+.overview-chart-total {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.75);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.overview-chart-total strong {
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.overview-chart-total__marker {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.overview-chart__axis,
+.overview-chart__guide {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.overview-chart__axis {
+  stroke: rgba(148, 163, 184, 0.45);
+  stroke-width: 1.4;
+}
+
+.overview-chart__guide {
+  stroke: rgba(148, 163, 184, 0.14);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.overview-chart__line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.overview-chart__dot {
+  stroke: rgba(11, 17, 32, 0.94);
+  stroke-width: 2;
+}
+
+.overview-chart__label,
+.overview-chart__scale {
+  fill: var(--muted);
+  font-size: 0.66rem;
+}
+
+.overview-chart__label {
+  font-weight: 600;
+}
+
+.overview-chart__line.is-player-1,
+.overview-chart__dot.is-player-1,
+.overview-chart-legend__item.is-player-1,
+.overview-chart-total__marker.is-player-1 {
+  stroke: #38bdf8;
+  background: rgba(56, 189, 248, 0.16);
+  color: #d8f3ff;
+  fill: #38bdf8;
+}
+
+.overview-chart__line.is-player-2,
+.overview-chart__dot.is-player-2,
+.overview-chart-legend__item.is-player-2,
+.overview-chart-total__marker.is-player-2 {
+  stroke: #34d399;
+  background: rgba(52, 211, 153, 0.16);
+  color: #d1fae5;
+  fill: #34d399;
+}
+
 .overview-bar-row {
   align-items: center;
 }
@@ -1028,6 +1153,10 @@ textarea {
 
   .record-card__metrics {
     grid-template-columns: 1fr;
+  }
+
+  .overview-chart-card {
+    padding: 0.75rem;
   }
 }
 
