@@ -7,6 +7,7 @@ interface LayoutProps extends PropsWithChildren {
   footer?: ReactNode;
   onBack?: () => void;
   stickyHeader?: boolean;
+  headerClassName?: string;
 }
 
 export const Layout = ({
@@ -16,10 +17,11 @@ export const Layout = ({
   footer,
   onBack,
   stickyHeader = false,
+  headerClassName,
   children
 }: LayoutProps) => (
   <div className={`app-shell ${stickyHeader ? "app-shell--sticky-header" : ""}`}>
-    <header className="app-header">
+    <header className={`app-header ${headerClassName ?? ""}`.trim()}>
       <div className="header-content">
         <div className="header-topline">
           {onBack ? (

@@ -16,6 +16,7 @@ import {
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
   getRoundDurationMs,
+  getSessionDurationMs,
   getTurnDurationMs,
   isTurnPaused
 } from "../utils/gameCalculations";
@@ -299,6 +300,10 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
       ? "game-page--round-even"
       : "game-page--round-odd";
+  const headerRoundClassName =
+    currentRoundNumber > 0 && currentRoundNumber % 2 === 0
+      ? "game-header--round-even"
+      : "game-header--round-odd";
   const selectedNotePlayer = noteDialogPlayerId
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
@@ -464,6 +469,7 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
         </div>
       }
       stickyHeader
+      headerClassName={headerRoundClassName}
       actions={
         <>
           <div className="game-header-meta">
@@ -899,6 +905,18 @@ export const GamePage = ({ gameId, onBack }: GamePageProps) => {
                   <div>
                     <span>Startzeit</span>
                     <strong>{formatClockTime(game.startedAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Endzeit</span>
+                    <strong>{formatClockTime(game.endedAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Match-Zeit</span>
+                    <strong>{formatDuration(getGameDurationMs(game))}</strong>
+                  </div>
+                  <div>
+                    <span>Gesamt offen</span>
+                    <strong>{formatDuration(getSessionDurationMs(game))}</strong>
                   </div>
                   <div>
                     <span>Aufstellung</span>

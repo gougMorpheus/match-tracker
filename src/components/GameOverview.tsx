@@ -8,31 +8,12 @@ import {
   getPlayerTotalScore,
   getPlayerTurnDurationTotalMs,
   getRoundDurationMs,
-  getSessionDurationMs,
   getTurnDurationMs
 } from "../utils/gameCalculations";
-import { formatClockTime, formatDateLabel, formatDuration } from "../utils/time";
+import { formatClockTime, formatDuration } from "../utils/time";
 
 interface GameOverviewProps {
   game: Game;
-}
-
-interface TurnRow {
-  id: string;
-  index: number;
-  roundNumber: number;
-  turnNumber: number;
-  playerId: string;
-  playerName: string;
-  durationMs: number;
-  primary: number;
-  secondary: number;
-  total: number;
-}
-
-interface ChartPoint {
-  label: string;
-  values: Record<string, number>;
 }
 
 interface RoundScoreRow {
@@ -49,21 +30,18 @@ interface RoundScoreRow {
   >;
 }
 
+interface RoundTimeRow {
+  roundNumber: number;
+  label: string;
+  values: Record<string, number>;
+}
+
 const CHART_WIDTH = 320;
 const CHART_HEIGHT = 150;
 const CHART_PADDING = 20;
 const SCORE_CHART_WIDTH = 360;
 const SCORE_CHART_HEIGHT = 190;
 const SCORE_CHART_PADDING = 24;
-const TURN_CHUNK_SIZE = 5;
-
-const chunkItems = <T,>(items: T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-};
 
 const buildLinePath = (points: Array<{ x: number; y: number }>): string =>
   points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
@@ -71,43 +49,6 @@ const buildLinePath = (points: Array<{ x: number; y: number }>): string =>
 export const GameOverview = ({ game }: GameOverviewProps) => {
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
-
-  const turnRows: TurnRow[] = game.rounds.flatMap((round) =>
-    round.turns.map((turn) => {
-      const player = game.players.find((entry) => entry.id === turn.playerId);
-      const primary = game.scoreEvents
-        .filter(
-          (event) =>
-            event.playerId === turn.playerId &&
-            event.roundNumber === round.roundNumber &&
-            event.turnNumber === turn.turnNumber &&
-            event.scoreType === "primary"
-        )
-        .reduce((total, event) => total + event.value, 0);
-      const secondary = game.scoreEvents
-        .filter(
-          (event) =>
-            event.playerId === turn.playerId &&
-            event.roundNumber === round.roundNumber &&
-            event.turnNumber === turn.turnNumber &&
-            event.scoreType === "secondary"
-        )
-        .reduce((total, event) => total + event.value, 0);
-
-      return {
-        id: turn.id,
-        index: 0,
-        roundNumber: round.roundNumber,
-        turnNumber: turn.turnNumber,
-        playerId: turn.playerId,
-        playerName: player?.name ?? "-",
-        durationMs: getTurnDurationMs(turn),
-        primary,
-        secondary,
-        total: primary + secondary
-      };
-    })
-  ).map((turn, index) => ({ ...turn, index: index + 1 }));
 
   const roundRows = game.rounds.map((round) => ({
     id: round.id,
@@ -161,20 +102,33 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     });
   });
 
-  const buildChartSegments = (valueSelector: (turn: TurnRow) => number): ChartPoint[][] => {
-    const runningTotals = Object.fromEntries(orderedPlayers.map((player) => [player.id, 0]));
-    const points = turnRows.map((turn) => {
-      runningTotals[turn.playerId] += valueSelector(turn);
-      return {
-        label: `Z${turn.index}`,
-        values: { ...runningTotals }
-      };
+  const roundTimeRows: RoundTimeRow[] = game.rounds.map((round) => {
+    const values = Object.fromEntries(
+      orderedPlayers.map((player) => [player.id, 0])
+    ) as RoundTimeRow["values"];
+
+    round.turns.forEach((turn) => {
+      if (values[turn.playerId] === undefined) {
+        return;
+      }
+
+      values[turn.playerId] += getTurnDurationMs(turn);
     });
 
-    return chunkItems(points, TURN_CHUNK_SIZE);
-  };
+    return {
+      roundNumber: round.roundNumber,
+      label: `R${round.roundNumber}`,
+      values
+    };
+  });
 
-  const timeSegments = buildChartSegments((turn) => turn.durationMs);
+  orderedPlayers.forEach((player) => {
+    let runningTotal = 0;
+    roundTimeRows.forEach((roundRow) => {
+      runningTotal += roundRow.values[player.id] ?? 0;
+      roundRow.values[player.id] = runningTotal;
+    });
+  });
 
   const renderRoundScoreChart = () => {
     if (!roundScoreRows.length) {
@@ -399,152 +353,138 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     );
   };
 
-  const renderLineChart = (
-    title: string,
-    segments: ChartPoint[][],
-    valueLabel: string,
-    formatter: (value: number) => string
-  ) => (
+  const renderRoundTimeChart = () => (
     <article className="card stack">
       <div className="list-row">
-        <h2>{title}</h2>
-        <span>{turnRows.length} Zuege</span>
+        <h2>Zeit-Verlauf</h2>
+        <span>{roundTimeRows.length} Runden</span>
       </div>
-      {segments.length === 0 ? (
-        <p className="muted-copy">Noch keine abgeschlossenen Zuege vorhanden.</p>
+      {!roundTimeRows.length ? (
+        <p className="muted-copy">Noch keine abgeschlossenen Runden vorhanden.</p>
       ) : (
-        <div className="overview-chart-grid">
-          {segments.map((segment, chunkIndex) => {
+        <section className="overview-chart-card">
+          <div className="overview-chart-card__head">
+            <strong>Runden-Zeit kumuliert</strong>
+            <div className="overview-chart-legend">
+              {orderedPlayers.map((player, playerIndex) => (
+                <span key={player.id} className={`overview-chart-legend__item is-player-${playerIndex + 1}`}>
+                  {player.name}
+                </span>
+              ))}
+            </div>
+          </div>
+          {(() => {
             const maxValue = Math.max(
-              ...segment.flatMap((point) => orderedPlayers.map((player) => point.values[player.id] ?? 0)),
+              ...roundTimeRows.flatMap((roundRow) =>
+                orderedPlayers.map((player) => roundRow.values[player.id] ?? 0)
+              ),
               1
             );
-          const stepX =
-            segment.length > 1
-              ? (CHART_WIDTH - CHART_PADDING * 2) / (segment.length - 1)
-              : 0;
+            const stepX =
+              roundTimeRows.length > 1
+                ? (CHART_WIDTH - CHART_PADDING * 2) / (roundTimeRows.length - 1)
+                : 0;
+            const playerSeries = orderedPlayers.map((player) => {
+              const points = roundTimeRows.map((roundRow, roundIndex) => {
+                const value = roundRow.values[player.id] ?? 0;
+                return {
+                  x: roundTimeRows.length > 1 ? CHART_PADDING + roundIndex * stepX : CHART_WIDTH / 2,
+                  y:
+                    CHART_HEIGHT -
+                    CHART_PADDING -
+                    (value / maxValue) * (CHART_HEIGHT - CHART_PADDING * 2),
+                  value
+                };
+              });
 
-          const playerSeries = orderedPlayers.map((player) => {
-            const points = segment.map((point, pointIndex) => {
-              const value = point.values[player.id] ?? 0;
               return {
-                x:
-                  segment.length > 1
-                    ? CHART_PADDING + pointIndex * stepX
-                    : CHART_WIDTH / 2,
-                y:
-                  CHART_HEIGHT -
-                  CHART_PADDING -
-                  (value / maxValue) * (CHART_HEIGHT - CHART_PADDING * 2),
-                label: point.label,
-                value
+                player,
+                path: buildLinePath(points),
+                points
               };
             });
 
-            return {
-              player,
-              points,
-              path: buildLinePath(points)
-            };
-          });
-
-          return (
-            <section key={`${title}-${chunkIndex}`} className="overview-chart-card">
-              <div className="overview-chart-card__head">
-                <strong>
-                  Zuege {chunkIndex * TURN_CHUNK_SIZE + 1}-
-                  {chunkIndex * TURN_CHUNK_SIZE + segment.length}
-                </strong>
-                <div className="overview-chart-legend">
-                  {orderedPlayers.map((player, playerIndex) => (
-                    <span key={player.id} className={`overview-chart-legend__item is-player-${playerIndex + 1}`}>
-                      {player.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <svg
-                viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-                className="overview-chart"
-                role="img"
-                aria-label={`${title} fuer Zuege ${chunkIndex * TURN_CHUNK_SIZE + 1} bis ${chunkIndex * TURN_CHUNK_SIZE + segment.length}`}
-              >
-                {[0.25, 0.5, 0.75].map((marker) => {
-                  const y = CHART_HEIGHT - CHART_PADDING - marker * (CHART_HEIGHT - CHART_PADDING * 2);
-                  return (
-                    <line
-                      key={marker}
-                      x1={CHART_PADDING}
-                      y1={y}
-                      x2={CHART_WIDTH - CHART_PADDING}
-                      y2={y}
-                      className="overview-chart__guide"
-                    />
-                  );
-                })}
-                <line
-                  x1={CHART_PADDING}
-                  y1={CHART_HEIGHT - CHART_PADDING}
-                  x2={CHART_WIDTH - CHART_PADDING}
-                  y2={CHART_HEIGHT - CHART_PADDING}
-                  className="overview-chart__axis"
-                />
-                <line
-                  x1={CHART_PADDING}
-                  y1={CHART_PADDING}
-                  x2={CHART_PADDING}
-                  y2={CHART_HEIGHT - CHART_PADDING}
-                  className="overview-chart__axis"
-                />
-                {playerSeries.map((series, playerIndex) =>
-                  <path
-                    key={`${series.player.id}-path`}
-                    d={series.path}
-                    className={`overview-chart__line is-player-${playerIndex + 1}`}
-                  />
-                )}
-                {segment.map((point, pointIndex) => (
-                  <text
-                    key={`${point.label}-label-${chunkIndex}`}
-                    x={segment.length > 1 ? CHART_PADDING + pointIndex * stepX : CHART_WIDTH / 2}
-                    y={CHART_HEIGHT - 5}
-                    textAnchor="middle"
-                    className="overview-chart__label"
-                  >
-                    {point.label}
-                  </text>
-                ))}
-                <text x={CHART_PADDING - 4} y={CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
-                  {formatter(maxValue)}
-                </text>
-                <text
-                  x={CHART_PADDING - 4}
-                  y={CHART_HEIGHT - CHART_PADDING + 4}
-                  textAnchor="end"
-                  className="overview-chart__scale"
+            return (
+              <>
+                <svg
+                  viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                  className="overview-chart"
+                  role="img"
+                  aria-label="Zeit-Verlauf pro Runde als kumulierte Spielzeit je Spieler"
                 >
-                  0
-                </text>
-              </svg>
-              <div className="overview-chart-card__totals">
-                {orderedPlayers.map((player, playerIndex) => {
-                  const latestPoint = playerSeries[playerIndex]?.points[playerSeries[playerIndex].points.length - 1];
-                  return (
-                    <div key={`${player.id}-${chunkIndex}`} className="overview-chart-total">
-                      <span className={`overview-chart-total__marker is-player-${playerIndex + 1}`} />
-                      <span>{player.name}</span>
-                      <strong>
-                        {formatter(latestPoint?.value ?? 0)}
-                        {valueLabel ? ` ${valueLabel}` : ""}
-                      </strong>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-          })}
-        </div>
+                  {[0.25, 0.5, 0.75].map((marker) => {
+                    const y = CHART_HEIGHT - CHART_PADDING - marker * (CHART_HEIGHT - CHART_PADDING * 2);
+                    return (
+                      <line
+                        key={marker}
+                        x1={CHART_PADDING}
+                        y1={y}
+                        x2={CHART_WIDTH - CHART_PADDING}
+                        y2={y}
+                        className="overview-chart__guide"
+                      />
+                    );
+                  })}
+                  <line
+                    x1={CHART_PADDING}
+                    y1={CHART_HEIGHT - CHART_PADDING}
+                    x2={CHART_WIDTH - CHART_PADDING}
+                    y2={CHART_HEIGHT - CHART_PADDING}
+                    className="overview-chart__axis"
+                  />
+                  <line
+                    x1={CHART_PADDING}
+                    y1={CHART_PADDING}
+                    x2={CHART_PADDING}
+                    y2={CHART_HEIGHT - CHART_PADDING}
+                    className="overview-chart__axis"
+                  />
+                  {playerSeries.map((series, playerIndex) => (
+                    <path
+                      key={`${series.player.id}-time-line`}
+                      d={series.path}
+                      className={`overview-chart__line is-player-${playerIndex + 1}`}
+                    />
+                  ))}
+                  {roundTimeRows.map((roundRow, roundIndex) => (
+                    <text
+                      key={roundRow.roundNumber}
+                      x={roundTimeRows.length > 1 ? CHART_PADDING + roundIndex * stepX : CHART_WIDTH / 2}
+                      y={CHART_HEIGHT - 5}
+                      textAnchor="middle"
+                      className="overview-chart__label"
+                    >
+                      {roundRow.label}
+                    </text>
+                  ))}
+                  <text x={CHART_PADDING - 4} y={CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
+                    {formatDuration(maxValue)}
+                  </text>
+                  <text
+                    x={CHART_PADDING - 4}
+                    y={CHART_HEIGHT - CHART_PADDING + 4}
+                    textAnchor="end"
+                    className="overview-chart__scale"
+                  >
+                    0
+                  </text>
+                </svg>
+                <div className="overview-chart-card__totals">
+                  {orderedPlayers.map((player, playerIndex) => {
+                    const latestPoint = playerSeries[playerIndex]?.points[playerSeries[playerIndex].points.length - 1];
+                    return (
+                      <div key={player.id} className="overview-chart-total">
+                        <span className={`overview-chart-total__marker is-player-${playerIndex + 1}`} />
+                        <span>{player.name}</span>
+                        <strong>{formatDuration(latestPoint?.value ?? 0)}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </section>
       )}
     </article>
   );
@@ -552,10 +492,14 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   return (
     <section className="stack game-overview">
       <article className="card stack">
-        <div className="overview-summary-grid">
+        <div className="overview-summary-grid overview-summary-grid--compact">
           <div>
             <span>Datum</span>
-            <strong>{formatDateLabel(game.scheduledDate, game.scheduledTime)}</strong>
+            <strong>{game.scheduledDate || "-"}</strong>
+          </div>
+          <div>
+            <span>Uhrzeit</span>
+            <strong>{game.scheduledTime || "-"}</strong>
           </div>
           <div>
             <span>Punkte</span>
@@ -566,17 +510,21 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             <strong>{formatDuration(getGameDurationMs(game))}</strong>
           </div>
           <div>
-            <span>Gesamt offen</span>
-            <strong>{formatDuration(getSessionDurationMs(game))}</strong>
-          </div>
-          <div>
-            <span>Start</span>
-            <strong>{formatClockTime(game.startedAt)}</strong>
-          </div>
-          <div>
             <span>Ende</span>
             <strong>{formatClockTime(game.endedAt)}</strong>
           </div>
+          {game.deployment ? (
+            <div>
+              <span>Aufstellung</span>
+              <strong>{game.deployment}</strong>
+            </div>
+          ) : null}
+          {game.primaryMission ? (
+            <div>
+              <span>Primaermission</span>
+              <strong>{game.primaryMission}</strong>
+            </div>
+          ) : null}
         </div>
       </article>
 
@@ -619,7 +567,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
       </div>
 
       {renderRoundScoreChart()}
-      {renderLineChart("Zeit-Verlauf", timeSegments, "", (value) => formatDuration(value))}
+      {renderRoundTimeChart()}
 
       <article className="card stack">
         <div className="list-row">

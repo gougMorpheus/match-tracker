@@ -90,6 +90,15 @@ textarea {
   backdrop-filter: blur(12px);
 }
 
+.app-shell--sticky-header .app-header.game-header--round-odd {
+  background: linear-gradient(180deg, rgba(11, 17, 32, 0.95), rgba(11, 17, 32, 0.92));
+}
+
+.app-shell--sticky-header .app-header.game-header--round-even {
+  background: linear-gradient(180deg, rgba(16, 29, 43, 0.96), rgba(12, 23, 36, 0.94));
+  border-color: rgba(94, 234, 212, 0.16);
+}
+
 .header-content {
   display: grid;
   gap: 0.35rem;
@@ -748,11 +757,34 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.overview-summary-grid--compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
 .overview-summary-grid div,
 .overview-player-card {
   border-radius: 16px;
   background: var(--bg-soft);
   padding: 0.75rem;
+}
+
+.overview-summary-grid--compact div {
+  padding: 0.42rem 0.5rem;
+  border-radius: 14px;
+  min-height: 0;
+}
+
+.overview-summary-grid--compact strong {
+  margin-top: 0.12rem;
+  font-size: 0.82rem;
+  line-height: 1.05;
+  word-break: break-word;
+}
+
+.overview-summary-grid--compact span {
+  font-size: 0.58rem;
+  line-height: 1;
 }
 
 .overview-summary-grid span,
@@ -1300,6 +1332,7 @@ textarea {
   .overview-chart-legend {
     justify-content: flex-start;
   }
+
 }
 
 @media (max-width: 420px) {
