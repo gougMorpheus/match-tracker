@@ -11,6 +11,9 @@ import {
   getCurrentTurnNumber,
   getGameDurationMs,
   getLatestTurn,
+  getPlayerCommandPoints,
+  getPlayerPrimaryTotal,
+  getPlayerSecondaryTotal,
   getRoundDurationMs,
   getTurnDurationMs,
   isTurnPaused
@@ -30,6 +33,7 @@ interface EditableEventItem {
   kind: "cp" | "score" | "note";
   label: string;
   value?: number;
+  displayValue?: number;
   note?: string;
   roundNumber?: number;
   turnNumber?: number;
@@ -80,6 +84,8 @@ export const GamePage = ({ gameId }: GamePageProps) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [noteDialogPlayerId, setNoteDialogPlayerId] = useState<PlayerId | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [entriesOpen, setEntriesOpen] = useState(false);
   const game = getGame(gameId);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
@@ -107,6 +113,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               kind: "cp" as const,
               label: event.cpType === "gained" ? "CP +" : "CP -",
               value: event.value,
+              displayValue: Math.abs(event.value),
               note: event.note,
               roundNumber: event.roundNumber,
               turnNumber: event.turnNumber,
@@ -117,8 +124,9 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               playerId: event.playerId,
               playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
               kind: "score" as const,
-              label: event.scoreType === "primary" ? "Primary" : "Secondary",
+              label: `${event.scoreType === "primary" ? "Primary" : "Secondary"} ${event.value < 0 ? "-" : "+"}`,
               value: event.value,
+              displayValue: Math.abs(event.value),
               note: event.note,
               roundNumber: event.roundNumber,
               turnNumber: event.turnNumber,
@@ -141,7 +149,12 @@ export const GamePage = ({ gameId }: GamePageProps) => {
   );
 
   useEffect(() => {
-    if (!game || !game.startedAt) {
+    const runningTurn = game ? getLatestTurn(game) : undefined;
+    if (
+      !runningTurn?.timing.startedAt ||
+      runningTurn.timing.endedAt ||
+      isTurnPaused(runningTurn)
+    ) {
       return;
     }
 
@@ -220,7 +233,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
       await pauseActiveTimer(game.id);
     }
     setEditingEventId(event.id);
-    setEditingValue(typeof event.value === "number" ? String(event.value) : "");
+    setEditingValue(typeof event.displayValue === "number" ? String(event.displayValue) : "");
     setEditingNote(event.note ?? "");
   };
 
@@ -231,15 +244,18 @@ export const GamePage = ({ gameId }: GamePageProps) => {
   };
 
   const saveEditedEvent = async (event: EditableEventItem) => {
-    const parsedValue = event.kind === "note" ? undefined : Number(editingValue);
+    const parsedValue = event.kind === "note" ? undefined : Math.abs(Number(editingValue));
+    const nextValue =
+      event.kind === "note"
+        ? undefined
+        : typeof parsedValue === "number" && Number.isFinite(parsedValue)
+          ? event.kind === "score" && (event.value ?? 0) < 0
+            ? parsedValue * -1
+            : parsedValue
+          : event.value ?? 0;
 
     await updateGameEvent(game.id, event.id, {
-      value_number:
-        event.kind === "note"
-          ? undefined
-          : Number.isFinite(parsedValue)
-            ? parsedValue
-            : event.value ?? 0,
+      value_number: nextValue,
       note: editingNote.trim() || null
     });
     closeEditor();
@@ -258,6 +274,11 @@ export const GamePage = ({ gameId }: GamePageProps) => {
 
     await deleteGame(game.id);
     window.location.hash = "/games";
+  };
+
+  const closeNoteDialog = () => {
+    setNoteDialogPlayerId(null);
+    setNoteDraft("");
   };
 
   const handleDeleteEvent = async (event: EditableEventItem) => {
@@ -281,8 +302,7 @@ export const GamePage = ({ gameId }: GamePageProps) => {
       playerId: noteDialogPlayerId,
       note: noteDraft
     });
-    setNoteDialogPlayerId(null);
-    setNoteDraft("");
+    closeNoteDialog();
   };
 
   const handleReopenGame = async () => {
@@ -321,24 +341,12 @@ export const GamePage = ({ gameId }: GamePageProps) => {
 
         <article className="tracker-summary">
           <div>
-            <span>Spielstatus</span>
-            <strong>{isClosed ? "Geschlossen" : "Offen"}</strong>
-          </div>
-          <div>
-            <span>Timer</span>
-            <strong>{timerStatusLabel}</strong>
-          </div>
-          <div>
             <span>Runde</span>
             <strong>{getCurrentRoundNumber(game)}</strong>
           </div>
           <div>
             <span>Zug</span>
             <strong>{getCurrentTurnNumber(game)}</strong>
-          </div>
-          <div>
-            <span>Gestartet</span>
-            <strong>{formatClockTime(game.startedAt)}</strong>
           </div>
           <div>
             <span>Spielpunkte</span>
@@ -355,6 +363,10 @@ export const GamePage = ({ gameId }: GamePageProps) => {
           <div>
             <span>Zugzeit</span>
             <strong>{formatDuration(latestTurn ? getTurnDurationMs(latestTurn) : 0)}</strong>
+          </div>
+          <div>
+            <span>Start</span>
+            <strong>{formatClockTime(game.startedAt)}</strong>
           </div>
         </article>
 
@@ -594,21 +606,41 @@ export const GamePage = ({ gameId }: GamePageProps) => {
               controls={
                 <QuickAdjustControls
                   player={player}
+                  currentCommandPoints={getPlayerCommandPoints(game, player.id)}
+                  currentPrimary={getPlayerPrimaryTotal(game, player.id)}
+                  currentSecondary={getPlayerSecondaryTotal(game, player.id)}
                   isSubmitting={isMutating || isClosed}
                   canSpendCommandPoints={activePlayerId === player.id}
                   onCommandPointChange={async (playerId, direction, amount) => {
+                    const currentCommandPoints = getPlayerCommandPoints(game, playerId);
+                    const safeAmount =
+                      direction === "minus" ? Math.min(amount, currentCommandPoints) : amount;
+                    if (safeAmount <= 0) {
+                      return;
+                    }
+
                     await addCommandPointEvent({
                       gameId,
                       playerId,
-                      value: amount,
+                      value: safeAmount,
                       cpType: direction === "plus" ? "gained" : "spent"
                     });
                   }}
                   onScoreChange={async (playerId, scoreType, direction, amount) => {
+                    const currentScore =
+                      scoreType === "primary"
+                        ? getPlayerPrimaryTotal(game, playerId)
+                        : getPlayerSecondaryTotal(game, playerId);
+                    const safeAmount =
+                      direction === "minus" ? Math.min(amount, currentScore) : amount;
+                    if (safeAmount <= 0) {
+                      return;
+                    }
+
                     await addScoreEvent({
                       gameId,
                       playerId,
-                      value: direction === "plus" ? amount : amount * -1,
+                      value: direction === "plus" ? safeAmount : safeAmount * -1,
                       scoreType
                     });
                   }}
@@ -692,112 +724,26 @@ export const GamePage = ({ gameId }: GamePageProps) => {
         </section>
 
         <section className="card stack">
-          <h2>Letzte Notizen</h2>
-          {game.noteEvents.length ? (
-            game.noteEvents
-              .slice(-4)
-              .reverse()
-              .map((event) => {
-                const playerName = game.players.find((player) => player.id === event.playerId)?.name ?? "-";
-                return (
-                  <article key={event.id} className="list-row">
-                    <div>
-                      <strong>{playerName}</strong>
-                      <p>{event.note}</p>
-                    </div>
-                    <span>
-                      R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
-                    </span>
-                  </article>
-                );
-              })
-          ) : (
-            <p className="muted-copy">Noch keine Notizen.</p>
-          )}
-        </section>
-
-        <section className="card stack">
           <div className="list-row">
-            <h2>Eintraege</h2>
-            <span>{isClosed ? "geschlossen" : "editierbar"}</span>
+            <h2>Verlauf</h2>
+            <span>{editableEvents.length} Eintraege</span>
           </div>
-          {editableEvents.length ? (
-            editableEvents.map((event) => (
-              <article key={event.id} className="event-editor">
-                <div className="event-editor__meta">
-                  <div>
-                    <strong>{event.playerName}</strong>
-                    <p>
-                      {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
-                    </p>
-                  </div>
-                  <div className="button-row button-row--compact">
-                    <button
-                      type="button"
-                      className="ghost-button compact-button"
-                      disabled={isMutating || isClosed}
-                      onClick={() => void openEditor(event)}
-                    >
-                      Bearbeiten
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-button compact-button"
-                      disabled={isMutating || isClosed}
-                      onClick={() => void handleDeleteEvent(event)}
-                    >
-                      Loeschen
-                    </button>
-                  </div>
-                </div>
-
-                {editingEventId === event.id ? (
-                  <div className="event-editor__form">
-                    {event.kind !== "note" ? (
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={editingValue}
-                        disabled={isMutating}
-                        onChange={(editEvent) => setEditingValue(editEvent.target.value)}
-                      />
-                    ) : null}
-                    <textarea
-                      rows={2}
-                      value={editingNote}
-                      disabled={isMutating}
-                      onChange={(editEvent) => setEditingNote(editEvent.target.value)}
-                    />
-                    <div className="button-row button-row--compact">
-                      <button
-                        type="button"
-                        className="primary-button compact-button"
-                        disabled={isMutating}
-                        onClick={() => void saveEditedEvent(event)}
-                      >
-                        Speichern
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button compact-button"
-                        disabled={isMutating}
-                        onClick={closeEditor}
-                      >
-                        Abbrechen
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted-copy">
-                    {typeof event.value === "number" ? `${event.value}` : event.note || "Keine Notiz"}
-                    {event.note && typeof event.value === "number" ? ` | ${event.note}` : ""}
-                  </p>
-                )}
-              </article>
-            ))
-          ) : (
-            <p className="muted-copy">Noch keine editierbaren Eintraege.</p>
-          )}
+          <div className="button-row button-row--compact">
+            <button
+              type="button"
+              className="ghost-button compact-button"
+              onClick={() => setNotesOpen(true)}
+            >
+              Notizen ({game.noteEvents.length})
+            </button>
+            <button
+              type="button"
+              className="ghost-button compact-button"
+              onClick={() => setEntriesOpen(true)}
+            >
+              Eintraege ({editableEvents.length})
+            </button>
+          </div>
         </section>
       </section>
 
@@ -828,14 +774,166 @@ export const GamePage = ({ gameId }: GamePageProps) => {
                   type="button"
                   className="ghost-button compact-button"
                   disabled={isMutating}
-                  onClick={() => {
-                    setNoteDialogPlayerId(null);
-                    setNoteDraft("");
-                  }}
+                  onClick={closeNoteDialog}
                 >
                   Abbrechen
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {notesOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Notizen</h2>
+                  <p className="muted-copy">{game.noteEvents.length} Eintraege</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => setNotesOpen(false)}
+                >
+                  Schliessen
+                </button>
+              </div>
+              {game.noteEvents.length ? (
+                <div className="stack modal-list">
+                  {game.noteEvents
+                    .slice()
+                    .reverse()
+                    .map((event) => {
+                      const playerName =
+                        game.players.find((player) => player.id === event.playerId)?.name ?? "-";
+                      return (
+                        <article key={event.id} className="event-editor">
+                          <div className="event-editor__meta">
+                            <div>
+                              <strong>{playerName}</strong>
+                              <p>
+                                R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="muted-copy">{event.note}</p>
+                        </article>
+                      );
+                    })}
+                </div>
+              ) : (
+                <p className="muted-copy">Noch keine Notizen.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {entriesOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Eintraege</h2>
+                  <p className="muted-copy">{isClosed ? "geschlossen" : "editierbar"}</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => {
+                    closeEditor();
+                    setEntriesOpen(false);
+                  }}
+                >
+                  Schliessen
+                </button>
+              </div>
+              {editableEvents.length ? (
+                <div className="stack modal-list">
+                  {editableEvents.map((event) => (
+                    <article key={event.id} className="event-editor">
+                      <div className="event-editor__meta">
+                        <div>
+                          <strong>{event.playerName}</strong>
+                          <p>
+                            {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
+                          </p>
+                        </div>
+                        <div className="button-row button-row--compact">
+                          <button
+                            type="button"
+                            className="ghost-button compact-button"
+                            disabled={isMutating || isClosed}
+                            onClick={() => void openEditor(event)}
+                          >
+                            Bearbeiten
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-button compact-button"
+                            disabled={isMutating || isClosed}
+                            onClick={() => void handleDeleteEvent(event)}
+                          >
+                            Loeschen
+                          </button>
+                        </div>
+                      </div>
+
+                      {editingEventId === event.id ? (
+                        <div className="event-editor__form">
+                          {event.kind !== "note" ? (
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              value={editingValue}
+                              disabled={isMutating}
+                              onChange={(editEvent) => setEditingValue(editEvent.target.value)}
+                            />
+                          ) : null}
+                          <textarea
+                            rows={2}
+                            value={editingNote}
+                            disabled={isMutating}
+                            onChange={(editEvent) => setEditingNote(editEvent.target.value)}
+                          />
+                          <div className="button-row button-row--compact">
+                            <button
+                              type="button"
+                              className="primary-button compact-button"
+                              disabled={isMutating}
+                              onClick={() => void saveEditedEvent(event)}
+                            >
+                              Speichern
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button compact-button"
+                              disabled={isMutating}
+                              onClick={closeEditor}
+                            >
+                              Abbrechen
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="muted-copy">
+                          {typeof event.displayValue === "number"
+                            ? `${event.displayValue}`
+                            : event.note || "Keine Notiz"}
+                          {event.note && typeof event.displayValue === "number" ? ` | ${event.note}` : ""}
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted-copy">Noch keine editierbaren Eintraege.</p>
+              )}
             </div>
           </div>
         </div>

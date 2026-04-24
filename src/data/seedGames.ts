@@ -9,7 +9,7 @@ export const seedGames: Game[] = [
     createdAt,
     updatedAt: createdAt,
     status: "completed",
-    gamePoints: 2000,
+    gamePoints: 1000,
     scheduledDate: "2026-04-20",
     scheduledTime: "19:00",
     deployment: "Hammer and Anvil",
@@ -25,7 +25,7 @@ export const seedGames: Game[] = [
         name: "Nora",
         army: {
           name: "Adepta Sororitas",
-          maxPoints: 2000
+          maxPoints: 1000
         }
       },
       {
@@ -33,7 +33,7 @@ export const seedGames: Game[] = [
         name: "Tim",
         army: {
           name: "Necrons",
-          maxPoints: 2000
+          maxPoints: 1000
         }
       }
     ],

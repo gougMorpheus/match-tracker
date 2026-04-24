@@ -39,6 +39,9 @@ import {
 import {
   getLatestRound,
   getLatestTurn,
+  getPlayerCommandPoints,
+  getPlayerPrimaryTotal,
+  getPlayerSecondaryTotal,
   isTurnPaused
 } from "../utils/gameCalculations";
 import {
@@ -51,7 +54,7 @@ import {
   saveSyncQueue,
   type SyncQueueItem
 } from "../utils/localSync";
-import { rememberPlayerNames } from "../utils/presets";
+import { syncRememberedPlayerNames } from "../utils/presets";
 import { getNowIso } from "../utils/time";
 
 interface EventPayload {
@@ -93,6 +96,7 @@ const sortGames = (games: Game[]): Game[] =>
   [...games].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
 const getErrorMessage = (error: unknown): string => getSyncErrorMessage(error);
+const clampNonNegative = (value: number): number => Math.max(value, 0);
 
 const mergeRemoteWithPending = (
   remoteGames: Game[],
@@ -145,6 +149,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     gamesRef.current = games;
     saveCachedGames(games);
+    syncRememberedPlayerNames(games);
   }, [games]);
 
   useEffect(() => {
@@ -266,6 +271,59 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
     return game.currentPlayerId;
   }, []);
+
+  const normalizeEventPatch = useCallback(
+    (game: Game, eventId: string, patch: UpdateSupabaseEventPayload): UpdateSupabaseEventPayload => {
+      const scoreEvent = game.scoreEvents.find((event) => event.id === eventId);
+      if (scoreEvent) {
+        const currentTotal =
+          scoreEvent.scoreType === "primary"
+            ? getPlayerPrimaryTotal(game, scoreEvent.playerId)
+            : getPlayerSecondaryTotal(game, scoreEvent.playerId);
+        const safeAmount = typeof patch.value_number === "number" && Number.isFinite(patch.value_number)
+          ? clampNonNegative(Math.abs(patch.value_number))
+          : Math.abs(scoreEvent.value);
+
+        if (scoreEvent.value < 0) {
+          const maxAmount = clampNonNegative(currentTotal - scoreEvent.value);
+          return {
+            ...patch,
+            value_number: -Math.min(safeAmount, maxAmount)
+          };
+        }
+
+        return {
+          ...patch,
+          value_number: safeAmount
+        };
+      }
+
+      const commandPointEvent = game.commandPointEvents.find((event) => event.id === eventId);
+      if (commandPointEvent) {
+        const safeAmount =
+          typeof patch.value_number === "number" && Number.isFinite(patch.value_number)
+            ? clampNonNegative(Math.abs(patch.value_number))
+          : commandPointEvent.value;
+
+        if (commandPointEvent.cpType === "spent") {
+          const currentBalance = getPlayerCommandPoints(game, commandPointEvent.playerId);
+          const maxAmount = clampNonNegative(currentBalance + commandPointEvent.value);
+          return {
+            ...patch,
+            value_number: Math.min(safeAmount, maxAmount)
+          };
+        }
+
+        return {
+          ...patch,
+          value_number: safeAmount
+        };
+      }
+
+      return patch;
+    },
+    []
+  );
 
   const pullRemoteGames = useCallback(async () => {
     const configError = getSupabaseConfigError();
@@ -462,7 +520,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     async (input: CreateGameInput): Promise<Game> =>
       runMutation(async () => {
         const createdGame = createLocalGame(input);
-        rememberPlayerNames([input.playerOneName, input.playerTwoName]);
         replaceGame(createdGame);
         enqueueGameUpsert(createdGame.id);
         void flushSyncQueue();
@@ -475,7 +532,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     async (gameId: string, input: CreateGameInput) =>
       runMutation(async () => {
         const nextGame = mutateGame(gameId, (game) => updateLocalGameDetails(game, input));
-        rememberPlayerNames([input.playerOneName, input.playerTwoName]);
         enqueueGameUpsert(nextGame.id);
         void flushSyncQueue();
       }),
@@ -490,13 +546,23 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           throw new Error("Spiel nicht gefunden.");
         }
 
+        const currentTotal =
+          scoreType === "primary"
+            ? getPlayerPrimaryTotal(game, playerId)
+            : getPlayerSecondaryTotal(game, playerId);
+        const safeValue =
+          value < 0 ? -Math.min(Math.abs(value), currentTotal) : clampNonNegative(value);
+        if (safeValue === 0) {
+          return;
+        }
+
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
         const nextGame = mutateGame(gameId, (currentGame) =>
           appendLocalScoreEvent(currentGame, {
             playerId,
             scoreType,
-            value,
+            value: safeValue,
             note,
             roundNumber: latestRound?.roundNumber,
             turnNumber: latestTurn?.turnNumber
@@ -524,13 +590,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           throw new Error("CP koennen nur vom aktiven Spieler im aktuellen Zug ausgegeben werden.");
         }
 
+        const safeValue =
+          cpType === "spent"
+            ? Math.min(clampNonNegative(value), getPlayerCommandPoints(game, playerId))
+            : clampNonNegative(value);
+        if (safeValue === 0) {
+          return;
+        }
+
         const latestRound = getLatestRound(game);
         const latestTurn = getLatestTurn(game);
         const nextGame = mutateGame(gameId, (currentGame) =>
           appendLocalCommandPointEvent(currentGame, {
             playerId,
             cpType,
-            value,
+            value: safeValue,
             note,
             roundNumber: latestRound?.roundNumber,
             turnNumber: latestTurn?.turnNumber
@@ -915,14 +989,28 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const updateGameEvent = useCallback(
     async (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) =>
       runMutation(async () => {
-        const nextGame = mutateGame(gameId, (currentGame) =>
-          updateLocalEvent(currentGame, eventId, patch)
+        const currentGame = getGame(gameId);
+        if (!currentGame) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const normalizedPatch = normalizeEventPatch(currentGame, eventId, patch);
+        const nextGame = mutateGame(gameId, (mutableGame) =>
+          updateLocalEvent(mutableGame, eventId, normalizedPatch)
         );
         enqueueGameUpsert(nextGame.id);
         enqueueEventUpsert(nextGame.id, eventId);
         void flushSyncQueue();
       }),
-    [enqueueEventUpsert, enqueueGameUpsert, flushSyncQueue, mutateGame, runMutation]
+    [
+      enqueueEventUpsert,
+      enqueueGameUpsert,
+      flushSyncQueue,
+      getGame,
+      mutateGame,
+      normalizeEventPatch,
+      runMutation
+    ]
   );
 
   const deleteGameEvent = useCallback(
@@ -1001,7 +1089,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
 
           replaceGame(normalizedGame);
-          rememberPlayerNames(game.players.map((player) => player.name));
           enqueueGameUpsert(normalizedGame.id);
           normalizedGame.timeEvents.forEach((event) => enqueueEventUpsert(normalizedGame.id, event.id));
           normalizedGame.commandPointEvents.forEach((event) => enqueueEventUpsert(normalizedGame.id, event.id));

@@ -12,23 +12,23 @@ interface NewGamePageProps {
   onBack: () => void;
 }
 
-const defaultFormState: CreateGameInput = {
+const createDefaultFormState = (): CreateGameInput => ({
   playerOneName: "",
   playerOneArmy: "",
   playerTwoName: "",
   playerTwoArmy: "",
-  gamePoints: 2000,
+  gamePoints: 1000,
   scheduledDate: toLocalDateInput(),
   scheduledTime: toLocalTimeInput(),
   deployment: "",
   primaryMission: "",
   defenderSlot: "player1",
   startingSlot: "player1"
-};
+});
 
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   const { createGame, games, isMutating, errorMessage, clearError } = useGameStore();
-  const [formState, setFormState] = useState<CreateGameInput>(defaultFormState);
+  const [formState, setFormState] = useState<CreateGameInput>(() => createDefaultFormState());
   const playerOptions = useMemo(
     () =>
       Array.from(

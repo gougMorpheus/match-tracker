@@ -1,3 +1,5 @@
+import type { Game } from "../types/game";
+
 const PLAYER_PRESETS_KEY = "match-tracker.player-presets.v1";
 
 const normalizeEntries = (entries: string[]): string[] =>
@@ -21,6 +23,14 @@ export const loadRememberedPlayerNames = (): string[] => {
 
 export const rememberPlayerNames = (names: string[]): string[] => {
   const nextNames = normalizeEntries([...loadRememberedPlayerNames(), ...names]);
+  window.localStorage.setItem(PLAYER_PRESETS_KEY, JSON.stringify(nextNames));
+  return nextNames;
+};
+
+export const syncRememberedPlayerNames = (games: Game[]): string[] => {
+  const nextNames = normalizeEntries(
+    games.flatMap((game) => game.players.map((player) => player.name))
+  );
   window.localStorage.setItem(PLAYER_PRESETS_KEY, JSON.stringify(nextNames));
   return nextNames;
 };

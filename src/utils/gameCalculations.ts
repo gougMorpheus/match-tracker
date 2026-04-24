@@ -14,6 +14,8 @@ import { getDurationMs } from "./time";
 const sumValues = <T extends { value: number }>(items: T[]): number =>
   items.reduce((total, item) => total + item.value, 0);
 
+const clampFloor = (value: number): number => Math.max(value, 0);
+
 export const getPlayerScoreEvents = (
   game: Game,
   playerId: PlayerId,
@@ -27,7 +29,7 @@ export const getPlayerScoreTotal = (
   game: Game,
   playerId: PlayerId,
   scoreType?: ScoreEvent["scoreType"]
-): number => sumValues(getPlayerScoreEvents(game, playerId, scoreType));
+): number => clampFloor(sumValues(getPlayerScoreEvents(game, playerId, scoreType)));
 
 export const getPlayerPrimaryTotal = (game: Game, playerId: PlayerId): number =>
   getPlayerScoreTotal(game, playerId, "primary");
@@ -50,7 +52,7 @@ export const getPlayerCommandPointEvents = (
 export const getPlayerCommandPoints = (game: Game, playerId: PlayerId): number => {
   const gained = sumValues(getPlayerCommandPointEvents(game, playerId, "gained"));
   const spent = sumValues(getPlayerCommandPointEvents(game, playerId, "spent"));
-  return gained - spent;
+  return clampFloor(gained - spent);
 };
 
 export const getPlayerCommandPointsGained = (game: Game, playerId: PlayerId): number =>
@@ -69,6 +71,9 @@ export const getTurnDurationMs = (turn: Turn): number =>
     return Math.max(totalDuration - pausedDuration, 0);
   })();
 
+export const getCompletedTurnDurationMs = (turn: Turn): number | null =>
+  turn.timing.startedAt && turn.timing.endedAt ? getTurnDurationMs(turn) : null;
+
 export const getRoundDurationMs = (round: Round): number => {
   if (round.startedAt && round.endedAt) {
     return getDurationMs(round.startedAt, round.endedAt);
@@ -81,6 +86,9 @@ export const getRoundDurationMs = (round: Round): number => {
   return round.turns.reduce((total, turn) => total + getTurnDurationMs(turn), 0);
 };
 
+export const getCompletedRoundDurationMs = (round: Round): number | null =>
+  round.startedAt && round.endedAt ? getRoundDurationMs(round) : null;
+
 export const getGameDurationMs = (game: Game): number => {
   if (game.startedAt && game.endedAt) {
     return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
@@ -92,6 +100,9 @@ export const getGameDurationMs = (game: Game): number => {
 
   return game.rounds.reduce((total, round) => total + getRoundDurationMs(round), 0);
 };
+
+export const getCompletedGameDurationMs = (game: Game): number | null =>
+  game.startedAt && game.endedAt ? getGameDurationMs(game) : null;
 
 export const getLatestRound = (game: Game): Round | undefined =>
   game.rounds[game.rounds.length - 1];
@@ -155,7 +166,7 @@ const createSummaryPlayer = (game: Game, playerId: PlayerId): GameSummaryPlayer 
     totalScore,
     commandPointsGained,
     commandPointsSpent,
-    commandPointBalance: commandPointsGained - commandPointsSpent,
+    commandPointBalance: getPlayerCommandPoints(game, playerId),
     result: getPlayerResult(totalScore, opponentTotal)
   };
 };
@@ -266,13 +277,16 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
   summaries.forEach((summary, summaryIndex) => {
     const game = games[summaryIndex];
     const actualFirstPlayerId = game.rounds[0]?.turns[0]?.playerId;
+    const completedDuration = getCompletedGameDurationMs(game);
 
     summary.players.forEach((player) => {
       const existing = grouped.get(player.name) ?? [];
       grouped.set(player.name, [...existing, player]);
 
-      const playerDurations = durations.get(player.name) ?? [];
-      durations.set(player.name, [...playerDurations, summary.totalDurationMs]);
+      if (completedDuration !== null) {
+        const playerDurations = durations.get(player.name) ?? [];
+        durations.set(player.name, [...playerDurations, completedDuration]);
+      }
 
       if (actualFirstPlayerId === player.playerId) {
         const existingGoFirst = goFirstGames.get(player.name) ?? { wins: 0, games: 0 };
@@ -440,13 +454,16 @@ export const createStatsOverview = (games: Game[]): StatsOverview => {
   const playerEntries = summaries.flatMap((summary) => summary.players);
   const playerCount = new Set(playerEntries.map((player) => player.name)).size;
   const armyCount = new Set(playerEntries.map((player) => player.armyName)).size;
+  const completedDurations = games
+    .map((game) => getCompletedGameDurationMs(game))
+    .filter((duration): duration is number => duration !== null);
 
   return {
     games: games.length,
     players: playerCount,
     armies: armyCount,
-    averageDurationMs: games.length
-      ? sumValues(games.map((game) => ({ value: getGameDurationMs(game) }))) / games.length
+    averageDurationMs: completedDurations.length
+      ? sumValues(completedDurations.map((value) => ({ value }))) / completedDurations.length
       : 0,
     averageRounds: games.length ? sumValues(games.map((game) => ({ value: game.rounds.length }))) / games.length : 0,
     averageCombinedScore: games.length
@@ -510,7 +527,10 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
     const scoreB = getPlayerTotalScore(game, game.players[1].id);
 
     existing.count += 1;
-    existing.durations.push(getGameDurationMs(game));
+    const completedDuration = getCompletedGameDurationMs(game);
+    if (completedDuration !== null) {
+      existing.durations.push(completedDuration);
+    }
     existing.combinedScores.push(scoreA + scoreB);
     existing.scoreDifferences.push(Math.abs(scoreA - scoreB));
     grouped.set(label, existing);
@@ -520,7 +540,9 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
     .map(([label, values]) => ({
       label,
       games: values.count,
-      averageDurationMs: values.count ? sumValues(values.durations.map((value) => ({ value }))) / values.count : 0,
+      averageDurationMs: values.durations.length
+        ? sumValues(values.durations.map((value) => ({ value }))) / values.durations.length
+        : 0,
       averageCombinedScore: values.count
         ? sumValues(values.combinedScores.map((value) => ({ value }))) / values.count
         : 0,
@@ -536,8 +558,12 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
 
   games.forEach((game) => {
     game.rounds.forEach((round) => {
+      const duration = getCompletedRoundDurationMs(round);
+      if (duration === null) {
+        return;
+      }
       const durations = grouped.get(round.roundNumber) ?? [];
-      durations.push(getRoundDurationMs(round));
+      durations.push(duration);
       grouped.set(round.roundNumber, durations);
     });
   });
@@ -562,7 +588,8 @@ export const getTurnRecords = (
       round.turns
         .map((turn) => {
           const player = game.players.find((entry) => entry.id === turn.playerId);
-          if (!player || !turn.timing.startedAt) {
+          const durationMs = getCompletedTurnDurationMs(turn);
+          if (!player || durationMs === null) {
             return null;
           }
 
@@ -574,7 +601,7 @@ export const getTurnRecords = (
             armyName: player.army.name,
             roundNumber: round.roundNumber,
             turnNumber: turn.turnNumber,
-            durationMs: getTurnDurationMs(turn),
+            durationMs,
             primaryScore: sumValues(
               game.scoreEvents
                 .filter(

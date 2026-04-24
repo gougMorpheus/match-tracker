@@ -220,16 +220,16 @@ textarea {
 .game-status-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
+  gap: 0.3rem;
   width: 100%;
 }
 
 .game-status-strip .status-pill {
   width: 100%;
-  min-height: 32px;
-  padding: 0.35rem 0.45rem;
+  min-height: 28px;
+  padding: 0.25rem 0.4rem;
   text-align: center;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
 }
 
 .scoreboard__grid,
@@ -450,85 +450,88 @@ textarea {
 }
 
 .game-page .tracker-summary {
-  padding: 0.55rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0.4rem;
+  gap: 0.3rem;
 }
 
 .game-page .tracker-summary div,
 .game-page .scoreboard__grid div {
-  padding: 0.45rem;
-  border-radius: 14px;
+  padding: 0.35rem 0.4rem;
+  border-radius: 12px;
 }
 
 .game-page .tracker-summary strong,
 .game-page .scoreboard__grid strong {
-  font-size: 0.95rem;
-  margin-top: 0.18rem;
+  font-size: 0.9rem;
+  margin-top: 0.12rem;
 }
 
 .game-page .tracker-summary span,
 .game-page .scoreboard__grid span,
 .game-page .scoreboard__grid p {
-  font-size: 0.74rem;
-  line-height: 1.2;
+  font-size: 0.68rem;
+  line-height: 1.1;
 }
 
 .game-page .scoreboard {
-  padding: 0.7rem;
+  padding: 0.55rem;
 }
 
 .game-page .scoreboard__head {
-  gap: 0.45rem;
-  margin-bottom: 0.55rem;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
 }
 
 .game-page .scoreboard__head h2 {
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .game-page .scoreboard__head p {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .game-page .scoreboard__meta {
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .game-page .scoreboard__grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .game-page .scoreboard__controls {
-  margin-top: 0.7rem;
-  padding-top: 0.7rem;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
 }
 
 .game-page .quick-controls {
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .game-page .quick-controls__row,
 .game-page .quick-controls__actions,
 .game-page .event-editor__meta {
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .game-page .step-input {
-  width: 4rem;
-  flex: 0 0 4rem;
-  padding-left: 0.4rem;
-  padding-right: 0.4rem;
+  width: 3.35rem;
+  flex: 0 0 3.35rem;
+  min-height: 30px;
+  padding: 0.35rem;
+  border-radius: 12px;
 }
 
 .game-page .mini-button {
-  min-height: 32px;
-  padding: 0.4rem 0.5rem;
-  font-size: 0.78rem;
+  min-height: 30px;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.74rem;
 }
 
 .game-page .button-grid--tracker {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
+  gap: 0.35rem;
 }
 
 .game-page .compact-button,
@@ -536,9 +539,9 @@ textarea {
 .game-page .secondary-button,
 .game-page .danger-button,
 .game-page .ghost-button {
-  min-height: 34px;
-  padding: 0.5rem 0.6rem;
-  font-size: 0.8rem;
+  min-height: 31px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.76rem;
 }
 
 .game-page .primary-button--large {
@@ -563,7 +566,7 @@ textarea {
 
 .quick-controls {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .quick-controls__row,
@@ -589,6 +592,11 @@ textarea {
   flex: 1;
 }
 
+.game-page .quick-controls__row > span {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .quick-controls__note {
   display: grid;
   gap: 0.5rem;
@@ -612,7 +620,7 @@ textarea {
 
 .list-row {
   align-items: flex-start;
-  padding: 0.85rem 0;
+  padding: 0.6rem 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -773,8 +781,8 @@ textarea {
 
 .event-editor {
   display: grid;
-  gap: 0.75rem;
-  padding: 0.85rem 0;
+  gap: 0.45rem;
+  padding: 0.6rem 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -785,7 +793,7 @@ textarea {
 
 .event-editor__form {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.45rem;
 }
 
 @media (max-width: 360px) {
@@ -799,6 +807,18 @@ textarea {
 
   .record-card__metrics {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .game-page .tracker-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .game-page .quick-controls__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 3.2rem minmax(0, 1fr);
+    width: 100%;
   }
 }
 
@@ -820,6 +840,12 @@ textarea {
   background: var(--bg-raised);
   box-shadow: var(--shadow);
   padding: 1rem;
+}
+
+.modal-list {
+  max-height: min(62vh, 520px);
+  overflow-y: auto;
+  padding-right: 0.2rem;
 }
 
 .bottom-nav {
