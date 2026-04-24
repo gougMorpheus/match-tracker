@@ -346,12 +346,6 @@ textarea {
   line-height: 1;
 }
 
-.scoreboard-stat__top strong small {
-  font-size: 0.58em;
-  font-weight: 500;
-  color: var(--muted);
-}
-
 .scoreboard-stat__meta {
   display: block;
   font-size: 0.58rem;
@@ -681,10 +675,6 @@ textarea {
   font-size: 0.52rem;
 }
 
-.game-page .scoreboard-stat__top strong small {
-  font-size: 0.56em;
-}
-
 .game-page .quick-controls {
   gap: 0.35rem;
 }
@@ -915,19 +905,25 @@ textarea {
   color: #b7f3d8;
 }
 
-.overview-chart__line.is-player-1,
+.overview-chart__line.is-player-1 {
+  stroke: #38bdf8;
+  fill: none;
+}
+
 .overview-chart-legend__item.is-player-1,
 .overview-chart-total__marker.is-player-1 {
-  stroke: #38bdf8;
   background: rgba(56, 189, 248, 0.16);
   color: #d8f3ff;
   fill: #38bdf8;
 }
 
-.overview-chart__line.is-player-2,
+.overview-chart__line.is-player-2 {
+  stroke: #34d399;
+  fill: none;
+}
+
 .overview-chart-legend__item.is-player-2,
 .overview-chart-total__marker.is-player-2 {
-  stroke: #34d399;
   background: rgba(52, 211, 153, 0.16);
   color: #d1fae5;
   fill: #34d399;

@@ -65,26 +65,23 @@ export const PlayerScoreboard = ({
         <div className="scoreboard-stat">
           <div className="scoreboard-stat__top">
             <span>Prim</span>
-            <strong>
-              {primary} <small>({currentRoundPrimary})</small>
-            </strong>
+            <strong>{primary}</strong>
           </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundPrimary}</span>
         </div>
         <div className="scoreboard-stat">
           <div className="scoreboard-stat__top">
             <span>Sek</span>
-            <strong>
-              {secondary} <small>({currentRoundSecondary})</small>
-            </strong>
+            <strong>{secondary}</strong>
           </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundSecondary}</span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--accent">
           <div className="scoreboard-stat__top">
             <span>Ges</span>
-            <strong>
-              {total} <small>({currentRoundTotal})</small>
-            </strong>
+            <strong>{total}</strong>
           </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundTotal}</span>
         </div>
       </div>
       {controls ? <div className="scoreboard__controls">{controls}</div> : null}
