@@ -1,11 +1,13 @@
 import type { Game } from "../types/game";
 import {
+  getPlayerComparablePrimaryScore,
+  getPlayerComparableSecondaryScore,
+  getPlayerComparableTotalScore,
   getPlayerCommandPointsGained,
   getPlayerCommandPointsSpent,
-  getPlayerPrimaryTotal,
-  getPlayerSecondaryTotal,
-  getPlayerTotalScore,
   getPlayerTurnDurationTotalMs,
+  hasComparableCommandPointData,
+  hasDetailedScoreData,
   getRoundDurationMs,
   getTurnDurationMs
 } from "../utils/gameCalculations";
@@ -46,6 +48,7 @@ const buildLinePath = (points: Array<{ x: number; y: number }>): string =>
   points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
 
 export const GameOverview = ({ game }: GameOverviewProps) => {
+  const formatScoreValue = (value: number | null) => (value === null ? "-" : value);
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
 
@@ -130,7 +133,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   });
 
   const renderRoundScoreChart = () => {
-    if (!roundScoreRows.length) {
+      if (!roundScoreRows.length || !hasDetailedScoreData(game)) {
       return (
         <article className="card stack">
           <div className="list-row">
@@ -537,15 +540,15 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             </div>
             <div className="overview-stat-line">
               <span>Prim</span>
-              <strong>{getPlayerPrimaryTotal(game, player.id)}</strong>
+              <strong>{formatScoreValue(getPlayerComparablePrimaryScore(game, player.id))}</strong>
             </div>
             <div className="overview-stat-line">
               <span>Sek</span>
-              <strong>{getPlayerSecondaryTotal(game, player.id)}</strong>
+              <strong>{formatScoreValue(getPlayerComparableSecondaryScore(game, player.id))}</strong>
             </div>
             <div className="overview-stat-line">
               <span>Ges</span>
-              <strong>{getPlayerTotalScore(game, player.id)}</strong>
+              <strong>{formatScoreValue(getPlayerComparableTotalScore(game, player.id))}</strong>
             </div>
             <div className="overview-stat-line">
               <span>Zeit</span>
@@ -554,7 +557,9 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             <div className="overview-stat-line">
               <span>CP + / -</span>
               <strong>
-                {getPlayerCommandPointsGained(game, player.id)} / {getPlayerCommandPointsSpent(game, player.id)}
+                {hasComparableCommandPointData(game, player.id)
+                  ? `${getPlayerCommandPointsGained(game, player.id)} / ${getPlayerCommandPointsSpent(game, player.id)}`
+                  : "-"}
               </strong>
             </div>
           </article>

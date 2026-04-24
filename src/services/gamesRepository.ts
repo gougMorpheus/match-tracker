@@ -15,7 +15,7 @@ import type { Database } from "../types/supabase";
 import { createId } from "../utils/id";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
-import type { TimerCorrections } from "../types/game";
+import type { ScoreDetailLevel, TimerCorrections } from "../types/game";
 
 export type SupabaseGameRecord = Database["public"]["Tables"]["games"]["Row"];
 export type SupabaseEventRecord = Database["public"]["Tables"]["events"]["Row"];
@@ -93,6 +93,14 @@ const createEmptyTimerCorrections = (): TimerCorrections => ({
   turns: {}
 });
 
+const createDefaultScoreMeta = (): {
+  scoreDetailLevel: ScoreDetailLevel;
+  legacyScoreTotals: Record<string, number>;
+} => ({
+  scoreDetailLevel: "full",
+  legacyScoreTotals: {}
+});
+
 const parseTimerCorrections = (value: string | null): TimerCorrections => {
   if (!value) {
     return createEmptyTimerCorrections();
@@ -121,18 +129,56 @@ const parseTimerCorrections = (value: string | null): TimerCorrections => {
   }
 };
 
-const serializeTimerCorrections = (timerCorrections: TimerCorrections): string | null => {
+const parseScoreMeta = (
+  value: string | null
+): { scoreDetailLevel: ScoreDetailLevel; legacyScoreTotals: Record<string, number> } => {
+  if (!value) {
+    return createDefaultScoreMeta();
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      scoreMeta?: {
+        scoreDetailLevel?: ScoreDetailLevel;
+        legacyScoreTotals?: Record<string, number>;
+      };
+    };
+    const scoreMeta = parsed?.scoreMeta;
+    return {
+      scoreDetailLevel:
+        scoreMeta?.scoreDetailLevel === "total-only" || scoreMeta?.scoreDetailLevel === "none"
+          ? scoreMeta.scoreDetailLevel
+          : "full",
+      legacyScoreTotals: Object.fromEntries(
+        Object.entries(scoreMeta?.legacyScoreTotals ?? {}).filter(([, amount]) => typeof amount === "number")
+      )
+    };
+  } catch {
+    return createDefaultScoreMeta();
+  }
+};
+
+const serializeGameNotes = (
+  timerCorrections: TimerCorrections,
+  scoreDetailLevel: ScoreDetailLevel,
+  legacyScoreTotals: Record<string, number>
+): string | null => {
   const hasCorrections =
     Boolean(timerCorrections.totalMs) ||
     Object.keys(timerCorrections.rounds).length > 0 ||
     Object.keys(timerCorrections.turns).length > 0;
+  const hasScoreMeta = scoreDetailLevel !== "full" || Object.keys(legacyScoreTotals).length > 0;
 
-  if (!hasCorrections) {
+  if (!hasCorrections && !hasScoreMeta) {
     return null;
   }
 
   return JSON.stringify({
-    timerCorrections
+    timerCorrections,
+    scoreMeta: {
+      scoreDetailLevel,
+      legacyScoreTotals
+    }
   });
 };
 
@@ -455,12 +501,14 @@ export const mapSupabaseGameToAppGame = (
   const defenderPlayerId = getPlayerIdFromSlot(row.id, row.defender_player ?? 1);
   const startedAt = getDerivedStartedAt(row, mappedEvents.timeEvents);
   const endedAt = getDerivedEndedAt(row, mappedEvents.timeEvents);
+  const scoreMeta = parseScoreMeta(row.notes);
 
   return {
     id: row.id,
     createdAt: row.created_at,
     updatedAt: getUpdatedAt(row, events),
     status: endedAt ? "completed" : "active",
+    scoreDetailLevel: scoreMeta.scoreDetailLevel,
     gamePoints: row.player1_max_points,
     scheduledDate: date,
     scheduledTime: time,
@@ -494,7 +542,8 @@ export const mapSupabaseGameToAppGame = (
     commandPointEvents: mappedEvents.commandPointEvents,
     noteEvents: mappedEvents.noteEvents,
     timeEvents: mappedEvents.timeEvents,
-    timerCorrections: parseTimerCorrections(row.notes)
+    timerCorrections: parseTimerCorrections(row.notes),
+    legacyScoreTotals: scoreMeta.legacyScoreTotals
   };
 };
 
@@ -562,7 +611,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: getWinnerPlayerSlot(game),
-  notes: serializeTimerCorrections(game.timerCorrections)
+  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals)
 });
 
 export const createImportedEventPayloads = (persistedGame: Game, importedGame: Game): CreateSupabaseEventPayload[] => {
@@ -649,7 +698,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
-  notes: serializeTimerCorrections(game.timerCorrections)
+  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals)
 });
 
 export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayload[] => {

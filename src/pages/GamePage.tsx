@@ -73,6 +73,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     advanceGame,
     rewindLastTurn,
     setTimerCorrections,
+    resetAllGameTimers,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
@@ -487,20 +488,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleResetTimerAdjustments = async () => {
-    if (!selectedTurn) {
-      return;
-    }
-
-    await setTimerCorrections({
-      gameId: game.id,
-      turnRef: {
-        roundNumber: selectedTurn.roundNumber,
-        turnNumber: selectedTurn.turnNumber
-      },
-      turnMs: 0,
-      roundMs: 0,
-      totalMs: 0
-    });
+    await resetAllGameTimers(game.id);
 
     setTimerAdjustTurnSeconds("0");
     setTimerAdjustRoundSeconds("0");

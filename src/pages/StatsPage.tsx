@@ -55,6 +55,15 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const roundDurationAggregates = useMemo(() => createRoundDurationAggregates(filteredGames), [filteredGames]);
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
 
+  const formatMetric = (value: number | null, digits = 1) =>
+    value === null ? "-" : value.toFixed(digits);
+
+  const formatPercent = (value: number | null) =>
+    value === null ? "-" : `${value.toFixed(0)}%`;
+
+  const formatDurationMetric = (value: number | null) =>
+    value === null ? "-" : formatDuration(value);
+
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
     setFilters((current) => ({
       ...current,
@@ -212,13 +221,13 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               </article>
               <article className="stats-hero__feature">
                 <span>Avg Dauer</span>
-                <strong>{formatDuration(overview.averageDurationMs)}</strong>
-                <p>{overview.averageRounds.toFixed(1)} Runden pro Spiel</p>
+                <strong>{formatDurationMetric(overview.averageDurationMs)}</strong>
+                <p>{formatMetric(overview.averageRounds)} Runden pro Spiel</p>
               </article>
               <article className="stats-hero__feature">
                 <span>Avg Score gesamt</span>
-                <strong>{overview.averageCombinedScore.toFixed(1)}</strong>
-                <p>{overview.averageSpentCp.toFixed(1)} CP spent je Spieler</p>
+                <strong>{formatMetric(overview.averageCombinedScore)}</strong>
+                <p>{formatMetric(overview.averageSpentCp)} CP spent je Spieler</p>
               </article>
             </section>
 
@@ -233,10 +242,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                 <StatCard label="Spiele" value={overview.games} />
                 <StatCard label="Spieler" value={overview.players} />
                 <StatCard label="Armeen" value={overview.armies} />
-                <StatCard label="Avg Dauer" value={formatDuration(overview.averageDurationMs)} />
-                <StatCard label="Avg Runden" value={overview.averageRounds.toFixed(1)} />
-                <StatCard label="Avg Score gesamt" value={overview.averageCombinedScore.toFixed(1)} />
-                <StatCard label="Avg CP spent" value={overview.averageSpentCp.toFixed(1)} />
+                <StatCard label="Avg Dauer" value={formatDurationMetric(overview.averageDurationMs)} />
+                <StatCard label="Avg Runden" value={formatMetric(overview.averageRounds)} />
+                <StatCard label="Avg Score gesamt" value={formatMetric(overview.averageCombinedScore)} />
+                <StatCard label="Avg CP spent" value={formatMetric(overview.averageSpentCp)} />
               </div>
             </CollapsibleSection>
 
@@ -255,17 +264,17 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                         <strong>{player.name}</strong>
                         <p>{player.games} Spiele</p>
                       </div>
-                      <span className="meta-chip meta-chip--accent">{player.winRate.toFixed(0)}% Winrate</span>
+                      <span className="meta-chip meta-chip--accent">{formatPercent(player.winRate)} Winrate</span>
                     </div>
                     <div className="stats-grid">
                       <StatCard label="W / L / T" value={`${player.wins} / ${player.losses} / ${player.ties}`} />
-                      <StatCard label="Win% when go first" value={`${player.winRateWhenGoFirst.toFixed(0)}%`} />
-                      <StatCard label="Win% when start first" value={`${player.winRateWhenStartFirst.toFixed(0)}%`} />
-                      <StatCard label="Avg Primary" value={player.averagePrimary.toFixed(1)} />
-                      <StatCard label="Avg Secondary" value={player.averageSecondary.toFixed(1)} />
-                      <StatCard label="Avg Total" value={player.averageTotal.toFixed(1)} />
-                      <StatCard label="Avg Dauer" value={formatDuration(player.averageDurationMs)} />
-                      <StatCard label="Avg CP spent" value={player.averageSpentCp.toFixed(1)} />
+                      <StatCard label="Win% when go first" value={formatPercent(player.winRateWhenGoFirst)} />
+                      <StatCard label="Win% when start first" value={formatPercent(player.winRateWhenStartFirst)} />
+                      <StatCard label="Avg Primary" value={formatMetric(player.averagePrimary)} />
+                      <StatCard label="Avg Secondary" value={formatMetric(player.averageSecondary)} />
+                      <StatCard label="Avg Total" value={formatMetric(player.averageTotal)} />
+                      <StatCard label="Avg Dauer" value={formatDurationMetric(player.averageDurationMs)} />
+                      <StatCard label="Avg CP spent" value={formatMetric(player.averageSpentCp)} />
                     </div>
                   </article>
                 ))}
@@ -289,7 +298,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     <div className="stats-row-card__metrics">
                       <div>
                         <span>Win%</span>
-                        <strong>{mission.winRate.toFixed(0)}%</strong>
+                        <strong>{formatPercent(mission.winRate)}</strong>
                       </div>
                       <div>
                         <span>Spiele</span>
@@ -318,7 +327,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     <div className="stats-row-card__metrics">
                       <div>
                         <span>Win%</span>
-                        <strong>{deployment.winRate.toFixed(0)}%</strong>
+                        <strong>{formatPercent(deployment.winRate)}</strong>
                       </div>
                       <div>
                         <span>Spiele</span>
@@ -345,13 +354,13 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                         <strong>{army.armyName}</strong>
                         <p>{army.games} Spiele</p>
                       </div>
-                      <span className="meta-chip meta-chip--accent">{army.winRate.toFixed(0)}% Winrate</span>
+                      <span className="meta-chip meta-chip--accent">{formatPercent(army.winRate)} Winrate</span>
                     </div>
                     <div className="stats-grid">
                       <StatCard label="W / L / T" value={`${army.wins} / ${army.losses} / ${army.ties}`} />
-                      <StatCard label="Avg Primary" value={army.averagePrimary.toFixed(1)} />
-                      <StatCard label="Avg Secondary" value={army.averageSecondary.toFixed(1)} />
-                      <StatCard label="Avg Total" value={army.averageTotal.toFixed(1)} />
+                      <StatCard label="Avg Primary" value={formatMetric(army.averagePrimary)} />
+                      <StatCard label="Avg Secondary" value={formatMetric(army.averageSecondary)} />
+                      <StatCard label="Avg Total" value={formatMetric(army.averageTotal)} />
                     </div>
                   </article>
                 ))}
@@ -375,11 +384,11 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     <div className="stats-row-card__metrics">
                       <div>
                         <span>Avg</span>
-                        <strong>{formatDuration(round.averageDurationMs)}</strong>
+                        <strong>{formatDurationMetric(round.averageDurationMs)}</strong>
                       </div>
                       <div>
                         <span>Max</span>
-                        <strong>{formatDuration(round.maxDurationMs)}</strong>
+                        <strong>{formatDurationMetric(round.maxDurationMs)}</strong>
                       </div>
                     </div>
                   </article>
@@ -470,9 +479,9 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                       </div>
                     </div>
                     <div className="stats-grid">
-                      <StatCard label="Avg Dauer" value={formatDuration(matchup.averageDurationMs)} />
-                      <StatCard label="Avg Score gesamt" value={matchup.averageCombinedScore.toFixed(1)} />
-                      <StatCard label="Avg Score-Diff" value={matchup.averageScoreDifference.toFixed(1)} />
+                      <StatCard label="Avg Dauer" value={formatDurationMetric(matchup.averageDurationMs)} />
+                      <StatCard label="Avg Score gesamt" value={formatMetric(matchup.averageCombinedScore)} />
+                      <StatCard label="Avg Score-Diff" value={formatMetric(matchup.averageScoreDifference)} />
                     </div>
                   </article>
                 ))}

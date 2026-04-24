@@ -18,6 +18,8 @@ const clampFloor = (value: number): number => Math.max(value, 0);
 const getRoundCorrectionKey = (roundNumber: number): string => String(roundNumber);
 const getTurnCorrectionKey = (roundNumber: number, turnNumber: number): string =>
   `${roundNumber}:${turnNumber}`;
+const averageOrNull = (values: number[]): number | null =>
+  values.length ? sumValues(values.map((value) => ({ value }))) / values.length : null;
 
 export const getPlayerScoreEvents = (
   game: Game,
@@ -41,7 +43,28 @@ export const getPlayerSecondaryTotal = (game: Game, playerId: PlayerId): number 
   getPlayerScoreTotal(game, playerId, "secondary");
 
 export const getPlayerTotalScore = (game: Game, playerId: PlayerId): number =>
-  getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId);
+  game.scoreDetailLevel === "total-only"
+    ? clampFloor(game.legacyScoreTotals[playerId] ?? 0)
+    : getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId);
+
+export const hasDetailedScoreData = (game: Game): boolean => game.scoreDetailLevel === "full";
+
+export const hasComparableTotalScoreData = (game: Game): boolean =>
+  game.scoreDetailLevel === "total-only"
+    ? game.players.every((player) => typeof game.legacyScoreTotals[player.id] === "number")
+    : game.scoreDetailLevel === "full";
+
+export const getPlayerComparablePrimaryScore = (game: Game, playerId: PlayerId): number | null =>
+  hasDetailedScoreData(game) ? getPlayerPrimaryTotal(game, playerId) : null;
+
+export const getPlayerComparableSecondaryScore = (game: Game, playerId: PlayerId): number | null =>
+  hasDetailedScoreData(game) ? getPlayerSecondaryTotal(game, playerId) : null;
+
+export const getPlayerComparableTotalScore = (game: Game, playerId: PlayerId): number | null =>
+  hasComparableTotalScoreData(game) ? getPlayerTotalScore(game, playerId) : null;
+
+export const hasComparableCommandPointData = (game: Game, playerId: PlayerId): boolean =>
+  game.commandPointEvents.some((event) => event.playerId === playerId);
 
 export const getPlayerRoundScoreTotal = (
   game: Game,
@@ -231,12 +254,13 @@ const getPlayerResult = (
 const createSummaryPlayer = (game: Game, playerId: PlayerId): GameSummaryPlayer => {
   const player = game.players.find((entry) => entry.id === playerId)!;
   const opponent = game.players.find((entry) => entry.id !== playerId)!;
-  const primaryScore = getPlayerPrimaryTotal(game, playerId);
-  const secondaryScore = getPlayerSecondaryTotal(game, playerId);
-  const totalScore = primaryScore + secondaryScore;
-  const opponentTotal = getPlayerTotalScore(game, opponent.id);
-  const commandPointsGained = sumValues(getPlayerCommandPointEvents(game, playerId, "gained"));
-  const commandPointsSpent = sumValues(getPlayerCommandPointEvents(game, playerId, "spent"));
+  const primaryScore = getPlayerComparablePrimaryScore(game, playerId);
+  const secondaryScore = getPlayerComparableSecondaryScore(game, playerId);
+  const totalScore = getPlayerComparableTotalScore(game, playerId);
+  const opponentTotal = getPlayerComparableTotalScore(game, opponent.id);
+  const hasCpData = hasComparableCommandPointData(game, playerId);
+  const commandPointsGained = hasCpData ? sumValues(getPlayerCommandPointEvents(game, playerId, "gained")) : null;
+  const commandPointsSpent = hasCpData ? sumValues(getPlayerCommandPointEvents(game, playerId, "spent")) : null;
 
   return {
     playerId,
@@ -247,8 +271,9 @@ const createSummaryPlayer = (game: Game, playerId: PlayerId): GameSummaryPlayer 
     totalScore,
     commandPointsGained,
     commandPointsSpent,
-    commandPointBalance: getPlayerCommandPoints(game, playerId),
-    result: getPlayerResult(totalScore, opponentTotal)
+    commandPointBalance: hasCpData ? getPlayerCommandPoints(game, playerId) : null,
+    result:
+      totalScore !== null && opponentTotal !== null ? getPlayerResult(totalScore, opponentTotal) : null
   };
 };
 
@@ -257,7 +282,7 @@ export const createGameSummary = (game: Game): GameSummary => ({
   status: game.status,
   scheduledDate: game.scheduledDate,
   scheduledTime: game.scheduledTime,
-  totalDurationMs: getGameDurationMs(game),
+  totalDurationMs: hasCompletedTimingData(game) ? getGameDurationMs(game) : null,
   roundCount: game.rounds.length,
   players: [
     createSummaryPlayer(game, game.players[0].id),
@@ -271,14 +296,14 @@ export interface PlayerAggregate {
   wins: number;
   losses: number;
   ties: number;
-  winRate: number;
-  winRateWhenGoFirst: number;
-  winRateWhenStartFirst: number;
-  averagePrimary: number;
-  averageSecondary: number;
-  averageTotal: number;
-  averageDurationMs: number;
-  averageSpentCp: number;
+  winRate: number | null;
+  winRateWhenGoFirst: number | null;
+  winRateWhenStartFirst: number | null;
+  averagePrimary: number | null;
+  averageSecondary: number | null;
+  averageTotal: number | null;
+  averageDurationMs: number | null;
+  averageSpentCp: number | null;
 }
 
 export interface ArmyAggregate {
@@ -287,25 +312,25 @@ export interface ArmyAggregate {
   wins: number;
   losses: number;
   ties: number;
-  winRate: number;
-  averagePrimary: number;
-  averageSecondary: number;
-  averageTotal: number;
+  winRate: number | null;
+  averagePrimary: number | null;
+  averageSecondary: number | null;
+  averageTotal: number | null;
 }
 
 export interface MatchupAggregate {
   label: string;
   games: number;
-  averageDurationMs: number;
-  averageCombinedScore: number;
-  averageScoreDifference: number;
+  averageDurationMs: number | null;
+  averageCombinedScore: number | null;
+  averageScoreDifference: number | null;
 }
 
 export interface RoundDurationAggregate {
   roundNumber: number;
   games: number;
-  averageDurationMs: number;
-  maxDurationMs: number;
+  averageDurationMs: number | null;
+  maxDurationMs: number | null;
 }
 
 export interface TurnRecord {
@@ -325,7 +350,7 @@ export interface TurnRecord {
 export interface ScenarioLeader {
   label: string;
   playerName: string;
-  winRate: number;
+  winRate: number | null;
   games: number;
 }
 
@@ -342,60 +367,72 @@ export interface StatsOverview {
   games: number;
   players: number;
   armies: number;
-  averageDurationMs: number;
-  averageRounds: number;
-  averageCombinedScore: number;
-  averageSpentCp: number;
+  averageDurationMs: number | null;
+  averageRounds: number | null;
+  averageCombinedScore: number | null;
+  averageSpentCp: number | null;
 }
 
+const hasPlayerScoreData = (
+  game: Game,
+  playerId: PlayerId,
+  scoreType?: ScoreEvent["scoreType"]
+): boolean =>
+  game.scoreDetailLevel === "full" &&
+  (!scoreType ||
+    scoreType === "primary" ||
+    scoreType === "secondary") &&
+  game.players.some((player) => player.id === playerId);
+
+const hasComparableScoreData = (game: Game): boolean =>
+  hasComparableTotalScoreData(game);
+
+const hasPlayerCommandPointData = (game: Game, playerId: PlayerId): boolean =>
+  hasComparableCommandPointData(game, playerId);
+
+const hasCompletedTimingData = (game: Game): boolean =>
+  game.rounds.some((round) => round.turns.some((turn) => getCompletedTurnDurationMs(turn, game) !== null));
+
 export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
-  const summaries = games.map(createGameSummary);
-  const grouped = new Map<string, GameSummaryPlayer[]>();
-  const durations = new Map<string, number[]>();
-  const goFirstGames = new Map<string, { wins: number; games: number }>();
-  const startFirstGames = new Map<string, { wins: number; games: number }>();
+  const playerNames = Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.name))));
 
-  summaries.forEach((summary, summaryIndex) => {
-    const game = games[summaryIndex];
-    const actualFirstPlayerId = game.rounds[0]?.turns[0]?.playerId;
-    const completedDuration = getCompletedGameDurationMs(game);
-
-    summary.players.forEach((player) => {
-      const existing = grouped.get(player.name) ?? [];
-      grouped.set(player.name, [...existing, player]);
-
-      if (completedDuration !== null) {
-        const playerDurations = durations.get(player.name) ?? [];
-        durations.set(player.name, [...playerDurations, completedDuration]);
-      }
-
-      if (actualFirstPlayerId === player.playerId) {
-        const existingGoFirst = goFirstGames.get(player.name) ?? { wins: 0, games: 0 };
-        goFirstGames.set(player.name, {
-          wins: existingGoFirst.wins + (player.result === "win" ? 1 : 0),
-          games: existingGoFirst.games + 1
-        });
-      }
-
-      if (game.startingPlayerId === player.playerId) {
-        const existingStartFirst = startFirstGames.get(player.name) ?? { wins: 0, games: 0 };
-        startFirstGames.set(player.name, {
-          wins: existingStartFirst.wins + (player.result === "win" ? 1 : 0),
-          games: existingStartFirst.games + 1
-        });
-      }
-    });
-  });
-
-  return Array.from(grouped.entries())
-    .map(([name, players]) => {
-      const playerDurations = durations.get(name) ?? [];
-      const gamesCount = players.length;
-      const wins = players.filter((player) => player.result === "win").length;
-      const losses = players.filter((player) => player.result === "loss").length;
-      const ties = players.filter((player) => player.result === "tie").length;
-      const goFirst = goFirstGames.get(name) ?? { wins: 0, games: 0 };
-      const startFirst = startFirstGames.get(name) ?? { wins: 0, games: 0 };
+  return playerNames
+    .map((name) => {
+      const playerGames = games
+        .map((game) => ({
+          game,
+          player: game.players.find((player) => player.name === name)
+        }))
+        .filter((entry): entry is { game: Game; player: Game["players"][number] } => Boolean(entry.player));
+      const gamesCount = playerGames.length;
+      const scoredGames = playerGames.filter(({ game }) => hasComparableScoreData(game));
+      const goFirstGames = scoredGames.filter(({ game, player }) => game.rounds[0]?.turns[0]?.playerId === player.id);
+      const startFirstGames = scoredGames.filter(({ game, player }) => game.startingPlayerId === player.id);
+      const wins = scoredGames.filter(({ game, player }) => {
+        const opponent = game.players.find((entry) => entry.id !== player.id)!;
+        return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
+      }).length;
+      const losses = scoredGames.filter(({ game, player }) => {
+        const opponent = game.players.find((entry) => entry.id !== player.id)!;
+        return getPlayerTotalScore(game, player.id) < getPlayerTotalScore(game, opponent.id);
+      }).length;
+      const ties = scoredGames.length - wins - losses;
+      const primaryValues = playerGames
+        .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "primary"))
+        .map(({ game, player }) => getPlayerPrimaryTotal(game, player.id));
+      const secondaryValues = playerGames
+        .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "secondary"))
+        .map(({ game, player }) => getPlayerSecondaryTotal(game, player.id));
+      const totalValues = playerGames
+        .filter(({ game, player }) => hasPlayerScoreData(game, player.id))
+        .map(({ game, player }) => getPlayerTotalScore(game, player.id));
+      const durationValues = playerGames
+        .filter(({ game }) => hasCompletedTimingData(game))
+        .map(({ game }) => getCompletedGameDurationMs(game))
+        .filter((value): value is number => value !== null);
+      const spentCpValues = playerGames
+        .filter(({ game, player }) => hasPlayerCommandPointData(game, player.id))
+        .map(({ game, player }) => getPlayerCommandPointsSpent(game, player.id));
 
       return {
         name,
@@ -403,20 +440,28 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
         wins,
         losses,
         ties,
-        winRate: gamesCount ? (wins / gamesCount) * 100 : 0,
-        winRateWhenGoFirst: goFirst.games ? (goFirst.wins / goFirst.games) * 100 : 0,
-        winRateWhenStartFirst: startFirst.games ? (startFirst.wins / startFirst.games) * 100 : 0,
-        averagePrimary: gamesCount ? sumValues(players.map((player) => ({ value: player.primaryScore }))) / gamesCount : 0,
-        averageSecondary: gamesCount
-          ? sumValues(players.map((player) => ({ value: player.secondaryScore }))) / gamesCount
-          : 0,
-        averageTotal: gamesCount ? sumValues(players.map((player) => ({ value: player.totalScore }))) / gamesCount : 0,
-        averageDurationMs: playerDurations.length
-          ? sumValues(playerDurations.map((value) => ({ value }))) / playerDurations.length
-          : 0,
-        averageSpentCp: gamesCount
-          ? sumValues(players.map((player) => ({ value: player.commandPointsSpent }))) / gamesCount
-          : 0
+        winRate: scoredGames.length ? (wins / scoredGames.length) * 100 : null,
+        winRateWhenGoFirst: goFirstGames.length
+          ? (goFirstGames.filter(({ game, player }) => {
+              const opponent = game.players.find((entry) => entry.id !== player.id)!;
+              return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
+            }).length /
+              goFirstGames.length) *
+            100
+          : null,
+        winRateWhenStartFirst: startFirstGames.length
+          ? (startFirstGames.filter(({ game, player }) => {
+              const opponent = game.players.find((entry) => entry.id !== player.id)!;
+              return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
+            }).length /
+              startFirstGames.length) *
+            100
+          : null,
+        averagePrimary: averageOrNull(primaryValues),
+        averageSecondary: averageOrNull(secondaryValues),
+        averageTotal: averageOrNull(totalValues),
+        averageDurationMs: averageOrNull(durationValues),
+        averageSpentCp: averageOrNull(spentCpValues)
       };
     })
     .sort((left, right) => right.games - left.games || left.name.localeCompare(right.name));
@@ -430,17 +475,18 @@ const createScenarioLeaders = (
 
   games.forEach((game) => {
     const label = scenarioSelector(game).trim();
-    if (!label) {
+    if (!label || !hasComparableScoreData(game)) {
       return;
     }
 
     const scenarioPlayers = grouped.get(label) ?? new Map<string, { wins: number; games: number }>();
-    const summary = createGameSummary(game);
-
-    summary.players.forEach((player) => {
+    game.players.forEach((player) => {
+      const opponent = game.players.find((entry) => entry.id !== player.id)!;
       const existing = scenarioPlayers.get(player.name) ?? { wins: 0, games: 0 };
       scenarioPlayers.set(player.name, {
-        wins: existing.wins + (player.result === "win" ? 1 : 0),
+        wins:
+          existing.wins +
+          (getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id) ? 1 : 0),
         games: existing.games + 1
       });
     });
@@ -462,7 +508,7 @@ const createScenarioLeaders = (
         label,
         playerName: leader?.playerName ?? "-",
         games: leader?.games ?? 0,
-        winRate: leader?.winRate ?? 0
+        winRate: leader?.winRate ?? null
       };
     })
     .sort((left, right) => left.label.localeCompare(right.label));
@@ -531,51 +577,65 @@ export const filterGames = (games: Game[], filters: GameFilterState): Game[] => 
 };
 
 export const createStatsOverview = (games: Game[]): StatsOverview => {
-  const summaries = games.map(createGameSummary);
-  const playerEntries = summaries.flatMap((summary) => summary.players);
+  const playerEntries = games.flatMap((game) => game.players);
   const playerCount = new Set(playerEntries.map((player) => player.name)).size;
-  const armyCount = new Set(playerEntries.map((player) => player.armyName)).size;
+  const armyCount = new Set(playerEntries.map((player) => player.army.name)).size;
   const completedDurations = games
     .map((game) => getCompletedGameDurationMs(game))
     .filter((duration): duration is number => duration !== null);
+  const roundsValues = games.filter((game) => game.rounds.length > 0).map((game) => game.rounds.length);
+  const comparableScoreGames = games.filter((game) => hasComparableScoreData(game));
+  const combinedScoreValues = comparableScoreGames.map(
+    (game) => getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id)
+  );
+  const spentCpValues = games.flatMap((game) =>
+    game.players
+      .filter((player) => hasPlayerCommandPointData(game, player.id))
+      .map((player) => getPlayerCommandPointsSpent(game, player.id))
+  );
 
   return {
     games: games.length,
     players: playerCount,
     armies: armyCount,
-    averageDurationMs: completedDurations.length
-      ? sumValues(completedDurations.map((value) => ({ value }))) / completedDurations.length
-      : 0,
-    averageRounds: games.length ? sumValues(games.map((game) => ({ value: game.rounds.length }))) / games.length : 0,
-    averageCombinedScore: games.length
-      ? sumValues(
-          summaries.map((summary) => ({
-            value: summary.players[0].totalScore + summary.players[1].totalScore
-          }))
-        ) / games.length
-      : 0,
-    averageSpentCp: playerEntries.length
-      ? sumValues(playerEntries.map((player) => ({ value: player.commandPointsSpent }))) / playerEntries.length
-      : 0
+    averageDurationMs: averageOrNull(completedDurations),
+    averageRounds: averageOrNull(roundsValues),
+    averageCombinedScore: averageOrNull(combinedScoreValues),
+    averageSpentCp: averageOrNull(spentCpValues)
   };
 };
 
 export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
-  const grouped = new Map<string, GameSummaryPlayer[]>();
+  const armyNames = Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.army.name))));
 
-  games.map(createGameSummary).forEach((summary) => {
-    summary.players.forEach((player) => {
-      const existing = grouped.get(player.armyName) ?? [];
-      grouped.set(player.armyName, [...existing, player]);
-    });
-  });
-
-  return Array.from(grouped.entries())
-    .map(([armyName, players]) => {
-      const gamesCount = players.length;
-      const wins = players.filter((player) => player.result === "win").length;
-      const losses = players.filter((player) => player.result === "loss").length;
-      const ties = players.filter((player) => player.result === "tie").length;
+  return armyNames
+    .map((armyName) => {
+      const armyGames = games
+        .map((game) => ({
+          game,
+          player: game.players.find((player) => player.army.name === armyName)
+        }))
+        .filter((entry): entry is { game: Game; player: Game["players"][number] } => Boolean(entry.player));
+      const gamesCount = armyGames.length;
+      const scoredGames = armyGames.filter(({ game }) => hasComparableScoreData(game));
+      const wins = scoredGames.filter(({ game, player }) => {
+        const opponent = game.players.find((entry) => entry.id !== player.id)!;
+        return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
+      }).length;
+      const losses = scoredGames.filter(({ game, player }) => {
+        const opponent = game.players.find((entry) => entry.id !== player.id)!;
+        return getPlayerTotalScore(game, player.id) < getPlayerTotalScore(game, opponent.id);
+      }).length;
+      const ties = scoredGames.length - wins - losses;
+      const primaryValues = armyGames
+        .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "primary"))
+        .map(({ game, player }) => getPlayerPrimaryTotal(game, player.id));
+      const secondaryValues = armyGames
+        .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "secondary"))
+        .map(({ game, player }) => getPlayerSecondaryTotal(game, player.id));
+      const totalValues = armyGames
+        .filter(({ game, player }) => hasPlayerScoreData(game, player.id))
+        .map(({ game, player }) => getPlayerTotalScore(game, player.id));
 
       return {
         armyName,
@@ -583,10 +643,10 @@ export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
         wins,
         losses,
         ties,
-        winRate: gamesCount ? (wins / gamesCount) * 100 : 0,
-        averagePrimary: gamesCount ? sumValues(players.map((player) => ({ value: player.primaryScore }))) / gamesCount : 0,
-        averageSecondary: gamesCount ? sumValues(players.map((player) => ({ value: player.secondaryScore }))) / gamesCount : 0,
-        averageTotal: gamesCount ? sumValues(players.map((player) => ({ value: player.totalScore }))) / gamesCount : 0
+        winRate: scoredGames.length ? (wins / scoredGames.length) * 100 : null,
+        averagePrimary: averageOrNull(primaryValues),
+        averageSecondary: averageOrNull(secondaryValues),
+        averageTotal: averageOrNull(totalValues)
       };
     })
     .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName));
@@ -612,8 +672,10 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
     if (completedDuration !== null) {
       existing.durations.push(completedDuration);
     }
-    existing.combinedScores.push(scoreA + scoreB);
-    existing.scoreDifferences.push(Math.abs(scoreA - scoreB));
+    if (hasComparableScoreData(game)) {
+      existing.combinedScores.push(scoreA + scoreB);
+      existing.scoreDifferences.push(Math.abs(scoreA - scoreB));
+    }
     grouped.set(label, existing);
   });
 
@@ -621,15 +683,9 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
     .map(([label, values]) => ({
       label,
       games: values.count,
-      averageDurationMs: values.durations.length
-        ? sumValues(values.durations.map((value) => ({ value }))) / values.durations.length
-        : 0,
-      averageCombinedScore: values.count
-        ? sumValues(values.combinedScores.map((value) => ({ value }))) / values.count
-        : 0,
-      averageScoreDifference: values.count
-        ? sumValues(values.scoreDifferences.map((value) => ({ value }))) / values.count
-        : 0
+      averageDurationMs: averageOrNull(values.durations),
+      averageCombinedScore: averageOrNull(values.combinedScores),
+      averageScoreDifference: averageOrNull(values.scoreDifferences)
     }))
     .sort((left, right) => right.games - left.games || left.label.localeCompare(right.label));
 };
@@ -653,10 +709,8 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
     .map(([roundNumber, durations]) => ({
       roundNumber,
       games: durations.length,
-      averageDurationMs: durations.length
-        ? sumValues(durations.map((value) => ({ value }))) / durations.length
-        : 0,
-      maxDurationMs: durations.length ? Math.max(...durations) : 0
+      averageDurationMs: averageOrNull(durations),
+      maxDurationMs: durations.length ? Math.max(...durations) : null
     }))
     .sort((left, right) => left.roundNumber - right.roundNumber);
 };

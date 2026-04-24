@@ -2,6 +2,7 @@ export type PlayerId = string;
 export type GameStatus = "active" | "completed";
 export type ScoreType = "primary" | "secondary";
 export type CommandPointType = "gained" | "spent";
+export type ScoreDetailLevel = "full" | "total-only" | "none";
 export type TimeEventAction =
   | "session-start"
   | "session-end"
@@ -105,6 +106,7 @@ export interface Game {
   createdAt: string;
   updatedAt: string;
   status: GameStatus;
+  scoreDetailLevel: ScoreDetailLevel;
   gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;
@@ -122,19 +124,20 @@ export interface Game {
   noteEvents: NoteEvent[];
   timeEvents: TimeEvent[];
   timerCorrections: TimerCorrections;
+  legacyScoreTotals: Record<string, number>;
 }
 
 export interface GameSummaryPlayer {
   playerId: PlayerId;
   name: string;
   armyName: string;
-  primaryScore: number;
-  secondaryScore: number;
-  totalScore: number;
-  commandPointsGained: number;
-  commandPointsSpent: number;
-  commandPointBalance: number;
-  result: GameResult;
+  primaryScore: number | null;
+  secondaryScore: number | null;
+  totalScore: number | null;
+  commandPointsGained: number | null;
+  commandPointsSpent: number | null;
+  commandPointBalance: number | null;
+  result: GameResult | null;
 }
 
 export interface GameSummary {
@@ -142,7 +145,7 @@ export interface GameSummary {
   status: GameStatus;
   scheduledDate: string;
   scheduledTime: string;
-  totalDurationMs: number;
+  totalDurationMs: number | null;
   roundCount: number;
   players: [GameSummaryPlayer, GameSummaryPlayer];
 }

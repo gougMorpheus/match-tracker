@@ -9,6 +9,7 @@ export const seedGames: Game[] = [
     createdAt,
     updatedAt: createdAt,
     status: "completed",
+    scoreDetailLevel: "full",
     gamePoints: 1000,
     scheduledDate: "2026-04-20",
     scheduledTime: "19:00",
@@ -133,6 +134,7 @@ export const seedGames: Game[] = [
       rounds: {},
       turns: {}
     },
+    legacyScoreTotals: {},
     timeEvents: [
       {
         id: createId("time"),

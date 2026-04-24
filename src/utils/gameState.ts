@@ -222,6 +222,7 @@ export const syncDerivedGameState = (game: Game): Game => {
     ...game,
     updatedAt: timestamps[timestamps.length - 1] ?? game.createdAt,
     status: endedAt ? "completed" : "active",
+    scoreDetailLevel: game.scoreDetailLevel ?? "full",
     players: syncPlayers(game.players, game.gamePoints),
     rounds,
     startedAt,
@@ -231,7 +232,8 @@ export const syncDerivedGameState = (game: Game): Game => {
     scoreEvents: sortByCreatedAt(game.scoreEvents),
     commandPointEvents: sortByCreatedAt(game.commandPointEvents),
     noteEvents: sortByCreatedAt(game.noteEvents),
-    timerCorrections: game.timerCorrections ?? createEmptyTimerCorrections()
+    timerCorrections: game.timerCorrections ?? createEmptyTimerCorrections(),
+    legacyScoreTotals: game.legacyScoreTotals ?? {}
   };
 };
 
@@ -264,6 +266,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     createdAt,
     updatedAt: createdAt,
     status: "active",
+    scoreDetailLevel: "full",
     gamePoints: input.gamePoints,
     scheduledDate: input.scheduledDate,
     scheduledTime: input.scheduledTime,
@@ -280,6 +283,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     commandPointEvents: [],
     noteEvents: [],
     timerCorrections: createEmptyTimerCorrections(),
+    legacyScoreTotals: {},
     timeEvents: [
       {
         id: createUuid(),

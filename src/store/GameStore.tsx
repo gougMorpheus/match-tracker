@@ -43,6 +43,7 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
+  getTurnBaseDurationMs,
   isSessionRunning,
   isTurnPaused
 } from "../utils/gameCalculations";
@@ -86,6 +87,7 @@ interface GameStoreValue {
   refreshGames: () => Promise<void>;
   updateGameDetails: (gameId: string, input: CreateGameInput) => Promise<void>;
   setTimerCorrections: (input: TimerCorrectionInput) => Promise<void>;
+  resetAllGameTimers: (gameId: string) => Promise<void>;
   addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
@@ -617,6 +619,32 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             }
           };
         });
+
+        enqueueGameUpsert(nextGame.id);
+        void flushSyncQueue();
+      }),
+    [enqueueGameUpsert, flushSyncQueue, mutateGame, runMutation]
+  );
+
+  const resetAllGameTimers = useCallback(
+    async (gameId: string) =>
+      runMutation(async () => {
+        const nextGame = mutateGame(gameId, (game) => ({
+          ...game,
+          timerCorrections: {
+            totalMs: 0,
+            rounds: {},
+            turns: Object.fromEntries(
+              game.rounds
+                .flatMap((round) => round.turns)
+                .map((turn) => [
+                  `${turn.roundNumber}:${turn.turnNumber}`,
+                  -getTurnBaseDurationMs(turn)
+                ])
+                .filter(([, correction]) => correction !== 0)
+            )
+          }
+        }));
 
         enqueueGameUpsert(nextGame.id);
         void flushSyncQueue();
@@ -1429,6 +1457,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       refreshGames,
       updateGameDetails,
       setTimerCorrections,
+      resetAllGameTimers,
       addScoreEvent,
       addCommandPointEvent,
       addNoteEvent,
@@ -1465,6 +1494,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       pauseActiveTimer,
       refreshGames,
       setTimerCorrections,
+      resetAllGameTimers,
       reopenGame,
       rewindLastTurn,
       startGameTimer,

@@ -9,6 +9,7 @@ interface GameCardProps {
 
 export const GameCard = ({ game, onOpen }: GameCardProps) => {
   const summary = createGameSummary(game);
+  const formatSummaryValue = (value: number | null) => (value === null ? "-" : value);
 
   return (
     <button type="button" className="game-card" onClick={onOpen}>
@@ -23,14 +24,14 @@ export const GameCard = ({ game, onOpen }: GameCardProps) => {
               <strong>{player.name}</strong>
               <span>{player.armyName}</span>
             </div>
-            <strong>{player.totalScore}</strong>
+            <strong>{formatSummaryValue(player.totalScore)}</strong>
           </div>
         ))}
       </div>
       <div className="game-card__foot">
         <span>{game.gamePoints} Pkt.</span>
         <span>{summary.roundCount} Runden</span>
-        <span>{formatDuration(summary.totalDurationMs)}</span>
+        <span>{summary.totalDurationMs === null ? "-" : formatDuration(summary.totalDurationMs)}</span>
       </div>
     </button>
   );
