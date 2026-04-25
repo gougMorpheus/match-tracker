@@ -6,16 +6,20 @@ import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
 import {
   createArmyAggregates,
+  createCpScoreCorrelationPoints,
   createDeploymentLeaders,
+  createPlayerTurnDurationAggregates,
   createInitialGameFilters,
   createMatchupAggregates,
   createMissionLeaders,
   createPlayerAggregates,
   createRoundDurationAggregates,
+  createRoundScoreAggregates,
+  createScenarioPerformanceAggregates,
   createStatsOverview,
   filterGames,
-  getTurnRecords,
   getFilterOptions,
+  getTurnRecords,
   type TurnRecord
 } from "../utils/gameCalculations";
 import { formatDateLabel, formatDuration } from "../utils/time";
@@ -42,6 +46,23 @@ interface RankedChartItem {
   value: number;
   display: string;
   tone: StatTone;
+  detail?: string;
+}
+
+interface SplitChartRow {
+  label: string;
+  primary: number | null;
+  secondary: number | null;
+  total?: number | null;
+}
+
+interface ScatterChartPoint {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  tone: StatTone;
+  detail: string;
 }
 
 const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
@@ -129,12 +150,16 @@ const RankedBarChart = ({
   title,
   subtitle,
   items,
-  emptyLabel
+  emptyLabel,
+  activeLabel,
+  onActivate
 }: {
   title: string;
   subtitle: string;
   items: RankedChartItem[];
   emptyLabel: string;
+  activeLabel?: string | null;
+  onActivate?: (label: string) => void;
 }) => {
   if (!items.length) {
     return (
@@ -148,13 +173,8 @@ const RankedBarChart = ({
     );
   }
 
-  const rowHeight = 20;
-  const labelWidth = 96;
-  const valueWidth = 38;
-  const barHeight = 10;
-  const chartHeight = CHART_PADDING * 2 + items.length * rowHeight;
-  const plotWidth = CHART_WIDTH - CHART_PADDING * 2 - labelWidth - valueWidth;
   const maxValue = Math.max(...items.map((item) => item.value), 1);
+  const activeItem = items.find((item) => item.label === activeLabel) ?? items[0];
 
   return (
     <article className="overview-chart-card">
@@ -162,91 +182,104 @@ const RankedBarChart = ({
         <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>
-      <svg
-        className="overview-chart stats-ranked-chart"
-        viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`}
-        role="img"
-        aria-label={title}
-      >
-        {items.map((item, index) => {
-          const y = CHART_PADDING + index * rowHeight + rowHeight / 2;
-          const width = (item.value / maxValue) * plotWidth;
-          const barX = CHART_PADDING + labelWidth;
+      <div className="stats-ranked-list" role="list" aria-label={title}>
+        {items.map((item) => {
+          const ratio = Math.max(Math.min((item.value / maxValue) * 100, 100), 0);
+          const isActive = activeItem?.label === item.label;
 
           return (
-            <g key={`${item.label}-${item.display}`}>
-              <text x={CHART_PADDING} y={y + 3} className="stats-ranked-chart__label">
-                {item.label}
-              </text>
-              <rect
-                x={barX}
-                y={y - barHeight / 2}
-                width={plotWidth}
-                height={barHeight}
-                rx={barHeight / 2}
-                className="stats-ranked-chart__track"
-              />
-              <rect
-                x={barX}
-                y={y - barHeight / 2}
-                width={Math.max(width, 4)}
-                height={barHeight}
-                rx={barHeight / 2}
-                fill={getToneColor(item.tone)}
-              />
-              <text x={barX + plotWidth + 8} y={y + 3} className="stats-ranked-chart__value">
-                {item.display}
-              </text>
-            </g>
+            <button
+              key={`${item.label}-${item.display}`}
+              type="button"
+              className={`stats-ranked-list__row ${isActive ? "is-active" : ""}`}
+              onMouseEnter={() => onActivate?.(item.label)}
+              onFocus={() => onActivate?.(item.label)}
+              onClick={() => onActivate?.(item.label)}
+            >
+              <span className="stats-ranked-list__label">{item.label}</span>
+              <span className="stats-ranked-list__track">
+                <span
+                  className="stats-ranked-list__fill"
+                  style={{ width: `${ratio}%`, background: getToneColor(item.tone) }}
+                />
+              </span>
+              <strong className="stats-ranked-list__value">{item.display}</strong>
+            </button>
           );
         })}
-      </svg>
+      </div>
+      {activeItem ? (
+        <div className="overview-chart-card__totals">
+          <div className="overview-chart-total">
+            <span className={`overview-chart-total__marker is-${activeItem.tone}`} />
+            <span>{activeItem.label}</span>
+            <strong>{activeItem.display}</strong>
+          </div>
+          <div className="overview-chart-total">
+            <span>Details</span>
+            <strong>{activeItem.detail ?? subtitle}</strong>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 };
 
-const RoundTrendChart = ({
+const TrendLineChart = ({
   title,
-  rows
+  rows,
+  primaryLabel,
+  secondaryLabel,
+  emptyLabel,
+  formatValue,
+  activeLabel,
+  onActivate
 }: {
   title: string;
-  rows: Array<{ label: string; average: number | null; max: number | null }>;
+  rows: Array<{ label: string; primary: number | null; secondary: number | null }>;
+  primaryLabel: string;
+  secondaryLabel: string;
+  emptyLabel: string;
+  formatValue: (value: number) => string;
+  activeLabel?: string | null;
+  onActivate?: (label: string) => void;
 }) => {
   if (!rows.length) {
     return (
       <article className="overview-chart-card">
         <div className="overview-chart-card__head">
           <strong>{title}</strong>
-          <span>0 Runden</span>
+          <span>0 Werte</span>
         </div>
-        <p className="muted-copy">Noch keine abgeschlossenen Runden vorhanden.</p>
+        <p className="muted-copy">{emptyLabel}</p>
       </article>
     );
   }
 
   const plotWidth = CHART_WIDTH - CHART_PADDING * 2;
   const plotHeight = CHART_HEIGHT - CHART_PADDING * 2;
-  const maxValue = Math.max(...rows.flatMap((row) => [row.average ?? 0, row.max ?? 0]), 1);
-  const averagePoints = rows.map((row, index) => ({
+  const maxValue = Math.max(...rows.flatMap((row) => [row.primary ?? 0, row.secondary ?? 0]), 1);
+  const primaryPoints = rows.map((row, index) => ({
     x: CHART_PADDING + (rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(rows.length - 1, 1)) * index),
-    y: CHART_HEIGHT - CHART_PADDING - (((row.average ?? 0) / maxValue) * plotHeight),
+    y: CHART_HEIGHT - CHART_PADDING - (((row.primary ?? 0) / maxValue) * plotHeight),
     label: row.label,
-    value: row.average ?? 0
+    value: row.primary ?? 0
   }));
-  const maxPoints = rows.map((row, index) => ({
+  const secondaryPoints = rows.map((row, index) => ({
     x: CHART_PADDING + (rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(rows.length - 1, 1)) * index),
-    y: CHART_HEIGHT - CHART_PADDING - (((row.max ?? 0) / maxValue) * plotHeight),
+    y: CHART_HEIGHT - CHART_PADDING - (((row.secondary ?? 0) / maxValue) * plotHeight),
     label: row.label,
-    value: row.max ?? 0
+    value: row.secondary ?? 0
   }));
+  const activeRow = rows.find((row) => row.label === activeLabel) ?? rows[rows.length - 1];
 
   return (
     <article className="overview-chart-card">
       <div className="overview-chart-card__head">
         <strong>{title}</strong>
         <div className="overview-chart-legend">
-          <span className="overview-chart-legend__item is-player-1">Avg</span>
-          <span className="overview-chart-legend__item is-player-2">Max</span>
+          <span className="overview-chart-legend__item is-player-1">{primaryLabel}</span>
+          <span className="overview-chart-legend__item is-player-2">{secondaryLabel}</span>
         </div>
       </div>
       <svg className="overview-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label={title}>
@@ -277,32 +310,183 @@ const RoundTrendChart = ({
           y2={CHART_HEIGHT - CHART_PADDING}
           className="overview-chart__axis"
         />
-        <path d={buildLinePath(averagePoints)} className="overview-chart__line is-player-1" />
-        <path d={buildLinePath(maxPoints)} className="overview-chart__line is-player-2" />
-        {averagePoints.map((point) => (
-          <text key={`avg-${point.label}`} x={point.x} y={CHART_HEIGHT - 4} textAnchor="middle" className="overview-chart__label">
-            {point.label}
-          </text>
-        ))}
+        <path d={buildLinePath(primaryPoints)} className="overview-chart__line is-player-1" />
+        <path d={buildLinePath(secondaryPoints)} className="overview-chart__line is-player-2" />
+        {rows.map((row, index) => {
+          const isActive = activeRow?.label === row.label;
+          return (
+            <g
+              key={row.label}
+              className={isActive ? "overview-chart__point-group is-active" : "overview-chart__point-group"}
+              onMouseEnter={() => onActivate?.(row.label)}
+              onClick={() => onActivate?.(row.label)}
+            >
+              <circle cx={primaryPoints[index]?.x ?? 0} cy={primaryPoints[index]?.y ?? 0} r={isActive ? 5 : 4} className="overview-chart__point is-player-1" />
+              <circle cx={secondaryPoints[index]?.x ?? 0} cy={secondaryPoints[index]?.y ?? 0} r={isActive ? 5 : 4} className="overview-chart__point is-player-2" />
+              <text x={primaryPoints[index]?.x ?? 0} y={CHART_HEIGHT - 4} textAnchor="middle" className="overview-chart__label">
+                {row.label}
+              </text>
+            </g>
+          );
+        })}
         <text x={CHART_PADDING - 4} y={CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
-          {formatDuration(maxValue)}
+          {formatValue(maxValue)}
         </text>
         <text x={CHART_PADDING - 4} y={CHART_HEIGHT - CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
-          0m
+          {formatValue(0)}
         </text>
       </svg>
-      <div className="overview-chart-card__totals">
-        <div className="overview-chart-total">
-          <span className="overview-chart-total__marker is-player-1" />
-          <span>Avg</span>
-          <strong>{formatDuration(rows[rows.length - 1]?.average ?? 0)}</strong>
+      {activeRow ? (
+        <div className="overview-chart-card__totals">
+          <div className="overview-chart-total">
+            <span className="overview-chart-total__marker is-player-1" />
+            <span>{activeRow.label}</span>
+            <strong>{primaryLabel}: {formatValue(activeRow.primary ?? 0)}</strong>
+          </div>
+          <div className="overview-chart-total">
+            <span className="overview-chart-total__marker is-player-2" />
+            <span>{secondaryLabel}</span>
+            <strong>{formatValue(activeRow.secondary ?? 0)}</strong>
+          </div>
         </div>
-        <div className="overview-chart-total">
-          <span className="overview-chart-total__marker is-player-2" />
-          <span>Max</span>
-          <strong>{formatDuration(rows[rows.length - 1]?.max ?? 0)}</strong>
+      ) : null}
+    </article>
+  );
+};
+
+const SplitBarChart = ({
+  title,
+  rows,
+  emptyLabel
+}: {
+  title: string;
+  rows: SplitChartRow[];
+  emptyLabel: string;
+}) => {
+  if (!rows.length) {
+    return (
+      <article className="overview-chart-card">
+        <div className="overview-chart-card__head">
+          <strong>{title}</strong>
+        </div>
+        <p className="muted-copy">{emptyLabel}</p>
+      </article>
+    );
+  }
+
+  const maxValue = getMetricMax(
+    rows.flatMap((row) => [row.primary, row.secondary, row.total])
+  );
+
+  return (
+    <article className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <strong>{title}</strong>
+        <div className="overview-chart-legend">
+          <span className="overview-chart-legend__item is-player-1 is-bar-primary">Primary</span>
+          <span className="overview-chart-legend__item is-player-2 is-bar-secondary">Secondary</span>
+          <span className="overview-chart-legend__item is-player-1 is-bar-total">Gesamt</span>
         </div>
       </div>
+      <div className="stats-split-list">
+        {rows.map((row) => (
+          <div key={row.label} className="stats-split-list__row">
+            <div className="stats-split-list__meta">
+              <strong>{row.label}</strong>
+              {row.total !== undefined ? <span>{(row.total ?? 0).toFixed(1)} ges</span> : null}
+            </div>
+            <div className="stats-split-list__bars">
+              <span className="stats-split-list__track">
+                <span className="stats-split-list__fill is-primary" style={{ width: `${(((row.primary ?? 0) / maxValue) * 100).toFixed(2)}%` }} />
+              </span>
+              <span className="stats-split-list__track">
+                <span className="stats-split-list__fill is-secondary" style={{ width: `${(((row.secondary ?? 0) / maxValue) * 100).toFixed(2)}%` }} />
+              </span>
+              {row.total !== undefined ? (
+                <span className="stats-split-list__track">
+                  <span className="stats-split-list__fill is-total" style={{ width: `${(((row.total ?? 0) / maxValue) * 100).toFixed(2)}%` }} />
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+};
+
+const ScatterChart = ({
+  title,
+  points,
+  emptyLabel,
+  activePointId,
+  onActivate
+}: {
+  title: string;
+  points: ScatterChartPoint[];
+  emptyLabel: string;
+  activePointId?: string | null;
+  onActivate?: (id: string) => void;
+}) => {
+  if (!points.length) {
+    return (
+      <article className="overview-chart-card">
+        <div className="overview-chart-card__head">
+          <strong>{title}</strong>
+        </div>
+        <p className="muted-copy">{emptyLabel}</p>
+      </article>
+    );
+  }
+
+  const maxX = Math.max(...points.map((point) => point.x), 1);
+  const maxY = Math.max(...points.map((point) => point.y), 1);
+  const plotWidth = CHART_WIDTH - CHART_PADDING * 2;
+  const plotHeight = CHART_HEIGHT - CHART_PADDING * 2;
+  const activePoint = points.find((point) => point.id === activePointId) ?? points[0];
+
+  return (
+    <article className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <strong>{title}</strong>
+        <span>CP spent vs Gesamtpunkte</span>
+      </div>
+      <svg className="overview-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label={title}>
+        <line x1={CHART_PADDING} x2={CHART_PADDING} y1={CHART_PADDING} y2={CHART_HEIGHT - CHART_PADDING} className="overview-chart__axis" />
+        <line x1={CHART_PADDING} x2={CHART_WIDTH - CHART_PADDING} y1={CHART_HEIGHT - CHART_PADDING} y2={CHART_HEIGHT - CHART_PADDING} className="overview-chart__axis" />
+        {points.map((point) => {
+          const x = CHART_PADDING + (point.x / maxX) * plotWidth;
+          const y = CHART_HEIGHT - CHART_PADDING - (point.y / maxY) * plotHeight;
+          const isActive = activePoint?.id === point.id;
+
+          return (
+            <circle
+              key={point.id}
+              cx={x}
+              cy={y}
+              r={isActive ? 6 : 4.5}
+              className={`overview-chart__point overview-chart__point--scatter is-${point.tone} ${isActive ? "is-active" : ""}`.trim()}
+              onMouseEnter={() => onActivate?.(point.id)}
+              onClick={() => onActivate?.(point.id)}
+            />
+          );
+        })}
+        <text x={CHART_PADDING - 4} y={CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
+          {maxY}
+        </text>
+        <text x={CHART_WIDTH - CHART_PADDING} y={CHART_HEIGHT - 6} textAnchor="end" className="overview-chart__scale">
+          {maxX} CP
+        </text>
+      </svg>
+      {activePoint ? (
+        <div className="overview-chart-card__totals">
+          <div className="overview-chart-total">
+            <span className={`overview-chart-total__marker is-${activePoint.tone}`} />
+            <span>{activePoint.label}</span>
+            <strong>{activePoint.detail}</strong>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 };
@@ -384,6 +568,14 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [openSections, setOpenSections] = useState(defaultOpenSections);
   const [gamePickerOpen, setGamePickerOpen] = useState(false);
+  const [playerChartMode, setPlayerChartMode] = useState<"winRate" | "score" | "duration">("winRate");
+  const [armyChartMode, setArmyChartMode] = useState<"usage" | "winRate" | "score">("usage");
+  const [topCount, setTopCount] = useState(6);
+  const [activePlayerChartLabel, setActivePlayerChartLabel] = useState<string | null>(null);
+  const [activeArmyChartLabel, setActiveArmyChartLabel] = useState<string | null>(null);
+  const [activeDurationRoundLabel, setActiveDurationRoundLabel] = useState<string | null>(null);
+  const [activeScoreRoundLabel, setActiveScoreRoundLabel] = useState<string | null>(null);
+  const [activeCpPointId, setActiveCpPointId] = useState<string | null>(null);
   const filteredGames = useMemo(() => filterGames(games, filters), [games, filters]);
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
   const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
@@ -391,8 +583,18 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const armyAggregates = useMemo(() => createArmyAggregates(filteredGames), [filteredGames]);
   const missionLeaders = useMemo(() => createMissionLeaders(filteredGames), [filteredGames]);
   const deploymentLeaders = useMemo(() => createDeploymentLeaders(filteredGames), [filteredGames]);
+  const deploymentPerformance = useMemo(
+    () => createScenarioPerformanceAggregates(filteredGames, (game) => game.deployment),
+    [filteredGames]
+  );
   const matchupAggregates = useMemo(() => createMatchupAggregates(filteredGames), [filteredGames]);
   const roundDurationAggregates = useMemo(() => createRoundDurationAggregates(filteredGames), [filteredGames]);
+  const roundScoreAggregates = useMemo(() => createRoundScoreAggregates(filteredGames), [filteredGames]);
+  const playerTurnDurationAggregates = useMemo(
+    () => createPlayerTurnDurationAggregates(filteredGames),
+    [filteredGames]
+  );
+  const cpScorePoints = useMemo(() => createCpScoreCorrelationPoints(filteredGames), [filteredGames]);
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
 
   const overviewGamesMax = getMetricMax([overview.games, overview.players, overview.armies]);
@@ -422,6 +624,19 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const roundDurationMax = getMetricMax(
     roundDurationAggregates.flatMap((round) => [round.averageDurationMs, round.maxDurationMs])
   );
+  const roundScoreMax = getMetricMax(
+    roundScoreAggregates.flatMap((round) => [
+      round.averagePlayerOneScore,
+      round.averagePlayerTwoScore,
+      round.averageCombinedScore
+    ])
+  );
+  const deploymentScoreMax = getMetricMax(
+    deploymentPerformance.flatMap((item) => [item.averageCombinedScore, item.averageDurationMs, item.leaderWinRate])
+  );
+  const playerTurnDurationMax = getMetricMax(
+    playerTurnDurationAggregates.flatMap((item) => [item.averageTurnDurationMs, item.longestTurnMs])
+  );
 
   const formatMetric = (value: number | null, digits = 1) =>
     value === null ? "-" : value.toFixed(digits);
@@ -432,50 +647,136 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const formatDurationMetric = (value: number | null) =>
     value === null ? "-" : formatDuration(value);
 
-  const playerWinRateChartItems = playerAggregates
-    .filter((player) => player.games > 0 && player.winRate !== null)
-    .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games)
-    .slice(0, 6)
-    .map((player) => ({
-      label: player.name,
-      value: player.winRate ?? 0,
-      display: formatPercent(player.winRate),
-      tone: "success" as const
-    }));
-  const playerScoreChartItems = playerAggregates
-    .filter((player) => player.games > 0 && player.averageTotal !== null)
-    .sort((left, right) => (right.averageTotal ?? 0) - (left.averageTotal ?? 0) || right.games - left.games)
-    .slice(0, 6)
-    .map((player) => ({
-      label: player.name,
-      value: player.averageTotal ?? 0,
-      display: formatMetric(player.averageTotal),
-      tone: "score" as const
-    }));
-  const armyUsageChartItems = armyAggregates
-    .filter((army) => army.games > 0)
-    .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName))
-    .slice(0, 6)
-    .map((army) => ({
-      label: army.armyName,
-      value: army.games,
-      display: String(army.games),
-      tone: "warning" as const
-    }));
-  const armyWinRateChartItems = armyAggregates
-    .filter((army) => army.games > 0 && army.winRate !== null)
-    .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games)
-    .slice(0, 6)
-    .map((army) => ({
-      label: army.armyName,
-      value: army.winRate ?? 0,
-      display: formatPercent(army.winRate),
-      tone: "success" as const
-    }));
-  const roundTrendRows = roundDurationAggregates.map((round) => ({
+  const playerChartItems = useMemo(() => {
+    if (playerChartMode === "duration") {
+      return playerAggregates
+        .filter((player) => player.games > 0 && player.averageDurationMs !== null)
+        .sort(
+          (left, right) => (right.averageDurationMs ?? 0) - (left.averageDurationMs ?? 0) || right.games - left.games
+        )
+        .slice(0, topCount)
+        .map((player) => ({
+          label: player.name,
+          value: player.averageDurationMs ?? 0,
+          display: formatDurationMetric(player.averageDurationMs),
+          tone: "time" as const,
+          detail: `${player.games} Spiele`
+        }));
+    }
+
+    if (playerChartMode === "score") {
+      return playerAggregates
+        .filter((player) => player.games > 0 && player.averageTotal !== null)
+        .sort((left, right) => (right.averageTotal ?? 0) - (left.averageTotal ?? 0) || right.games - left.games)
+        .slice(0, topCount)
+        .map((player) => ({
+          label: player.name,
+          value: player.averageTotal ?? 0,
+          display: formatMetric(player.averageTotal),
+          tone: "score" as const,
+          detail: `Prim ${formatMetric(player.averagePrimary)} | Sek ${formatMetric(player.averageSecondary)}`
+        }));
+    }
+
+    return playerAggregates
+      .filter((player) => player.games > 0 && player.winRate !== null)
+      .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games)
+      .slice(0, topCount)
+      .map((player) => ({
+        label: player.name,
+        value: player.winRate ?? 0,
+        display: formatPercent(player.winRate),
+        tone: "success" as const,
+        detail: `${player.wins}/${player.losses}/${player.ties}`
+      }));
+  }, [formatDurationMetric, playerAggregates, playerChartMode, topCount]);
+
+  const armyChartItems = useMemo(() => {
+    if (armyChartMode === "score") {
+      return armyAggregates
+        .filter((army) => army.games > 0 && army.averageTotal !== null)
+        .sort((left, right) => (right.averageTotal ?? 0) - (left.averageTotal ?? 0) || right.games - left.games)
+        .slice(0, topCount)
+        .map((army) => ({
+          label: army.armyName,
+          value: army.averageTotal ?? 0,
+          display: formatMetric(army.averageTotal),
+          tone: "score" as const,
+          detail: `Prim ${formatMetric(army.averagePrimary)} | Sek ${formatMetric(army.averageSecondary)}`
+        }));
+    }
+
+    if (armyChartMode === "winRate") {
+      return armyAggregates
+        .filter((army) => army.games > 0 && army.winRate !== null)
+        .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games)
+        .slice(0, topCount)
+        .map((army) => ({
+          label: army.armyName,
+          value: army.winRate ?? 0,
+          display: formatPercent(army.winRate),
+          tone: "success" as const,
+          detail: `${army.games} Spiele`
+        }));
+    }
+
+    return armyAggregates
+      .filter((army) => army.games > 0)
+      .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName))
+      .slice(0, topCount)
+      .map((army) => ({
+        label: army.armyName,
+        value: army.games,
+        display: String(army.games),
+        tone: "warning" as const,
+        detail: `Winrate ${formatPercent(army.winRate)}`
+      }));
+  }, [armyAggregates, armyChartMode, topCount]);
+
+  const roundDurationRows = roundDurationAggregates.map((round) => ({
     label: `R${round.roundNumber}`,
-    average: round.averageDurationMs,
-    max: round.maxDurationMs
+    primary: round.averageDurationMs,
+    secondary: round.maxDurationMs
+  }));
+  const roundScoreRows = roundScoreAggregates.map((round) => ({
+    label: `R${round.roundNumber}`,
+    primary: round.averagePlayerOneScore,
+    secondary: round.averagePlayerTwoScore
+  }));
+  const playerSplitRows = playerAggregates
+    .filter((player) => player.games > 0)
+    .map((player) => ({
+      label: player.name,
+      primary: player.averagePrimary,
+      secondary: player.averageSecondary,
+      total: player.averageTotal
+    }));
+  const playerTurnDurationItems = playerTurnDurationAggregates
+    .slice(0, topCount)
+    .map((player) => ({
+      label: player.playerName,
+      value: player.averageTurnDurationMs ?? 0,
+      display: formatDurationMetric(player.averageTurnDurationMs),
+      tone: "time" as const,
+      detail: `${player.turns} Zuege | Max ${formatDurationMetric(player.longestTurnMs)}`
+    }));
+  const deploymentWinRateItems = deploymentPerformance
+    .filter((item) => item.leaderWinRate !== null)
+    .slice(0, topCount)
+    .map((item) => ({
+      label: item.label,
+      value: item.leaderWinRate ?? 0,
+      display: formatPercent(item.leaderWinRate),
+      tone: "success" as const,
+      detail: `${item.games} Spiele | Leader ${item.leaderName}`
+    }));
+  const cpScatterPoints = cpScorePoints.map((point) => ({
+    id: `${point.gameId}:${point.playerName}:${point.cpSpent}:${point.totalScore}`,
+    x: point.cpSpent,
+    y: point.totalScore,
+    label: point.playerName,
+    tone: (point.primaryScore !== null && point.secondaryScore !== null ? "score" : "warning") as StatTone,
+    detail: `${point.cpSpent} CP | ${point.totalScore} Punkte | ${formatDateLabel(point.scheduledDate, point.scheduledTime)}`
   }));
 
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
@@ -733,26 +1034,93 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               open={openSections.overview}
               onToggle={() => toggleSection("overview")}
             >
+              <div className="button-row button-row--compact stats-toolbar">
+                <div className="stats-toolbar__group">
+                  {(["winRate", "score", "duration"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`chip-button ${playerChartMode === mode ? "is-selected" : ""}`}
+                      onClick={() => setPlayerChartMode(mode)}
+                    >
+                      {mode === "winRate" ? "Spieler Winrate" : mode === "score" ? "Spieler Score" : "Spieler Dauer"}
+                    </button>
+                  ))}
+                </div>
+                <div className="stats-toolbar__group">
+                  {(["usage", "winRate", "score"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`chip-button ${armyChartMode === mode ? "is-selected" : ""}`}
+                      onClick={() => setArmyChartMode(mode)}
+                    >
+                      {mode === "usage" ? "Armeen Spiele" : mode === "winRate" ? "Armeen Winrate" : "Armeen Score"}
+                    </button>
+                  ))}
+                </div>
+                <div className="stats-toolbar__group">
+                  {[5, 6, 10].map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      className={`chip-button ${topCount === count ? "is-selected" : ""}`}
+                      onClick={() => setTopCount(count)}
+                    >
+                      Top {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="overview-chart-grid stats-chart-grid">
                 <RankedBarChart
-                  title="Spieler Winrate"
-                  subtitle="Top 6"
-                  items={playerWinRateChartItems}
+                  title={
+                    playerChartMode === "winRate"
+                      ? "Spieler Winrate"
+                      : playerChartMode === "score"
+                        ? "Spieler Avg Score"
+                        : "Spieler Avg Dauer"
+                  }
+                  subtitle={`Top ${topCount}`}
+                  items={playerChartItems}
                   emptyLabel="Noch keine auswertbaren Spieler."
+                  activeLabel={activePlayerChartLabel}
+                  onActivate={setActivePlayerChartLabel}
                 />
                 <RankedBarChart
-                  title="Spieler Avg Score"
-                  subtitle="Top 6"
-                  items={playerScoreChartItems}
-                  emptyLabel="Noch keine Score-Daten vorhanden."
-                />
-                <RankedBarChart
-                  title="Armeen nach Spielen"
-                  subtitle="Top 6"
-                  items={armyUsageChartItems}
+                  title={
+                    armyChartMode === "usage"
+                      ? "Armeen nach Spielen"
+                      : armyChartMode === "winRate"
+                        ? "Armee Winrate"
+                        : "Armee Avg Score"
+                  }
+                  subtitle={`Top ${topCount}`}
+                  items={armyChartItems}
                   emptyLabel="Noch keine Armeen vorhanden."
+                  activeLabel={activeArmyChartLabel}
+                  onActivate={setActiveArmyChartLabel}
                 />
-                <RoundTrendChart title="Rundenzeiten" rows={roundTrendRows} />
+                <TrendLineChart
+                  title="Rundenzeiten"
+                  rows={roundDurationRows}
+                  primaryLabel="Avg"
+                  secondaryLabel="Max"
+                  emptyLabel="Noch keine abgeschlossenen Runden vorhanden."
+                  formatValue={formatDuration}
+                  activeLabel={activeDurationRoundLabel}
+                  onActivate={setActiveDurationRoundLabel}
+                />
+                <TrendLineChart
+                  title="Score nach Runde"
+                  rows={roundScoreRows}
+                  primaryLabel="P1"
+                  secondaryLabel="P2"
+                  emptyLabel="Noch keine Rundenscores vorhanden."
+                  formatValue={(value) => value.toFixed(1)}
+                  activeLabel={activeScoreRoundLabel}
+                  onActivate={setActiveScoreRoundLabel}
+                />
               </div>
               <div className="stats-grid stats-grid--stats-page">
                 <StatCard
@@ -851,17 +1219,23 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
             >
               <div className="stack">
                 <div className="overview-chart-grid stats-chart-grid">
-                  <RankedBarChart
-                    title="Winrate Vergleich"
-                    subtitle="Spieler"
-                    items={playerWinRateChartItems}
-                    emptyLabel="Noch keine Spielerstatistik vorhanden."
+                  <SplitBarChart
+                    title="Primary vs Secondary je Spieler"
+                    rows={playerSplitRows}
+                    emptyLabel="Noch keine Spieler-Scores vorhanden."
                   />
                   <RankedBarChart
-                    title="Avg Score Vergleich"
-                    subtitle="Spieler"
-                    items={playerScoreChartItems}
-                    emptyLabel="Noch keine Score-Daten vorhanden."
+                    title="Dauer pro Spielerzug"
+                    subtitle={`Top ${topCount}`}
+                    items={playerTurnDurationItems}
+                    emptyLabel="Noch keine abgeschlossenen Zuege vorhanden."
+                  />
+                  <ScatterChart
+                    title="CP-Spent vs Score"
+                    points={cpScatterPoints}
+                    emptyLabel="Noch keine kombinierten CP- und Score-Daten vorhanden."
+                    activePointId={activeCpPointId}
+                    onActivate={setActiveCpPointId}
                   />
                 </div>
                 {playerAggregates.map((player) => (
@@ -1056,41 +1430,64 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
 
             <CollapsibleSection
               title="Aufstellungen"
-              helper="Leader, Winrate und Stichprobengroesse"
+              helper="Leader, Winrate, Score und Tempo"
               count={deploymentLeaders.length}
               open={openSections.deployments}
               onToggle={() => toggleSection("deployments")}
             >
               <div className="stack">
-                {deploymentLeaders.map((deployment) => (
+                <RankedBarChart
+                  title="Winrate nach Aufstellung"
+                  subtitle={`Top ${topCount}`}
+                  items={deploymentWinRateItems}
+                  emptyLabel="Noch keine Aufstellungsdaten vorhanden."
+                />
+                {deploymentPerformance.map((deployment) => (
                   <article key={deployment.label} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
                       <strong>{deployment.label}</strong>
-                      <p>{deployment.playerName}</p>
+                      <p>{deployment.leaderName}</p>
                     </div>
                     <div className="stats-grid stats-grid--stats-page">
-                      <StatCard label="Leader" value={deployment.playerName} />
+                      <StatCard label="Leader" value={deployment.leaderName} />
                       <StatCard
                         label="Win%"
-                        value={formatPercent(deployment.winRate)}
+                        value={formatPercent(deployment.leaderWinRate)}
                         tone="success"
                         chart={defaultMetricCardChart(
-                          deployment.winRate,
-                          formatPercent(deployment.winRate),
+                          deployment.leaderWinRate,
+                          formatPercent(deployment.leaderWinRate),
                           100,
                           "success"
+                        )}
+                      />
+                      <StatCard
+                        label="Avg Score ges"
+                        value={formatMetric(deployment.averageCombinedScore)}
+                        tone="score"
+                        chart={defaultMetricCardChart(
+                          deployment.averageCombinedScore,
+                          formatMetric(deployment.averageCombinedScore),
+                          deploymentScoreMax,
+                          "score"
+                        )}
+                      />
+                      <StatCard
+                        label="Avg Dauer"
+                        value={formatDurationMetric(deployment.averageDurationMs)}
+                        tone="time"
+                        chart={defaultMetricCardChart(
+                          deployment.averageDurationMs,
+                          formatDurationMetric(deployment.averageDurationMs),
+                          deploymentScoreMax,
+                          "time"
                         )}
                       />
                       <StatCard
                         label="Spiele"
                         value={deployment.games}
                         tone="warning"
-                        chart={defaultMetricCardChart(
-                          deployment.games,
-                          String(deployment.games),
-                          deploymentGamesMax,
-                          "warning"
-                        )}
+                        chart={defaultMetricCardChart(deployment.games, String(deployment.games), deploymentGamesMax, "warning")}
                       />
                     </div>
                   </article>
@@ -1108,16 +1505,24 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               <div className="stack">
                 <div className="overview-chart-grid stats-chart-grid">
                   <RankedBarChart
-                    title="Armee Nutzung"
-                    subtitle="Spiele"
-                    items={armyUsageChartItems}
+                    title={
+                      armyChartMode === "usage"
+                        ? "Armee Nutzung"
+                        : armyChartMode === "winRate"
+                          ? "Armee Winrate"
+                          : "Armee Avg Score"
+                    }
+                    subtitle={`Top ${topCount}`}
+                    items={armyChartItems}
                     emptyLabel="Noch keine Armeedaten vorhanden."
+                    activeLabel={activeArmyChartLabel}
+                    onActivate={setActiveArmyChartLabel}
                   />
                   <RankedBarChart
-                    title="Armee Winrate"
-                    subtitle="Top 6"
-                    items={armyWinRateChartItems}
-                    emptyLabel="Noch keine Winrate-Daten vorhanden."
+                    title="Winrate nach Aufstellung"
+                    subtitle={`Top ${topCount}`}
+                    items={deploymentWinRateItems}
+                    emptyLabel="Noch keine Aufstellungsdaten vorhanden."
                   />
                 </div>
                 {armyAggregates.map((army) => (
@@ -1245,7 +1650,28 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("rounds")}
             >
               <div className="stack">
-                <RoundTrendChart title="Rundenzeiten Verlauf" rows={roundTrendRows} />
+                <div className="overview-chart-grid stats-chart-grid">
+                  <TrendLineChart
+                    title="Rundenzeiten Verlauf"
+                    rows={roundDurationRows}
+                    primaryLabel="Avg"
+                    secondaryLabel="Max"
+                    emptyLabel="Noch keine Rundenzeiten vorhanden."
+                    formatValue={formatDuration}
+                    activeLabel={activeDurationRoundLabel}
+                    onActivate={setActiveDurationRoundLabel}
+                  />
+                  <TrendLineChart
+                    title="Score nach Runde"
+                    rows={roundScoreRows}
+                    primaryLabel="P1"
+                    secondaryLabel="P2"
+                    emptyLabel="Noch keine Rundenscores vorhanden."
+                    formatValue={(value) => value.toFixed(1)}
+                    activeLabel={activeScoreRoundLabel}
+                    onActivate={setActiveScoreRoundLabel}
+                  />
+                </div>
                 {roundDurationAggregates.map((round) => (
                   <article key={round.roundNumber} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
@@ -1271,13 +1697,20 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                         )}
                       />
                       <StatCard
-                        label="Max"
-                        value={formatDurationMetric(round.maxDurationMs)}
+                        label="Avg Score ges"
+                        value={formatMetric(
+                          roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ??
+                            null
+                        )}
                         tone="score"
                         chart={defaultMetricCardChart(
-                          round.maxDurationMs,
-                          formatDurationMetric(round.maxDurationMs),
-                          roundDurationMax,
+                          roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ??
+                            null,
+                          formatMetric(
+                            roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ??
+                              null
+                          ),
+                          roundScoreMax,
                           "score"
                         )}
                       />

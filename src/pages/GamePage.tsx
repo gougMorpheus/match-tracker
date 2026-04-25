@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { GameMetaFields } from "../components/GameMetaFields";
 import { GameOverview } from "../components/GameOverview";
+import { GamePlayerFields } from "../components/GamePlayerFields";
 import { Layout } from "../components/Layout";
+import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
-import { RememberedNameField } from "../components/RememberedNameField";
-import { ARMY_OPTIONS } from "../data/armies";
 import { useGameStore } from "../store/GameStore";
 import type { CreateGameInput, Game, PlayerId } from "../types/game";
+import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
   getCurrentRoundNumber,
   getGameDurationMs,
@@ -22,7 +24,6 @@ import {
   getTurnDurationMs,
   isTurnPaused
 } from "../utils/gameCalculations";
-import { loadRememberedPlayerNames } from "../utils/presets";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -145,80 +146,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     [game]
   );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
-  const playerOptions = useMemo(
-    () =>
-      Array.from(
-        new Set([
-          ...loadRememberedPlayerNames(),
-          ...games.flatMap((item) => item.players.map((player) => player.name))
-        ])
-      ).sort((left, right) => left.localeCompare(right)),
-    [games]
-  );
-  const latestArmyByPlayerName = useMemo(() => {
-    const armyByName = new Map<string, string>();
-    [...games]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .forEach((entry) => {
-        entry.players.forEach((player) => {
-          const normalizedName = player.name.trim();
-          if (!normalizedName || armyByName.has(normalizedName)) {
-            return;
-          }
-
-          armyByName.set(normalizedName, player.army.name);
-        });
-      });
-
-    return armyByName;
-  }, [games]);
-  const latestDetachmentByPlayerArmy = useMemo(() => {
-    const detachmentByCombo = new Map<string, string>();
-    [...games]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .forEach((entry) => {
-        entry.players.forEach((player) => {
-          const comboKey = `${player.name.trim().toLocaleLowerCase()}::${player.army.name.trim().toLocaleLowerCase()}`;
-          const detachment = player.army.detachment.trim();
-          if (!comboKey || detachmentByCombo.has(comboKey) || !detachment) {
-            return;
-          }
-
-          detachmentByCombo.set(comboKey, detachment);
-        });
-      });
-
-    return detachmentByCombo;
-  }, [games]);
-  const detachmentOptionsByArmy = useMemo(() => {
-    const detachments = new Map<string, string[]>();
-    games.forEach((entry) => {
-      entry.players.forEach((player) => {
-        const armyName = player.army.name.trim();
-        const detachment = player.army.detachment.trim();
-        if (!armyName || !detachment) {
-          return;
-        }
-
-        const current = detachments.get(armyName) ?? [];
-        if (!current.includes(detachment)) {
-          detachments.set(armyName, [...current, detachment].sort((left, right) => left.localeCompare(right)));
-        }
-      });
-    });
-
-    return detachments;
-  }, [games]);
-
-  const getPlayerArmyComboKey = (playerName: string, armyName: string): string | null => {
-    const normalizedPlayerName = playerName.trim().toLocaleLowerCase();
-    const normalizedArmyName = armyName.trim().toLocaleLowerCase();
-    if (!normalizedPlayerName || !normalizedArmyName) {
-      return null;
-    }
-
-    return `${normalizedPlayerName}::${normalizedArmyName}`;
-  };
+  const {
+    playerOptions,
+    latestArmyByPlayerName,
+    latestDetachmentByPlayerArmy,
+    detachmentOptionsByArmy,
+    deploymentOptions,
+    primaryMissionOptions
+  } = useMemo(() => buildGameFormOptions(games), [games]);
   const editableEvents = useMemo<EditableEventItem[]>(
     () =>
       game
@@ -882,115 +817,40 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         />
       ) : null}
       {reopenPasswordOpen ? (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="stack">
-              <div className="list-row">
-                <div>
-                  <h2>Spiel wieder eroeffnen</h2>
-                  <p className="muted-copy">Passwort erforderlich</p>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  onClick={closeReopenDialog}
-                >
-                  Schliessen
-                </button>
-              </div>
-              <label className="field">
-                <span>Passwort</span>
-                <input
-                  type="password"
-                  value={reopenPassword}
-                  disabled={isMutating}
-                  autoFocus
-                  onChange={(event) => {
-                    setReopenPassword(event.target.value);
-                    if (reopenPasswordError) {
-                      setReopenPasswordError("");
-                    }
-                  }}
-                />
-              </label>
-              {reopenPasswordError ? <p className="muted-copy">{reopenPasswordError}</p> : null}
-              <div className="button-row button-row--compact">
-                <button
-                  type="button"
-                  className="primary-button compact-button"
-                  disabled={isMutating || !reopenPassword}
-                  onClick={() => void handleConfirmReopenGame()}
-                >
-                  Wieder eroeffnen
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  disabled={isMutating}
-                  onClick={closeReopenDialog}
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PasswordDialog
+          title="Spiel wieder eroeffnen"
+          confirmLabel="Wieder eroeffnen"
+          value={reopenPassword}
+          error={reopenPasswordError}
+          disabled={isMutating}
+          onChange={(value) => {
+            setReopenPassword(value);
+            if (reopenPasswordError) {
+              setReopenPasswordError("");
+            }
+          }}
+          onClose={closeReopenDialog}
+          onConfirm={() => void handleConfirmReopenGame()}
+        />
       ) : null}
       {deletePasswordOpen ? (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="stack">
-              <div className="list-row">
-                <div>
-                  <h2>Spiel loeschen</h2>
-                  <p className="muted-copy">Passwort erforderlich</p>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  onClick={closeDeleteDialog}
-                >
-                  Schliessen
-                </button>
-              </div>
-              <label className="field">
-                <span>Passwort</span>
-                <input
-                  type="password"
-                  value={deletePassword}
-                  disabled={isMutating}
-                  autoFocus
-                  onChange={(event) => {
-                    setDeletePassword(event.target.value);
-                    if (deletePasswordError) {
-                      setDeletePasswordError("");
-                    }
-                  }}
-                />
-              </label>
-              {deletePasswordError ? <p className="muted-copy">{deletePasswordError}</p> : null}
-              <p className="muted-copy">Alle Events dieses Spiels werden dabei entfernt.</p>
-              <div className="button-row button-row--compact">
-                <button
-                  type="button"
-                  className="danger-button compact-button"
-                  disabled={isMutating || !deletePassword}
-                  onClick={() => void handleConfirmDeleteGame()}
-                >
-                  Spiel loeschen
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  disabled={isMutating}
-                  onClick={closeDeleteDialog}
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PasswordDialog
+          title="Spiel loeschen"
+          confirmLabel="Spiel loeschen"
+          value={deletePassword}
+          error={deletePasswordError}
+          hint="Alle Events dieses Spiels werden dabei entfernt."
+          confirmTone="danger"
+          disabled={isMutating}
+          onChange={(value) => {
+            setDeletePassword(value);
+            if (deletePasswordError) {
+              setDeletePasswordError("");
+            }
+          }}
+          onClose={closeDeleteDialog}
+          onConfirm={() => void handleConfirmDeleteGame()}
+        />
       ) : null}
       {timerAdjustOpen ? (
         <div className="modal-backdrop">
@@ -1238,185 +1098,39 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
               {isEditingGame ? (
                 <form className="stack" onSubmit={handleGameSave}>
-                  <section className="stack">
-                    <RememberedNameField
-                      label="Spieler 1"
-                      value={gameForm.playerOneName}
-                      options={playerOptions}
-                      disabled={isMutating}
-                      onChange={(value) => updateGameField("playerOneName", value)}
-                      onSelectRemembered={(value) => applyRememberedGamePlayerName("player1", value)}
-                    />
-                    <label className="field">
-                      <span>Armee 1</span>
-                      <select
-                        required
-                        value={gameForm.playerOneArmy}
-                        onChange={(editEvent) => applyGameFormArmySelection("player1", editEvent.target.value)}
-                        disabled={isMutating}
-                      >
-                        <option value="">Armee waehlen</option>
-                        {ARMY_OPTIONS.map((army) => (
-                          <option key={army} value={army}>
-                            {army}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Detachment 1 (optional)</span>
-                      <input
-                        list="game-player-one-detachment-options"
-                        value={gameForm.playerOneDetachment}
-                        onChange={(editEvent) => updateGameField("playerOneDetachment", editEvent.target.value)}
-                        disabled={isMutating}
-                        placeholder="Offen oder vorhandenes waehlen"
-                      />
-                      <datalist id="game-player-one-detachment-options">
-                        {(detachmentOptionsByArmy.get(gameForm.playerOneArmy) ?? []).map((detachment) => (
-                          <option key={detachment} value={detachment} />
-                        ))}
-                      </datalist>
-                    </label>
-                    <RememberedNameField
-                      label="Spieler 2"
-                      value={gameForm.playerTwoName}
-                      options={playerOptions}
-                      disabled={isMutating}
-                      onChange={(value) => updateGameField("playerTwoName", value)}
-                      onSelectRemembered={(value) => applyRememberedGamePlayerName("player2", value)}
-                    />
-                    <label className="field">
-                      <span>Armee 2</span>
-                      <select
-                        required
-                        value={gameForm.playerTwoArmy}
-                        onChange={(editEvent) => applyGameFormArmySelection("player2", editEvent.target.value)}
-                        disabled={isMutating}
-                      >
-                        <option value="">Armee waehlen</option>
-                        {ARMY_OPTIONS.map((army) => (
-                          <option key={army} value={army}>
-                            {army}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Detachment 2 (optional)</span>
-                      <input
-                        list="game-player-two-detachment-options"
-                        value={gameForm.playerTwoDetachment}
-                        onChange={(editEvent) => updateGameField("playerTwoDetachment", editEvent.target.value)}
-                        disabled={isMutating}
-                        placeholder="Offen oder vorhandenes waehlen"
-                      />
-                      <datalist id="game-player-two-detachment-options">
-                        {(detachmentOptionsByArmy.get(gameForm.playerTwoArmy) ?? []).map((detachment) => (
-                          <option key={detachment} value={detachment} />
-                        ))}
-                      </datalist>
-                    </label>
-                  </section>
-
-                  <div className="two-column-grid game-scheduling-grid">
-                    <label className="field">
-                      <span>Spielpunkte</span>
-                      <input
-                        required
-                        type="number"
-                        min={0}
-                        inputMode="numeric"
-                        value={gameForm.gamePoints}
-                        onChange={(editEvent) =>
-                          updateGameField("gamePoints", Number(editEvent.target.value) || 0)
-                        }
-                        disabled={isMutating}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Datum</span>
-                      <input
-                        required
-                        type="date"
-                        value={gameForm.scheduledDate}
-                        onChange={(editEvent) => updateGameField("scheduledDate", editEvent.target.value)}
-                        disabled={isMutating}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Uhrzeit</span>
-                      <input
-                        required
-                        type="time"
-                        value={gameForm.scheduledTime}
-                        onChange={(editEvent) => updateGameField("scheduledTime", editEvent.target.value)}
-                        disabled={isMutating}
-                      />
-                    </label>
-                  </div>
-                  <label className="field">
-                    <span>Aufstellung (optional)</span>
-                    <input
-                      value={gameForm.deployment}
-                      onChange={(editEvent) => updateGameField("deployment", editEvent.target.value)}
-                      disabled={isMutating}
-                      placeholder="Kann leer bleiben"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Primaermission (optional)</span>
-                    <input
-                      value={gameForm.primaryMission}
-                      onChange={(editEvent) => updateGameField("primaryMission", editEvent.target.value)}
-                      disabled={isMutating}
-                      placeholder="Kann leer bleiben"
-                    />
-                  </label>
-
-                  <div className="field">
-                    <span>Defender</span>
-                    <div className="segmented-control">
-                      <button
-                        type="button"
-                        className={gameForm.defenderSlot === "player1" ? "is-selected" : ""}
-                        onClick={() => updateGameField("defenderSlot", "player1")}
-                        disabled={isMutating}
-                      >
-                        Spieler 1
-                      </button>
-                      <button
-                        type="button"
-                        className={gameForm.defenderSlot === "player2" ? "is-selected" : ""}
-                        onClick={() => updateGameField("defenderSlot", "player2")}
-                        disabled={isMutating}
-                      >
-                        Spieler 2
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <span>Startspieler</span>
-                    <div className="segmented-control">
-                      <button
-                        type="button"
-                        className={gameForm.startingSlot === "player1" ? "is-selected" : ""}
-                        onClick={() => updateGameField("startingSlot", "player1")}
-                        disabled={isMutating}
-                      >
-                        Spieler 1
-                      </button>
-                      <button
-                        type="button"
-                        className={gameForm.startingSlot === "player2" ? "is-selected" : ""}
-                        onClick={() => updateGameField("startingSlot", "player2")}
-                        disabled={isMutating}
-                      >
-                        Spieler 2
-                      </button>
-                    </div>
-                  </div>
+                  <GamePlayerFields
+                    title="Spieler 1"
+                    nameValue={gameForm.playerOneName}
+                    armyValue={gameForm.playerOneArmy}
+                    detachmentValue={gameForm.playerOneDetachment}
+                    playerOptions={playerOptions}
+                    detachmentOptions={detachmentOptionsByArmy.get(gameForm.playerOneArmy) ?? []}
+                    disabled={isMutating}
+                    onNameChange={(value) => updateGameField("playerOneName", value)}
+                    onSelectRememberedName={(value) => applyRememberedGamePlayerName("player1", value)}
+                    onArmyChange={(value) => applyGameFormArmySelection("player1", value)}
+                    onDetachmentChange={(value) => updateGameField("playerOneDetachment", value)}
+                  />
+                  <GamePlayerFields
+                    title="Spieler 2"
+                    nameValue={gameForm.playerTwoName}
+                    armyValue={gameForm.playerTwoArmy}
+                    detachmentValue={gameForm.playerTwoDetachment}
+                    playerOptions={playerOptions}
+                    detachmentOptions={detachmentOptionsByArmy.get(gameForm.playerTwoArmy) ?? []}
+                    disabled={isMutating}
+                    onNameChange={(value) => updateGameField("playerTwoName", value)}
+                    onSelectRememberedName={(value) => applyRememberedGamePlayerName("player2", value)}
+                    onArmyChange={(value) => applyGameFormArmySelection("player2", value)}
+                    onDetachmentChange={(value) => updateGameField("playerTwoDetachment", value)}
+                  />
+                  <GameMetaFields
+                    value={gameForm}
+                    deploymentOptions={deploymentOptions}
+                    primaryMissionOptions={primaryMissionOptions}
+                    disabled={isMutating}
+                    onChange={updateGameField}
+                  />
 
                   <div className="button-row button-row--compact">
                     <button type="submit" className="primary-button compact-button" disabled={isMutating}>

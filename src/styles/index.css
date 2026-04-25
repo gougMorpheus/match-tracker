@@ -1071,6 +1071,108 @@ textarea {
   fill: rgba(30, 41, 59, 0.88);
 }
 
+.stats-toolbar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.stats-toolbar__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.stats-ranked-list,
+.stats-split-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.stats-ranked-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.5);
+  color: inherit;
+  text-align: left;
+}
+
+.stats-ranked-list__row.is-active {
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.stats-ranked-list__label,
+.stats-ranked-list__value {
+  font-size: 0.72rem;
+}
+
+.stats-ranked-list__label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stats-ranked-list__value {
+  color: var(--muted);
+}
+
+.stats-ranked-list__track,
+.stats-split-list__track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 0.58rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.stats-ranked-list__fill,
+.stats-split-list__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.stats-split-list__row {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.stats-split-list__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+}
+
+.stats-split-list__meta span {
+  color: var(--muted);
+}
+
+.stats-split-list__bars {
+  display: grid;
+  gap: 0.26rem;
+}
+
+.stats-split-list__fill.is-primary {
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+}
+
+.stats-split-list__fill.is-secondary {
+  background: linear-gradient(90deg, #34d399, #14b8a6);
+}
+
+.stats-split-list__fill.is-total {
+  background: linear-gradient(90deg, #fbbf24, #f97316);
+}
+
 .overview-score-bar {
   stroke: none;
 }
@@ -1134,11 +1236,57 @@ textarea {
   fill: none;
 }
 
+.overview-chart__point {
+  cursor: pointer;
+  stroke: rgba(15, 23, 42, 0.95);
+  stroke-width: 2;
+}
+
+.overview-chart__point.is-player-1 {
+  fill: #38bdf8;
+}
+
+.overview-chart__point.is-player-2 {
+  fill: #34d399;
+}
+
+.overview-chart__point--scatter.is-score {
+  fill: #38bdf8;
+}
+
+.overview-chart__point--scatter.is-warning {
+  fill: #f59e0b;
+}
+
+.overview-chart__point-group.is-active .overview-chart__label {
+  fill: var(--text);
+}
+
 .overview-chart-legend__item.is-player-2,
 .overview-chart-total__marker.is-player-2 {
   background: rgba(52, 211, 153, 0.16);
   color: #d1fae5;
   fill: #34d399;
+}
+
+.overview-chart-total__marker.is-score {
+  background: rgba(56, 189, 248, 0.16);
+  fill: #38bdf8;
+}
+
+.overview-chart-total__marker.is-time {
+  background: rgba(52, 211, 153, 0.16);
+  fill: #34d399;
+}
+
+.overview-chart-total__marker.is-success {
+  background: rgba(94, 234, 212, 0.16);
+  fill: #5eead4;
+}
+
+.overview-chart-total__marker.is-warning {
+  background: rgba(245, 158, 11, 0.16);
+  fill: #f59e0b;
 }
 
 .overview-bar-row {
@@ -1690,6 +1838,10 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .stats-ranked-list__row {
+    grid-template-columns: 1fr;
+  }
+
 }
 
 @media (max-width: 420px) {
@@ -1702,6 +1854,18 @@ textarea {
     grid-template-areas:
       "primary secondary total"
       "cp time time";
+  }
+
+  .stats-toolbar {
+    align-items: stretch;
+  }
+
+  .stats-toolbar__group {
+    width: 100%;
+  }
+
+  .stats-toolbar__group .chip-button {
+    flex: 1 1 calc(50% - 0.35rem);
   }
 
   .game-page .quick-controls__actions {

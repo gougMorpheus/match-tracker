@@ -349,6 +349,14 @@ export interface RoundDurationAggregate {
   maxDurationMs: number | null;
 }
 
+export interface RoundScoreAggregate {
+  roundNumber: number;
+  games: number;
+  averagePlayerOneScore: number | null;
+  averagePlayerTwoScore: number | null;
+  averageCombinedScore: number | null;
+}
+
 export interface TurnRecord {
   gameId: string;
   scheduledDate: string;
@@ -368,6 +376,33 @@ export interface ScenarioLeader {
   playerName: string;
   winRate: number | null;
   games: number;
+}
+
+export interface ScenarioPerformanceAggregate {
+  label: string;
+  leaderName: string;
+  leaderWinRate: number | null;
+  games: number;
+  averageCombinedScore: number | null;
+  averageDurationMs: number | null;
+}
+
+export interface PlayerTurnDurationAggregate {
+  playerName: string;
+  turns: number;
+  averageTurnDurationMs: number | null;
+  longestTurnMs: number | null;
+}
+
+export interface CpScorePoint {
+  playerName: string;
+  gameId: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  cpSpent: number;
+  totalScore: number;
+  primaryScore: number | null;
+  secondaryScore: number | null;
 }
 
 export interface GameFilterState {
@@ -537,6 +572,45 @@ export const createMissionLeaders = (games: Game[]): ScenarioLeader[] =>
 
 export const createDeploymentLeaders = (games: Game[]): ScenarioLeader[] =>
   createScenarioLeaders(games, (game) => game.deployment);
+
+export const createScenarioPerformanceAggregates = (
+  games: Game[],
+  scenarioSelector: (game: Game) => string
+): ScenarioPerformanceAggregate[] => {
+  const leaders = createScenarioLeaders(games, scenarioSelector);
+  const leaderByLabel = new Map(leaders.map((leader) => [leader.label, leader]));
+  const grouped = new Map<string, { scores: number[]; durations: number[]; games: number }>();
+
+  games.forEach((game) => {
+    const label = scenarioSelector(game).trim();
+    if (!label || !hasComparableScoreData(game)) {
+      return;
+    }
+
+    const existing = grouped.get(label) ?? { scores: [], durations: [], games: 0 };
+    existing.games += 1;
+    existing.scores.push(getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id));
+    const duration = getCompletedGameDurationMs(game);
+    if (duration !== null) {
+      existing.durations.push(duration);
+    }
+    grouped.set(label, existing);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([label, values]) => {
+      const leader = leaderByLabel.get(label);
+      return {
+        label,
+        leaderName: leader?.playerName ?? "-",
+        leaderWinRate: leader?.winRate ?? null,
+        games: values.games,
+        averageCombinedScore: averageOrNull(values.scores),
+        averageDurationMs: averageOrNull(values.durations)
+      };
+    })
+    .sort((left, right) => right.games - left.games || left.label.localeCompare(right.label));
+};
 
 export const createInitialGameFilters = (): GameFilterState => ({
   query: "",
@@ -736,6 +810,89 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
     }))
     .sort((left, right) => left.roundNumber - right.roundNumber);
 };
+
+export const createRoundScoreAggregates = (games: Game[]): RoundScoreAggregate[] => {
+  const grouped = new Map<number, { playerOneScores: number[]; playerTwoScores: number[]; combinedScores: number[] }>();
+
+  games.forEach((game) => {
+    if (!hasComparableScoreData(game)) {
+      return;
+    }
+
+    game.rounds.forEach((round) => {
+      const playerOneScore = getPlayerRoundScoreTotal(game, game.players[0].id, round.roundNumber);
+      const playerTwoScore = getPlayerRoundScoreTotal(game, game.players[1].id, round.roundNumber);
+      const existing = grouped.get(round.roundNumber) ?? {
+        playerOneScores: [],
+        playerTwoScores: [],
+        combinedScores: []
+      };
+
+      existing.playerOneScores.push(playerOneScore);
+      existing.playerTwoScores.push(playerTwoScore);
+      existing.combinedScores.push(playerOneScore + playerTwoScore);
+      grouped.set(round.roundNumber, existing);
+    });
+  });
+
+  return Array.from(grouped.entries())
+    .map(([roundNumber, values]) => ({
+      roundNumber,
+      games: values.combinedScores.length,
+      averagePlayerOneScore: averageOrNull(values.playerOneScores),
+      averagePlayerTwoScore: averageOrNull(values.playerTwoScores),
+      averageCombinedScore: averageOrNull(values.combinedScores)
+    }))
+    .sort((left, right) => left.roundNumber - right.roundNumber);
+};
+
+export const createPlayerTurnDurationAggregates = (games: Game[]): PlayerTurnDurationAggregate[] => {
+  const grouped = new Map<string, number[]>();
+
+  games.forEach((game) => {
+    game.rounds.forEach((round) => {
+      round.turns.forEach((turn) => {
+        const player = game.players.find((entry) => entry.id === turn.playerId);
+        const duration = getCompletedTurnDurationMs(turn, game);
+        if (!player || duration === null) {
+          return;
+        }
+
+        const durations = grouped.get(player.name) ?? [];
+        durations.push(duration);
+        grouped.set(player.name, durations);
+      });
+    });
+  });
+
+  return Array.from(grouped.entries())
+    .map(([playerName, durations]) => ({
+      playerName,
+      turns: durations.length,
+      averageTurnDurationMs: averageOrNull(durations),
+      longestTurnMs: durations.length ? Math.max(...durations) : null
+    }))
+    .sort((left, right) => right.turns - left.turns || left.playerName.localeCompare(right.playerName));
+};
+
+export const createCpScoreCorrelationPoints = (games: Game[]): CpScorePoint[] =>
+  games.flatMap((game) =>
+    game.players
+      .filter(
+        (player) =>
+          hasPlayerCommandPointData(game, player.id) && getPlayerComparableTotalScore(game, player.id) !== null
+      )
+      .map((player) => ({
+        playerName: player.name,
+        gameId: game.id,
+        scheduledDate: game.scheduledDate,
+        scheduledTime: game.scheduledTime,
+        cpSpent: getPlayerCommandPointsSpent(game, player.id),
+        totalScore: getPlayerTotalScore(game, player.id),
+        primaryScore: getPlayerComparablePrimaryScore(game, player.id),
+        secondaryScore: getPlayerComparableSecondaryScore(game, player.id)
+      }))
+  );
 
 export const getTurnRecords = (
   games: Game[]
