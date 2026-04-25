@@ -386,6 +386,8 @@ export interface StatsOverview {
   averageDurationMs: number | null;
   averageRounds: number | null;
   averageCombinedScore: number | null;
+  averagePlayerOneScore: number | null;
+  averagePlayerTwoScore: number | null;
   averageSpentCp: number | null;
 }
 
@@ -604,6 +606,8 @@ export const createStatsOverview = (games: Game[]): StatsOverview => {
   const combinedScoreValues = comparableScoreGames.map(
     (game) => getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id)
   );
+  const playerOneScoreValues = comparableScoreGames.map((game) => getPlayerTotalScore(game, game.players[0].id));
+  const playerTwoScoreValues = comparableScoreGames.map((game) => getPlayerTotalScore(game, game.players[1].id));
   const spentCpValues = games.flatMap((game) =>
     game.players
       .filter((player) => hasPlayerCommandPointData(game, player.id))
@@ -617,6 +621,8 @@ export const createStatsOverview = (games: Game[]): StatsOverview => {
     averageDurationMs: averageOrNull(completedDurations),
     averageRounds: averageOrNull(roundsValues),
     averageCombinedScore: averageOrNull(combinedScoreValues),
+    averagePlayerOneScore: averageOrNull(playerOneScoreValues),
+    averagePlayerTwoScore: averageOrNull(playerTwoScoreValues),
     averageSpentCp: averageOrNull(spentCpValues)
   };
 };
@@ -733,7 +739,7 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
 
 export const getTurnRecords = (
   games: Game[]
-): { longestTurn: TurnRecord | null; fastestTurn: TurnRecord | null } => {
+): { longestTurn: TurnRecord | null; fastestTurn: TurnRecord | null; highestScoringTurn: TurnRecord | null } => {
   const turnRecords = games.flatMap((game) =>
     game.rounds.flatMap((round) =>
       round.turns
@@ -795,14 +801,19 @@ export const getTurnRecords = (
   if (!turnRecords.length) {
     return {
       longestTurn: null,
-      fastestTurn: null
+      fastestTurn: null,
+      highestScoringTurn: null
     };
   }
 
   const sortedByDuration = [...turnRecords].sort((left, right) => left.durationMs - right.durationMs);
+  const sortedByScore = [...turnRecords].sort(
+    (left, right) => left.totalScore - right.totalScore || left.secondaryScore - right.secondaryScore
+  );
 
   return {
     fastestTurn: sortedByDuration[0] ?? null,
-    longestTurn: sortedByDuration[sortedByDuration.length - 1] ?? null
+    longestTurn: sortedByDuration[sortedByDuration.length - 1] ?? null,
+    highestScoringTurn: sortedByScore[sortedByScore.length - 1] ?? null
   };
 };
