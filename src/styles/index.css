@@ -368,6 +368,11 @@ textarea {
   background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(30, 41, 59, 0.82));
 }
 
+.scoreboard-stat--time {
+  border-color: rgba(52, 211, 153, 0.16);
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(30, 41, 59, 0.82));
+}
+
 .button-grid {
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 }
@@ -664,7 +669,7 @@ textarea {
 }
 
 .game-page .scoreboard__grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.24rem;
 }
 
@@ -1437,6 +1442,10 @@ textarea {
 
 @media (max-width: 420px) {
   .game-page .tracker-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .game-page .scoreboard__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

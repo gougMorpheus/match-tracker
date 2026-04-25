@@ -9,8 +9,10 @@ import {
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
+  getPlayerTurnDurationTotalMs,
   getPlayerTotalScore
 } from "../utils/gameCalculations";
+import { formatDuration } from "../utils/time";
 
 interface PlayerScoreboardProps {
   game: Game;
@@ -38,6 +40,7 @@ export const PlayerScoreboard = ({
   const cp = getPlayerCommandPoints(game, player.id);
   const cpGained = getPlayerCommandPointsGained(game, player.id);
   const cpSpent = getPlayerCommandPointsSpent(game, player.id);
+  const activeDuration = getPlayerTurnDurationTotalMs(game, player.id);
 
   return (
     <article className={`scoreboard ${emphasized ? "is-emphasized" : ""}`}>
@@ -82,6 +85,13 @@ export const PlayerScoreboard = ({
             <strong>{total}</strong>
           </div>
           <span className="scoreboard-stat__meta">Runde +{currentRoundTotal}</span>
+        </div>
+        <div className="scoreboard-stat scoreboard-stat--time">
+          <div className="scoreboard-stat__top">
+            <span>Zeit</span>
+            <strong>{formatDuration(activeDuration)}</strong>
+          </div>
+          <span className="scoreboard-stat__meta">Gesamt aktiv</span>
         </div>
       </div>
       {controls ? <div className="scoreboard__controls">{controls}</div> : null}
