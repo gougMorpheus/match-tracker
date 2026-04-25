@@ -37,6 +37,13 @@ interface MiniBarItem {
   tone: StatTone;
 }
 
+interface RankedChartItem {
+  label: string;
+  value: number;
+  display: string;
+  tone: StatTone;
+}
+
 const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
   overview: true,
   players: true,
@@ -50,6 +57,29 @@ const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
 
 const getMetricMax = (values: Array<number | null | undefined>, fallback = 1): number =>
   Math.max(...values.map((value) => value ?? 0), fallback);
+
+const CHART_WIDTH = 360;
+const CHART_HEIGHT = 170;
+const CHART_PADDING = 22;
+
+const buildLinePath = (points: Array<{ x: number; y: number }>): string =>
+  points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+
+const getToneColor = (tone: StatTone): string => {
+  if (tone === "time") {
+    return "#34d399";
+  }
+
+  if (tone === "success") {
+    return "#5eead4";
+  }
+
+  if (tone === "warning") {
+    return "#f59e0b";
+  }
+
+  return "#38bdf8";
+};
 
 const MiniBarChart = ({ items }: { items: MiniBarItem[] }) => (
   <div className="stats-mini-bar-list">
@@ -94,6 +124,188 @@ const defaultMetricCardChart = (
     ]}
   />
 );
+
+const RankedBarChart = ({
+  title,
+  subtitle,
+  items,
+  emptyLabel
+}: {
+  title: string;
+  subtitle: string;
+  items: RankedChartItem[];
+  emptyLabel: string;
+}) => {
+  if (!items.length) {
+    return (
+      <article className="overview-chart-card">
+        <div className="overview-chart-card__head">
+          <strong>{title}</strong>
+          <span>{subtitle}</span>
+        </div>
+        <p className="muted-copy">{emptyLabel}</p>
+      </article>
+    );
+  }
+
+  const rowHeight = 20;
+  const labelWidth = 96;
+  const valueWidth = 38;
+  const barHeight = 10;
+  const chartHeight = CHART_PADDING * 2 + items.length * rowHeight;
+  const plotWidth = CHART_WIDTH - CHART_PADDING * 2 - labelWidth - valueWidth;
+  const maxValue = Math.max(...items.map((item) => item.value), 1);
+
+  return (
+    <article className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+      </div>
+      <svg
+        className="overview-chart stats-ranked-chart"
+        viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`}
+        role="img"
+        aria-label={title}
+      >
+        {items.map((item, index) => {
+          const y = CHART_PADDING + index * rowHeight + rowHeight / 2;
+          const width = (item.value / maxValue) * plotWidth;
+          const barX = CHART_PADDING + labelWidth;
+
+          return (
+            <g key={`${item.label}-${item.display}`}>
+              <text x={CHART_PADDING} y={y + 3} className="stats-ranked-chart__label">
+                {item.label}
+              </text>
+              <rect
+                x={barX}
+                y={y - barHeight / 2}
+                width={plotWidth}
+                height={barHeight}
+                rx={barHeight / 2}
+                className="stats-ranked-chart__track"
+              />
+              <rect
+                x={barX}
+                y={y - barHeight / 2}
+                width={Math.max(width, 4)}
+                height={barHeight}
+                rx={barHeight / 2}
+                fill={getToneColor(item.tone)}
+              />
+              <text x={barX + plotWidth + 8} y={y + 3} className="stats-ranked-chart__value">
+                {item.display}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </article>
+  );
+};
+
+const RoundTrendChart = ({
+  title,
+  rows
+}: {
+  title: string;
+  rows: Array<{ label: string; average: number | null; max: number | null }>;
+}) => {
+  if (!rows.length) {
+    return (
+      <article className="overview-chart-card">
+        <div className="overview-chart-card__head">
+          <strong>{title}</strong>
+          <span>0 Runden</span>
+        </div>
+        <p className="muted-copy">Noch keine abgeschlossenen Runden vorhanden.</p>
+      </article>
+    );
+  }
+
+  const plotWidth = CHART_WIDTH - CHART_PADDING * 2;
+  const plotHeight = CHART_HEIGHT - CHART_PADDING * 2;
+  const maxValue = Math.max(...rows.flatMap((row) => [row.average ?? 0, row.max ?? 0]), 1);
+  const averagePoints = rows.map((row, index) => ({
+    x: CHART_PADDING + (rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(rows.length - 1, 1)) * index),
+    y: CHART_HEIGHT - CHART_PADDING - (((row.average ?? 0) / maxValue) * plotHeight),
+    label: row.label,
+    value: row.average ?? 0
+  }));
+  const maxPoints = rows.map((row, index) => ({
+    x: CHART_PADDING + (rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(rows.length - 1, 1)) * index),
+    y: CHART_HEIGHT - CHART_PADDING - (((row.max ?? 0) / maxValue) * plotHeight),
+    label: row.label,
+    value: row.max ?? 0
+  }));
+
+  return (
+    <article className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <strong>{title}</strong>
+        <div className="overview-chart-legend">
+          <span className="overview-chart-legend__item is-player-1">Avg</span>
+          <span className="overview-chart-legend__item is-player-2">Max</span>
+        </div>
+      </div>
+      <svg className="overview-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label={title}>
+        {[0, 0.5, 1].map((ratio) => {
+          const y = CHART_HEIGHT - CHART_PADDING - plotHeight * ratio;
+          return (
+            <line
+              key={`guide-${ratio}`}
+              x1={CHART_PADDING}
+              x2={CHART_WIDTH - CHART_PADDING}
+              y1={y}
+              y2={y}
+              className="overview-chart__guide"
+            />
+          );
+        })}
+        <line
+          x1={CHART_PADDING}
+          x2={CHART_PADDING}
+          y1={CHART_PADDING}
+          y2={CHART_HEIGHT - CHART_PADDING}
+          className="overview-chart__axis"
+        />
+        <line
+          x1={CHART_PADDING}
+          x2={CHART_WIDTH - CHART_PADDING}
+          y1={CHART_HEIGHT - CHART_PADDING}
+          y2={CHART_HEIGHT - CHART_PADDING}
+          className="overview-chart__axis"
+        />
+        <path d={buildLinePath(averagePoints)} className="overview-chart__line is-player-1" />
+        <path d={buildLinePath(maxPoints)} className="overview-chart__line is-player-2" />
+        {averagePoints.map((point) => (
+          <text key={`avg-${point.label}`} x={point.x} y={CHART_HEIGHT - 4} textAnchor="middle" className="overview-chart__label">
+            {point.label}
+          </text>
+        ))}
+        <text x={CHART_PADDING - 4} y={CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
+          {formatDuration(maxValue)}
+        </text>
+        <text x={CHART_PADDING - 4} y={CHART_HEIGHT - CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
+          0m
+        </text>
+      </svg>
+      <div className="overview-chart-card__totals">
+        <div className="overview-chart-total">
+          <span className="overview-chart-total__marker is-player-1" />
+          <span>Avg</span>
+          <strong>{formatDuration(rows[rows.length - 1]?.average ?? 0)}</strong>
+        </div>
+        <div className="overview-chart-total">
+          <span className="overview-chart-total__marker is-player-2" />
+          <span>Max</span>
+          <strong>{formatDuration(rows[rows.length - 1]?.max ?? 0)}</strong>
+        </div>
+      </div>
+    </article>
+  );
+};
 
 const renderTurnRecordCard = (
   record: TurnRecord | null,
@@ -219,6 +431,52 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
 
   const formatDurationMetric = (value: number | null) =>
     value === null ? "-" : formatDuration(value);
+
+  const playerWinRateChartItems = playerAggregates
+    .filter((player) => player.games > 0 && player.winRate !== null)
+    .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games)
+    .slice(0, 6)
+    .map((player) => ({
+      label: player.name,
+      value: player.winRate ?? 0,
+      display: formatPercent(player.winRate),
+      tone: "success" as const
+    }));
+  const playerScoreChartItems = playerAggregates
+    .filter((player) => player.games > 0 && player.averageTotal !== null)
+    .sort((left, right) => (right.averageTotal ?? 0) - (left.averageTotal ?? 0) || right.games - left.games)
+    .slice(0, 6)
+    .map((player) => ({
+      label: player.name,
+      value: player.averageTotal ?? 0,
+      display: formatMetric(player.averageTotal),
+      tone: "score" as const
+    }));
+  const armyUsageChartItems = armyAggregates
+    .filter((army) => army.games > 0)
+    .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName))
+    .slice(0, 6)
+    .map((army) => ({
+      label: army.armyName,
+      value: army.games,
+      display: String(army.games),
+      tone: "warning" as const
+    }));
+  const armyWinRateChartItems = armyAggregates
+    .filter((army) => army.games > 0 && army.winRate !== null)
+    .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games)
+    .slice(0, 6)
+    .map((army) => ({
+      label: army.armyName,
+      value: army.winRate ?? 0,
+      display: formatPercent(army.winRate),
+      tone: "success" as const
+    }));
+  const roundTrendRows = roundDurationAggregates.map((round) => ({
+    label: `R${round.roundNumber}`,
+    average: round.averageDurationMs,
+    max: round.maxDurationMs
+  }));
 
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
     setFilters((current) => ({
@@ -475,6 +733,27 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               open={openSections.overview}
               onToggle={() => toggleSection("overview")}
             >
+              <div className="overview-chart-grid stats-chart-grid">
+                <RankedBarChart
+                  title="Spieler Winrate"
+                  subtitle="Top 6"
+                  items={playerWinRateChartItems}
+                  emptyLabel="Noch keine auswertbaren Spieler."
+                />
+                <RankedBarChart
+                  title="Spieler Avg Score"
+                  subtitle="Top 6"
+                  items={playerScoreChartItems}
+                  emptyLabel="Noch keine Score-Daten vorhanden."
+                />
+                <RankedBarChart
+                  title="Armeen nach Spielen"
+                  subtitle="Top 6"
+                  items={armyUsageChartItems}
+                  emptyLabel="Noch keine Armeen vorhanden."
+                />
+                <RoundTrendChart title="Rundenzeiten" rows={roundTrendRows} />
+              </div>
               <div className="stats-grid stats-grid--stats-page">
                 <StatCard
                   label="Spiele"
@@ -571,6 +850,20 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("players")}
             >
               <div className="stack">
+                <div className="overview-chart-grid stats-chart-grid">
+                  <RankedBarChart
+                    title="Winrate Vergleich"
+                    subtitle="Spieler"
+                    items={playerWinRateChartItems}
+                    emptyLabel="Noch keine Spielerstatistik vorhanden."
+                  />
+                  <RankedBarChart
+                    title="Avg Score Vergleich"
+                    subtitle="Spieler"
+                    items={playerScoreChartItems}
+                    emptyLabel="Noch keine Score-Daten vorhanden."
+                  />
+                </div>
                 {playerAggregates.map((player) => (
                   <article key={player.name} className="card stack stats-group-card">
                     <div className="stats-group-card__head">
@@ -813,6 +1106,20 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("armies")}
             >
               <div className="stack">
+                <div className="overview-chart-grid stats-chart-grid">
+                  <RankedBarChart
+                    title="Armee Nutzung"
+                    subtitle="Spiele"
+                    items={armyUsageChartItems}
+                    emptyLabel="Noch keine Armeedaten vorhanden."
+                  />
+                  <RankedBarChart
+                    title="Armee Winrate"
+                    subtitle="Top 6"
+                    items={armyWinRateChartItems}
+                    emptyLabel="Noch keine Winrate-Daten vorhanden."
+                  />
+                </div>
                 {armyAggregates.map((army) => (
                   <article key={army.armyName} className="card stack stats-group-card">
                     <div className="stats-group-card__head">
@@ -938,6 +1245,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("rounds")}
             >
               <div className="stack">
+                <RoundTrendChart title="Rundenzeiten Verlauf" rows={roundTrendRows} />
                 {roundDurationAggregates.map((round) => (
                   <article key={round.roundNumber} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
