@@ -337,6 +337,10 @@ textarea {
   line-height: 1;
 }
 
+.scoreboard__grid--details {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .scoreboard-stat {
   display: grid;
   gap: 0.14rem;
@@ -408,6 +412,31 @@ textarea {
 .remembered-name-picker {
   display: grid;
   gap: 0.35rem;
+}
+
+.choice-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.choice-field__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.choice-field__toggle {
+  width: auto;
+  min-width: 2.6rem;
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
+}
+
+.choice-field__toggle.is-active {
+  background: var(--accent-soft);
+  border-color: rgba(56, 189, 248, 0.32);
+  color: #d8f3ff;
 }
 
 .remembered-name-picker__label {
@@ -519,6 +548,11 @@ textarea {
 .field {
   display: grid;
   gap: 0.45rem;
+  min-width: 0;
+}
+
+.field > * {
+  min-width: 0;
 }
 
 .segmented-control {
@@ -668,9 +702,32 @@ textarea {
   gap: 0.25rem;
 }
 
-.game-page .scoreboard__grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.game-page .scoreboard__grid--player {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "primary secondary total"
+    "cp time time";
   gap: 0.24rem;
+}
+
+.game-page .scoreboard-stat--primary {
+  grid-area: primary;
+}
+
+.game-page .scoreboard-stat--secondary {
+  grid-area: secondary;
+}
+
+.game-page .scoreboard-stat--total {
+  grid-area: total;
+}
+
+.game-page .scoreboard-stat--cp {
+  grid-area: cp;
+}
+
+.game-page .scoreboard-stat--time {
+  grid-area: time;
 }
 
 .game-page .scoreboard__controls {
@@ -720,6 +777,10 @@ textarea {
   align-items: center;
 }
 
+.game-page .quick-controls__row--score {
+  grid-template-columns: minmax(0, 1fr) 3.35rem minmax(0, 1fr);
+}
+
 .game-page .step-input {
   width: 3.35rem;
   flex: 0 0 3.35rem;
@@ -743,6 +804,10 @@ textarea {
 }
 
 .game-page .quick-controls__actions .mini-button {
+  width: 100%;
+}
+
+.game-page .quick-controls__row--score .mini-button {
   width: 100%;
 }
 
@@ -1085,26 +1150,46 @@ textarea {
 
 .round-change-indicator {
   position: fixed;
-  top: 4.35rem;
+  inset: 0;
   left: 50%;
   z-index: 33;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.55rem;
   transform: translateX(-50%);
   pointer-events: none;
   animation: round-change-indicator 1.5s ease-out forwards;
 }
 
+.round-change-indicator strong,
 .round-change-indicator span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.35rem;
-  padding: 0.5rem 1rem;
+  box-shadow: 0 18px 40px rgba(8, 15, 28, 0.42);
+}
+
+.round-change-indicator strong {
+  min-height: 2.2rem;
+  padding: 0.45rem 1rem;
   border-radius: 999px;
-  border: 1px solid rgba(94, 234, 212, 0.3);
-  background: rgba(15, 23, 42, 0.94);
-  box-shadow: 0 14px 28px rgba(8, 15, 28, 0.36);
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  background: rgba(15, 23, 42, 0.82);
+  color: rgba(204, 251, 241, 0.92);
+  font-size: 0.92rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.round-change-indicator span {
+  min-height: 4rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 24px;
+  border: 1px solid rgba(94, 234, 212, 0.34);
+  background: rgba(9, 16, 29, 0.94);
   color: #ccfbf1;
-  font-size: 0.94rem;
+  font-size: clamp(1.8rem, 8vw, 3rem);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -1422,7 +1507,7 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .game-page .scoreboard__grid {
+  .game-page .scoreboard__grid--details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1445,12 +1530,23 @@ textarea {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .game-page .scoreboard__grid {
+  .game-page .scoreboard__grid--player {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "primary secondary total"
+      "cp time time";
   }
 
   .game-page .quick-controls__actions {
     width: 100%;
+  }
+
+  .game-page .quick-controls__row--score {
+    grid-template-columns: minmax(0, 1fr) 3.15rem minmax(0, 1fr);
+  }
+
+  .modal-filters {
+    grid-template-columns: 1fr;
   }
 
   .app-shell {
@@ -1530,6 +1626,12 @@ textarea {
     linear-gradient(180deg, rgba(56, 189, 248, 0.18), rgba(14, 165, 233, 0.08));
 }
 
+.action-feedback-flash--round {
+  background:
+    radial-gradient(circle at center, rgba(94, 234, 212, 0.24), rgba(94, 234, 212, 0.08) 34%, transparent 68%),
+    linear-gradient(180deg, rgba(45, 212, 191, 0.16), rgba(20, 184, 166, 0.08));
+}
+
 @keyframes action-feedback-flash {
   0% {
     opacity: 0;
@@ -1547,22 +1649,22 @@ textarea {
 @keyframes round-change-indicator {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-10px) scale(0.96);
+    transform: translateX(-50%) scale(0.92);
   }
 
   16% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateX(-50%) scale(1);
   }
 
   74% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateX(-50%) scale(1);
   }
 
   100% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-8px) scale(0.98);
+    transform: translateX(-50%) scale(0.97);
   }
 }
 
@@ -1587,6 +1689,12 @@ textarea {
   max-height: min(62vh, 520px);
   overflow-y: auto;
   padding-right: 0.2rem;
+}
+
+.modal-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .floating-menu {
@@ -1701,7 +1809,7 @@ textarea {
   bottom: 0.8rem;
   z-index: 26;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.35rem;
   width: min(calc(100% - 1.2rem), 760px);
   transform: translateX(-50%);
@@ -1758,6 +1866,10 @@ textarea {
   }
 
   .two-column-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .game-scheduling-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

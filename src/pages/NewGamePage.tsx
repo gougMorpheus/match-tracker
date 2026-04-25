@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ARMY_OPTIONS } from "../data/armies";
-import { RememberedNameField } from "../components/RememberedNameField";
+import { SelectOrCreateField } from "../components/SelectOrCreateField";
 import type { CreateGameInput } from "../types/game";
 import { Layout } from "../components/Layout";
 import { useGameStore } from "../store/GameStore";
@@ -28,17 +28,20 @@ const createDefaultFormState = (): CreateGameInput => ({
   startingSlot: "player1"
 });
 
+const getSortedUniqueValues = (values: string[]): string[] =>
+  Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((left, right) =>
+    left.localeCompare(right)
+  );
+
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   const { createGame, games, isMutating, errorMessage, clearError } = useGameStore();
   const [formState, setFormState] = useState<CreateGameInput>(() => createDefaultFormState());
   const playerOptions = useMemo(
     () =>
-      Array.from(
-        new Set([
-          ...loadRememberedPlayerNames(),
-          ...games.flatMap((game) => game.players.map((player) => player.name))
-        ])
-      ).sort((left, right) => left.localeCompare(right)),
+      getSortedUniqueValues([
+        ...loadRememberedPlayerNames(),
+        ...games.flatMap((game) => game.players.map((player) => player.name))
+      ]),
     [games]
   );
   const latestArmyByPlayerName = useMemo(() => {
@@ -95,6 +98,14 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
 
     return detachments;
   }, [games]);
+  const deploymentOptions = useMemo(
+    () => getSortedUniqueValues(games.map((game) => game.deployment)),
+    [games]
+  );
+  const primaryMissionOptions = useMemo(
+    () => getSortedUniqueValues(games.map((game) => game.primaryMission)),
+    [games]
+  );
 
   const getPlayerArmyComboKey = (playerName: string, armyName: string): string | null => {
     const normalizedPlayerName = playerName.trim().toLocaleLowerCase();
@@ -183,13 +194,16 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
 
         <section className="card stack">
           <h2>Spieler 1</h2>
-          <RememberedNameField
+          <SelectOrCreateField
             label="Name"
             value={formState.playerOneName}
             options={playerOptions}
+            required
             disabled={isMutating}
+            selectPlaceholder="Spieler waehlen"
+            inputPlaceholder="Neuen Namen eingeben"
             onChange={(value) => updateField("playerOneName", value)}
-            onSelectRemembered={(value) => applyRememberedPlayerName("player1", value)}
+            onSelectOption={(value) => applyRememberedPlayerName("player1", value)}
           />
           <label className="field">
             <span>Armee</span>
@@ -207,32 +221,29 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>Detachment (optional)</span>
-            <input
-              list="player-one-detachment-options"
-              value={formState.playerOneDetachment}
-              onChange={(event) => updateField("playerOneDetachment", event.target.value)}
-              disabled={isMutating}
-              placeholder="Offen oder vorhandenes waehlen"
-            />
-            <datalist id="player-one-detachment-options">
-              {(detachmentOptionsByArmy.get(formState.playerOneArmy) ?? []).map((detachment) => (
-                <option key={detachment} value={detachment} />
-              ))}
-            </datalist>
-          </label>
+          <SelectOrCreateField
+            label="Detachment (optional)"
+            value={formState.playerOneDetachment}
+            options={detachmentOptionsByArmy.get(formState.playerOneArmy) ?? []}
+            disabled={isMutating}
+            selectPlaceholder="Detachment waehlen"
+            inputPlaceholder="Neues Detachment eingeben"
+            onChange={(value) => updateField("playerOneDetachment", value)}
+          />
         </section>
 
         <section className="card stack">
           <h2>Spieler 2</h2>
-          <RememberedNameField
+          <SelectOrCreateField
             label="Name"
             value={formState.playerTwoName}
             options={playerOptions}
+            required
             disabled={isMutating}
+            selectPlaceholder="Spieler waehlen"
+            inputPlaceholder="Neuen Namen eingeben"
             onChange={(value) => updateField("playerTwoName", value)}
-            onSelectRemembered={(value) => applyRememberedPlayerName("player2", value)}
+            onSelectOption={(value) => applyRememberedPlayerName("player2", value)}
           />
           <label className="field">
             <span>Armee</span>
@@ -250,21 +261,15 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>Detachment (optional)</span>
-            <input
-              list="player-two-detachment-options"
-              value={formState.playerTwoDetachment}
-              onChange={(event) => updateField("playerTwoDetachment", event.target.value)}
-              disabled={isMutating}
-              placeholder="Offen oder vorhandenes waehlen"
-            />
-            <datalist id="player-two-detachment-options">
-              {(detachmentOptionsByArmy.get(formState.playerTwoArmy) ?? []).map((detachment) => (
-                <option key={detachment} value={detachment} />
-              ))}
-            </datalist>
-          </label>
+          <SelectOrCreateField
+            label="Detachment (optional)"
+            value={formState.playerTwoDetachment}
+            options={detachmentOptionsByArmy.get(formState.playerTwoArmy) ?? []}
+            disabled={isMutating}
+            selectPlaceholder="Detachment waehlen"
+            inputPlaceholder="Neues Detachment eingeben"
+            onChange={(value) => updateField("playerTwoDetachment", value)}
+          />
         </section>
 
         <section className="card stack">
@@ -281,7 +286,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
               disabled={isMutating}
             />
           </label>
-          <div className="two-column-grid">
+          <div className="two-column-grid game-scheduling-grid">
             <label className="field">
               <span>Datum</span>
               <input
@@ -303,24 +308,24 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
               />
             </label>
           </div>
-          <label className="field">
-            <span>Aufstellung (optional)</span>
-            <input
-              value={formState.deployment}
-              onChange={(event) => updateField("deployment", event.target.value)}
-              disabled={isMutating}
-              placeholder="Kann leer bleiben"
-            />
-          </label>
-          <label className="field">
-            <span>Primaermission (optional)</span>
-            <input
-              value={formState.primaryMission}
-              onChange={(event) => updateField("primaryMission", event.target.value)}
-              disabled={isMutating}
-              placeholder="Kann leer bleiben"
-            />
-          </label>
+          <SelectOrCreateField
+            label="Aufstellung (optional)"
+            value={formState.deployment}
+            options={deploymentOptions}
+            disabled={isMutating}
+            selectPlaceholder="Aufstellung waehlen"
+            inputPlaceholder="Neue Aufstellung eingeben"
+            onChange={(value) => updateField("deployment", value)}
+          />
+          <SelectOrCreateField
+            label="Primaermission (optional)"
+            value={formState.primaryMission}
+            options={primaryMissionOptions}
+            disabled={isMutating}
+            selectPlaceholder="Primaermission waehlen"
+            inputPlaceholder="Neue Primaermission eingeben"
+            onChange={(value) => updateField("primaryMission", value)}
+          />
 
           <div className="field">
             <span>Defender</span>

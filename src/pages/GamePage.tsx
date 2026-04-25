@@ -31,11 +31,21 @@ interface GamePageProps {
   forceOverview?: boolean;
 }
 
+type EditableEventFilterType =
+  | "all"
+  | "cp-gained"
+  | "cp-spent"
+  | "primary"
+  | "secondary"
+  | "legacy-total"
+  | "note";
+
 interface EditableEventItem {
   id: string;
   playerId: string;
   playerName: string;
   kind: "cp" | "score" | "note";
+  eventType: Exclude<EditableEventFilterType, "all">;
   label: string;
   value?: number;
   displayValue?: number;
@@ -60,6 +70,8 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : "player2",
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
 });
+
+const REOPEN_GAME_PASSWORD = "110326";
 
 const getRoundSurfaceClassName = (roundNumber?: number) =>
   roundNumber && roundNumber % 2 === 0 ? "round-surface round-surface--even" : "round-surface round-surface--odd";
@@ -105,6 +117,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const [roundChangePulse, setRoundChangePulse] = useState<number | null>(null);
   const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
+  const [entryFilterPlayerId, setEntryFilterPlayerId] = useState<"all" | PlayerId>("all");
+  const [entryFilterType, setEntryFilterType] = useState<EditableEventFilterType>("all");
+  const [reopenPasswordOpen, setReopenPasswordOpen] = useState(false);
+  const [reopenPassword, setReopenPassword] = useState("");
+  const [reopenPasswordError, setReopenPasswordError] = useState("");
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
@@ -208,6 +225,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               playerId: event.playerId,
               playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
               kind: "cp" as const,
+              eventType:
+                (event.cpType === "gained" ? "cp-gained" : "cp-spent") as EditableEventItem["eventType"],
               label: event.cpType === "gained" ? "CP +" : "CP -",
               value: event.value,
               displayValue: Math.abs(event.value),
@@ -221,6 +240,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               playerId: event.playerId,
               playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
               kind: "score" as const,
+              eventType: event.scoreType as EditableEventItem["eventType"],
               label: `${
                 event.scoreType === "primary"
                   ? "Primary"
@@ -240,6 +260,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               playerId: event.playerId,
               playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
               kind: "note" as const,
+              eventType: "note" as const,
               label: "Notiz",
               note: event.note,
               roundNumber: event.roundNumber,
@@ -250,14 +271,23 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         : [],
     [game]
   );
+  const filteredEditableEvents = useMemo(
+    () =>
+      editableEvents.filter((event) => {
+        const matchesPlayer = entryFilterPlayerId === "all" || event.playerId === entryFilterPlayerId;
+        const matchesType = entryFilterType === "all" || event.eventType === entryFilterType;
+        return matchesPlayer && matchesType;
+      }),
+    [editableEvents, entryFilterPlayerId, entryFilterType]
+  );
+  const latestEditableEvent = editableEvents[0];
 
   useEffect(() => {
     if (detailsOpen || isEditingGame) {
       return;
     }
 
-    const runningTurn =
-      allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
+    const runningTurn = latestTurn;
     if (
       !runningTurn?.timing.startedAt ||
       runningTurn.timing.endedAt ||
@@ -271,7 +301,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [allTurns, detailsOpen, isEditingGame, latestTurn, selectedTurnKey]);
+  }, [detailsOpen, isEditingGame, latestTurn]);
 
   useEffect(() => {
     if (!game) {
@@ -564,6 +594,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     setNoteDraft("");
   };
 
+  const closeReopenDialog = () => {
+    setReopenPasswordOpen(false);
+    setReopenPassword("");
+    setReopenPasswordError("");
+  };
+
   const openTimerAdjustDialog = async () => {
     if (!selectedTurn || !selectedRound) {
       return;
@@ -647,10 +683,33 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     closeNoteDialog();
   };
 
-  const handleReopenGame = async () => {
+  const handleRequestReopenGame = () => {
+    setReopenPasswordOpen(true);
+    setReopenPassword("");
+    setReopenPasswordError("");
+  };
+
+  const handleConfirmReopenGame = async () => {
+    if (reopenPassword !== REOPEN_GAME_PASSWORD) {
+      setReopenPasswordError("Falsches Passwort.");
+      return;
+    }
+
+    closeReopenDialog();
     await reopenGame(game.id);
     if (forceOverview) {
       window.location.hash = `/game/${game.id}`;
+    }
+  };
+
+  const handleUndoLastEvent = async () => {
+    if (!latestEditableEvent) {
+      return;
+    }
+
+    await deleteGameEvent(game.id, latestEditableEvent.id);
+    if (editingEventId === latestEditableEvent.id) {
+      closeEditor();
     }
   };
 
@@ -769,7 +828,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
-                        onClick: () => void handleReopenGame()
+                        onClick: handleRequestReopenGame
                       }
                     : {
                         label: "Spiel beenden",
@@ -791,15 +850,74 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       }
     >
       {roundChangePulse !== null ? (
-        <div className="round-change-indicator" aria-hidden="true">
-          <span>Runde {roundChangePulse}</span>
-        </div>
+        <>
+          <div className="action-feedback-flash action-feedback-flash--round" aria-hidden="true" />
+          <div className="round-change-indicator" aria-hidden="true">
+            <strong>Neue Runde</strong>
+            <span>Runde {roundChangePulse}</span>
+          </div>
+        </>
       ) : null}
       {actionFlash ? (
         <div
           className={`action-feedback-flash action-feedback-flash--${actionFlash}`}
           aria-hidden="true"
         />
+      ) : null}
+      {reopenPasswordOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spiel wieder eroeffnen</h2>
+                  <p className="muted-copy">Passwort erforderlich</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={closeReopenDialog}
+                >
+                  Schliessen
+                </button>
+              </div>
+              <label className="field">
+                <span>Passwort</span>
+                <input
+                  type="password"
+                  value={reopenPassword}
+                  disabled={isMutating}
+                  autoFocus
+                  onChange={(event) => {
+                    setReopenPassword(event.target.value);
+                    if (reopenPasswordError) {
+                      setReopenPasswordError("");
+                    }
+                  }}
+                />
+              </label>
+              {reopenPasswordError ? <p className="muted-copy">{reopenPasswordError}</p> : null}
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  disabled={isMutating || !reopenPassword}
+                  onClick={() => void handleConfirmReopenGame()}
+                >
+                  Wieder eroeffnen
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  disabled={isMutating}
+                  onClick={closeReopenDialog}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
       {timerAdjustOpen ? (
         <div className="modal-backdrop">
@@ -927,8 +1045,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   <QuickAdjustControls
                     player={player}
                     currentCommandPoints={getPlayerCommandPoints(game, player.id)}
-                    currentPrimary={getPlayerPrimaryTotal(game, player.id)}
-                    currentSecondary={getPlayerSecondaryTotal(game, player.id)}
                     isSubmitting={isMutating || isClosed}
                     canSpendCommandPoints
                     onCommandPointChange={async (playerId, direction, amount) => {
@@ -1247,7 +1363,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   </div>
                 </form>
               ) : (
-                <div className="scoreboard__grid">
+                <div className="scoreboard__grid scoreboard__grid--details">
                   <div>
                     <span>Spieler 1</span>
                     <strong>{game.players[0].name}</strong>
@@ -1373,7 +1489,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               <div className="list-row">
                 <div>
                   <h2>Eintraege</h2>
-                  <p className="muted-copy">{isClosed ? "geschlossen" : "editierbar"}</p>
+                  <p className="muted-copy">
+                    {filteredEditableEvents.length} von {editableEvents.length} sichtbar
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -1386,9 +1504,46 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   Schliessen
                 </button>
               </div>
-              {editableEvents.length ? (
+              <div className="modal-filters">
+                <label className="field">
+                  <span>Spieler</span>
+                  <select
+                    value={entryFilterPlayerId}
+                    disabled={!editableEvents.length}
+                    onChange={(event) =>
+                      setEntryFilterPlayerId(event.target.value as "all" | PlayerId)
+                    }
+                  >
+                    <option value="all">Alle Spieler</option>
+                    {game.players.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Ereignisart</span>
+                  <select
+                    value={entryFilterType}
+                    disabled={!editableEvents.length}
+                    onChange={(event) =>
+                      setEntryFilterType(event.target.value as EditableEventFilterType)
+                    }
+                  >
+                    <option value="all">Alle Ereignisse</option>
+                    <option value="primary">Primary</option>
+                    <option value="secondary">Secondary</option>
+                    <option value="legacy-total">Gesamt</option>
+                    <option value="cp-gained">CP +</option>
+                    <option value="cp-spent">CP -</option>
+                    <option value="note">Notizen</option>
+                  </select>
+                </label>
+              </div>
+              {filteredEditableEvents.length ? (
                 <div className="stack modal-list">
-                  {editableEvents.map((event) => (
+                  {filteredEditableEvents.map((event) => (
                     <article
                       key={event.id}
                       className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
@@ -1472,7 +1627,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   ))}
                 </div>
               ) : (
-                <p className="muted-copy">Noch keine editierbaren Eintraege.</p>
+                <p className="muted-copy">
+                  {editableEvents.length
+                    ? "Keine Eintraege passend zum aktuellen Filter."
+                    : "Noch keine editierbaren Eintraege."}
+                </p>
               )}
             </div>
           </div>
@@ -1496,6 +1655,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
             disabled={isMutating || !canGoBack}
           >
             Zurueck
+          </button>
+          <button
+            type="button"
+            className="ghost-button compact-button"
+            onClick={() => void handleUndoLastEvent()}
+            disabled={isMutating || !latestEditableEvent}
+          >
+            Undo
           </button>
           <button
             type="button"

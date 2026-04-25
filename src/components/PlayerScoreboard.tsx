@@ -55,7 +55,28 @@ export const PlayerScoreboard = ({
           {emphasized ? <span className="meta-chip meta-chip--accent">Aktiv</span> : null}
         </div>
       </div>
-      <div className="scoreboard__grid scoreboard__grid--compact">
+      <div className="scoreboard__grid scoreboard__grid--compact scoreboard__grid--player">
+        <div className="scoreboard-stat scoreboard-stat--primary">
+          <div className="scoreboard-stat__top">
+            <span>Prim</span>
+            <strong>{primary}</strong>
+          </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundPrimary}</span>
+        </div>
+        <div className="scoreboard-stat scoreboard-stat--secondary">
+          <div className="scoreboard-stat__top">
+            <span>Sek</span>
+            <strong>{secondary}</strong>
+          </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundSecondary}</span>
+        </div>
+        <div className="scoreboard-stat scoreboard-stat--accent scoreboard-stat--total">
+          <div className="scoreboard-stat__top">
+            <span>Ges</span>
+            <strong>{total}</strong>
+          </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundTotal}</span>
+        </div>
         <div className="scoreboard-stat scoreboard-stat--cp">
           <div className="scoreboard-stat__top">
             <span>CP</span>
@@ -64,27 +85,6 @@ export const PlayerScoreboard = ({
           <span className="scoreboard-stat__meta">
             +{cpGained} / -{cpSpent}
           </span>
-        </div>
-        <div className="scoreboard-stat">
-          <div className="scoreboard-stat__top">
-            <span>Prim</span>
-            <strong>{primary}</strong>
-          </div>
-          <span className="scoreboard-stat__meta">Runde +{currentRoundPrimary}</span>
-        </div>
-        <div className="scoreboard-stat">
-          <div className="scoreboard-stat__top">
-            <span>Sek</span>
-            <strong>{secondary}</strong>
-          </div>
-          <span className="scoreboard-stat__meta">Runde +{currentRoundSecondary}</span>
-        </div>
-        <div className="scoreboard-stat scoreboard-stat--accent">
-          <div className="scoreboard-stat__top">
-            <span>Ges</span>
-            <strong>{total}</strong>
-          </div>
-          <span className="scoreboard-stat__meta">Runde +{currentRoundTotal}</span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--time">
           <div className="scoreboard-stat__top">
