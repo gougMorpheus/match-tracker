@@ -24,6 +24,7 @@ import {
   getTurnDurationMs,
   isTurnPaused
 } from "../utils/gameCalculations";
+import { isGameAdminPassword } from "../utils/gameSecurity";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -71,8 +72,6 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : "player2",
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
 });
-
-const REOPEN_GAME_PASSWORD = "110326";
 
 const getRoundSurfaceClassName = (roundNumber?: number) =>
   roundNumber && roundNumber % 2 === 0 ? "round-surface round-surface--even" : "round-surface round-surface--odd";
@@ -531,7 +530,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleConfirmDeleteGame = async () => {
-    if (deletePassword !== REOPEN_GAME_PASSWORD) {
+    if (!isGameAdminPassword(deletePassword)) {
       setDeletePasswordError("Falsches Passwort.");
       return;
     }
@@ -642,7 +641,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleConfirmReopenGame = async () => {
-    if (reopenPassword !== REOPEN_GAME_PASSWORD) {
+    if (!isGameAdminPassword(reopenPassword)) {
       setReopenPasswordError("Falsches Passwort.");
       return;
     }
