@@ -122,6 +122,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [reopenPasswordOpen, setReopenPasswordOpen] = useState(false);
   const [reopenPassword, setReopenPassword] = useState("");
   const [reopenPasswordError, setReopenPasswordError] = useState("");
+  const [deletePasswordOpen, setDeletePasswordOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePasswordError, setDeletePasswordError] = useState("");
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
@@ -580,11 +583,25 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     setIsEditingGame(false);
   };
 
-  const handleDeleteGame = async () => {
-    if (!window.confirm("Spiel wirklich loeschen? Alle Events gehen dabei verloren.")) {
+  const handleRequestDeleteGame = () => {
+    setDeletePasswordOpen(true);
+    setDeletePassword("");
+    setDeletePasswordError("");
+  };
+
+  const closeDeleteDialog = () => {
+    setDeletePasswordOpen(false);
+    setDeletePassword("");
+    setDeletePasswordError("");
+  };
+
+  const handleConfirmDeleteGame = async () => {
+    if (deletePassword !== REOPEN_GAME_PASSWORD) {
+      setDeletePasswordError("Falsches Passwort.");
       return;
     }
 
+    closeDeleteDialog();
     await deleteGame(game.id);
     window.location.hash = "/games";
   };
@@ -838,7 +855,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       },
                   {
                     label: "Spiel loeschen",
-                    onClick: () => void handleDeleteGame(),
+                    onClick: handleRequestDeleteGame,
                     disabled: isMutating,
                     danger: true
                   }
@@ -911,6 +928,62 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   className="ghost-button compact-button"
                   disabled={isMutating}
                   onClick={closeReopenDialog}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {deletePasswordOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spiel loeschen</h2>
+                  <p className="muted-copy">Passwort erforderlich</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={closeDeleteDialog}
+                >
+                  Schliessen
+                </button>
+              </div>
+              <label className="field">
+                <span>Passwort</span>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  disabled={isMutating}
+                  autoFocus
+                  onChange={(event) => {
+                    setDeletePassword(event.target.value);
+                    if (deletePasswordError) {
+                      setDeletePasswordError("");
+                    }
+                  }}
+                />
+              </label>
+              {deletePasswordError ? <p className="muted-copy">{deletePasswordError}</p> : null}
+              <p className="muted-copy">Alle Events dieses Spiels werden dabei entfernt.</p>
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="danger-button compact-button"
+                  disabled={isMutating || !deletePassword}
+                  onClick={() => void handleConfirmDeleteGame()}
+                >
+                  Spiel loeschen
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  disabled={isMutating}
+                  onClick={closeDeleteDialog}
                 >
                   Abbrechen
                 </button>
@@ -1246,7 +1319,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     </label>
                   </section>
 
-                  <div className="two-column-grid">
+                  <div className="two-column-grid game-scheduling-grid">
                     <label className="field">
                       <span>Spielpunkte</span>
                       <input
@@ -1365,6 +1438,30 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               ) : (
                 <div className="scoreboard__grid scoreboard__grid--details">
                   <div>
+                    <span>Datum</span>
+                    <strong>{game.scheduledDate || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Uhrzeit</span>
+                    <strong>{game.scheduledTime || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Ende</span>
+                    <strong>{formatClockTime(game.endedAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Aufstellung</span>
+                    <strong>{game.deployment || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Primaermission</span>
+                    <strong>{game.primaryMission || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Spielpunkte</span>
+                    <strong>{game.gamePoints}</strong>
+                  </div>
+                  <div>
                     <span>Spieler 1</span>
                     <strong>{game.players[0].name}</strong>
                     <p>{game.players[0].army.name}</p>
@@ -1375,15 +1472,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     <strong>{game.players[1].name}</strong>
                     <p>{game.players[1].army.name}</p>
                     <p>{game.players[1].army.detachment || "-"}</p>
-                  </div>
-                  <div>
-                    <span>Datum</span>
-                    <strong>{game.scheduledDate || "-"}</strong>
-                    <p>{game.scheduledTime || "-"}</p>
-                  </div>
-                  <div>
-                    <span>Spielpunkte</span>
-                    <strong>{game.gamePoints}</strong>
                   </div>
                   <div>
                     <span>Defender</span>
@@ -1402,24 +1490,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     <strong>{formatClockTime(game.startedAt)}</strong>
                   </div>
                   <div>
-                    <span>Endzeit</span>
-                    <strong>{formatClockTime(game.endedAt)}</strong>
-                  </div>
-                  <div>
                     <span>Match-Zeit</span>
                     <strong>{formatDuration(getGameDurationMs(game))}</strong>
                   </div>
                   <div>
                     <span>Gesamt offen</span>
                     <strong>{formatDuration(getSessionDurationMs(game))}</strong>
-                  </div>
-                  <div>
-                    <span>Aufstellung</span>
-                    <strong>{game.deployment || "-"}</strong>
-                  </div>
-                  <div>
-                    <span>Primaermission</span>
-                    <strong>{game.primaryMission || "-"}</strong>
                   </div>
                 </div>
               )}

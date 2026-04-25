@@ -15,7 +15,6 @@ interface QuickAdjustControlsProps {
   ) => Promise<void>;
 }
 
-const CP_AMOUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const SCORE_AMOUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export const QuickAdjustControls = ({
@@ -26,41 +25,27 @@ export const QuickAdjustControls = ({
   onCommandPointChange,
   onScoreChange
 }: QuickAdjustControlsProps) => {
-  const [cpAmount, setCpAmount] = useState(1);
   const [scoreAmount, setScoreAmount] = useState(1);
 
   return (
     <div className="quick-controls">
-      <div className="quick-controls__row">
-        <span>CP</span>
-        <div className="quick-controls__actions">
+      <div className="quick-controls__row quick-controls__row--cp">
+        <div className="quick-controls__actions quick-controls__actions--pair">
           <button
             type="button"
             className="mini-button"
             disabled={isSubmitting || !canSpendCommandPoints || currentCommandPoints <= 0}
-            onClick={() => void onCommandPointChange(player.id, "minus", cpAmount)}
+            onClick={() => void onCommandPointChange(player.id, "minus", 1)}
           >
-            Spend {cpAmount}
+            1 CP spend
           </button>
-          <select
-            className="step-input"
-            value={cpAmount}
-            disabled={isSubmitting}
-            onChange={(event) => setCpAmount(Number(event.target.value))}
-          >
-            {CP_AMOUNT_OPTIONS.map((amount) => (
-              <option key={amount} value={amount}>
-                {amount}
-              </option>
-            ))}
-          </select>
           <button
             type="button"
             className="mini-button mini-button--accent"
             disabled={isSubmitting}
-            onClick={() => void onCommandPointChange(player.id, "plus", cpAmount)}
+            onClick={() => void onCommandPointChange(player.id, "plus", 1)}
           >
-            Earn {cpAmount}
+            1 CP earn
           </button>
         </div>
       </div>
