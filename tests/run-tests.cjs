@@ -1,9 +1,11 @@
 const { runGameCalculationsTests } = require("./gameCalculations.test.cjs");
 const { runGameSecurityTests } = require("./gameSecurity.test.cjs");
+const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 
 const suites = [
   ["gameCalculations", runGameCalculationsTests],
-  ["gameSecurity", runGameSecurityTests]
+  ["gameSecurity", runGameSecurityTests],
+  ["timerFocus", runTimerFocusTests]
 ];
 
 let failures = 0;

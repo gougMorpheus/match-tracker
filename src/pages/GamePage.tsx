@@ -25,6 +25,7 @@ import {
   isTimeoutActive,
   isTurnPaused
 } from "../utils/gameCalculations";
+import { getTimerFocusTurn, shouldRunTimerTicker } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
@@ -232,35 +233,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const redoLabel = redoActionLabel ? `Redo: ${redoActionLabel}` : "Redo";
 
   useEffect(() => {
-    if (detailsOpen || isEditingGame) {
-      return;
-    }
-
-    if (timeoutActive) {
-      const interval = window.setInterval(() => {
-        setTick((current) => current + 1);
-      }, 1000);
-
-      return () => window.clearInterval(interval);
-    }
-
-    const runningTurn = latestTurn;
-    if (
-      !runningTurn?.timing.startedAt ||
-      runningTurn.timing.endedAt ||
-      isTurnPaused(runningTurn)
-    ) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      setTick((current) => current + 1);
-    }, 1000);
-
-    return () => window.clearInterval(interval);
-  }, [detailsOpen, isEditingGame, latestTurn, timeoutActive]);
-
-  useEffect(() => {
     if (!game) {
       setGameForm(null);
       setSelectedTurnKey(null);
@@ -363,6 +335,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const latestRound = game.rounds[game.rounds.length - 1];
   const selectedTurn =
     allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
+  const timerFocusTurn = getTimerFocusTurn(selectedTurn, latestTurn);
   const selectedTurnIndex = selectedTurn
     ? allTurns.findIndex((turn) => turn.key === `${selectedTurn.roundNumber}:${selectedTurn.turnNumber}`)
     : -1;
@@ -380,8 +353,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isTimerRunning = !isClosed && !timeoutActive && hasActiveTurn && !isPaused;
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
-  const displayTurn = isTimerRunning || timeoutActive ? latestTurn ?? selectedTurn : selectedTurn;
-  const displayRound = isTimerRunning || timeoutActive ? latestRound ?? selectedRound : selectedRound;
+  const displayTurn = timerFocusTurn ?? selectedTurn;
+  const displayRound =
+    timerFocusTurn ? game.rounds.find((round) => round.roundNumber === timerFocusTurn.roundNumber) ?? selectedRound : selectedRound;
   const selectedRoundTurns =
     displayRound?.turns.filter((turn) =>
       displayTurn ? turn.turnNumber <= displayTurn.turnNumber : true
@@ -405,6 +379,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const selectedNotePlayer = noteDialogPlayerId
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
+
+  useEffect(() => {
+    if (detailsOpen || isEditingGame) {
+      return;
+    }
+
+    const focusTurn = timerFocusTurn;
+    if (shouldRunTimerTicker(focusTurn, timeoutActive, isClosed)) {
+      const interval = window.setInterval(() => {
+        setTick((current) => current + 1);
+      }, 1000);
+
+      return () => window.clearInterval(interval);
+    }
+  }, [detailsOpen, isEditingGame, isClosed, timeoutActive, timerFocusTurn]);
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
