@@ -1113,7 +1113,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           if (keepTimerRunning) {
             pushPauseForRunningTurns(getTurnKey(nextExistingTurn));
             pushStartStateForTurn(nextExistingTurn, true);
-            enqueueTimeEvents(game, eventsToAdd, "Weiter", nextExistingTurn);
+            enqueueTimeEvents(game, eventsToAdd, "Weiter", currentTurn ?? nextExistingTurn);
             void flushSyncQueue();
           }
           return;
@@ -1284,10 +1284,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         }
 
-        enqueueTimeEvents(game, eventsToAdd, "Weiter", {
-          roundNumber: currentRound.roundNumber,
-          turnNumber: 2
-        });
+        enqueueTimeEvents(game, eventsToAdd, "Weiter", currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 });
         void flushSyncQueue();
       }),
     [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation]
@@ -1361,7 +1358,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         if (eventsToAdd.length) {
-          enqueueTimeEvents(game, eventsToAdd, "Zurueck", targetTurn);
+          enqueueTimeEvents(game, eventsToAdd, "Zurueck", currentTurn ?? targetTurn);
           void flushSyncQueue();
         }
       }),

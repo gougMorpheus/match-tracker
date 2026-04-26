@@ -1394,7 +1394,7 @@ textarea {
 .timeout-banner {
   position: sticky;
   top: 4.6rem;
-  z-index: 22;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2203,7 +2203,7 @@ textarea {
   position: fixed;
   left: 50%;
   bottom: 6.25rem;
-  z-index: 27;
+  z-index: 20;
   display: grid;
   width: min(calc(100% - 1.2rem), 760px);
   transform: translateX(-50%);
