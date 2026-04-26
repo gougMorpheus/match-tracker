@@ -679,6 +679,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     closeEditor();
+    if (undoActionLabel.startsWith("Weiter") || undoActionLabel.startsWith("Zurueck")) {
+      snapToLatestTurnRef.current = true;
+    }
     await undoGameAction(game.id);
   };
 
@@ -688,6 +691,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     closeEditor();
+    if (redoActionLabel.startsWith("Weiter") || redoActionLabel.startsWith("Zurueck")) {
+      snapToLatestTurnRef.current = true;
+    }
     await redoGameAction(game.id);
   };
 
