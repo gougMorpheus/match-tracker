@@ -19,7 +19,6 @@ interface PlayerScoreboardProps {
   player: Player;
   emphasized?: boolean;
   defender?: boolean;
-  timerRunning?: boolean;
   controls?: ReactNode;
   noteAction?: ReactNode;
 }
@@ -29,7 +28,6 @@ export const PlayerScoreboard = ({
   player,
   emphasized = false,
   defender = false,
-  timerRunning = false,
   controls,
   noteAction
 }: PlayerScoreboardProps) => {
@@ -52,13 +50,6 @@ export const PlayerScoreboard = ({
           <p>{player.army.name}</p>
         </div>
         <div className="scoreboard__meta">
-          <div
-            className={`scoreboard__timer ${timerRunning ? "is-running" : ""}`}
-            aria-label={`${player.name} verbrauchte Zeit ${formatDuration(activeDuration)}`}
-          >
-            <span>Zeit</span>
-            <strong>{formatDuration(activeDuration)}</strong>
-          </div>
           {noteAction}
           {defender ? <span className="meta-chip">Defender</span> : null}
           {emphasized ? <span className="meta-chip meta-chip--accent">Aktiv</span> : null}
