@@ -633,6 +633,12 @@ textarea {
   color: #cbd5e1;
 }
 
+.status-pill--timeout {
+  background: rgba(251, 113, 133, 0.18);
+  border-color: rgba(251, 113, 133, 0.34);
+  color: #fecdd3;
+}
+
 .tracker-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1430,6 +1436,34 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.timeout-banner {
+  position: sticky;
+  top: 4.6rem;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin: 0 0 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  border-radius: 16px;
+  background: rgba(127, 29, 29, 0.34);
+  color: #fecdd3;
+  box-shadow: 0 12px 30px rgba(8, 15, 28, 0.26);
+  backdrop-filter: blur(12px);
+}
+
+.timeout-banner strong {
+  white-space: nowrap;
+}
+
+.timeout-banner span {
+  color: #fee2e2;
+  font-size: 0.76rem;
+  text-align: right;
+}
+
 .game-page .primary-button--large {
   min-height: 38px;
   font-size: 0.82rem;
@@ -2204,6 +2238,26 @@ textarea {
 
 .game-bottom-dock .compact-button {
   min-height: 34px;
+}
+
+.game-timeout-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 4.2rem;
+  z-index: 27;
+  display: grid;
+  width: min(calc(100% - 1.2rem), 760px);
+  transform: translateX(-50%);
+  padding: 0.45rem;
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  border-radius: 18px;
+  background: rgba(11, 17, 32, 0.95);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.game-timeout-dock .compact-button {
+  min-height: 38px;
 }
 
 .game-bottom-dock__undo {

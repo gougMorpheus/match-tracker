@@ -159,7 +159,7 @@ export const getRoundBaseDurationMs = (round: Round): number =>
 export const getRoundDurationMs = (round: Round, game?: Game): number =>
   clampFloor(
     round.turns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
-      (game ? getRoundCorrectionMs(game, round.roundNumber) : 0)
+      (game ? getRoundCorrectionMs(game, round.roundNumber) + getTimeoutDurationMs(game, round.roundNumber) : 0)
   );
 
 export const getCompletedRoundDurationMs = (round: Round, game?: Game): number | null =>
@@ -211,6 +211,45 @@ export const isSessionRunning = (game: Game): boolean => {
   const latestSessionEvent = sessionEvents[sessionEvents.length - 1];
   return latestSessionEvent?.action === "session-start";
 };
+
+export const isTimeoutActive = (game: Game): boolean => {
+  const timeoutEvents = [...game.timeEvents]
+    .filter((event) => event.action === "timeout-start" || event.action === "timeout-end")
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const latestTimeoutEvent = timeoutEvents[timeoutEvents.length - 1];
+
+  return latestTimeoutEvent?.action === "timeout-start";
+};
+
+export function getTimeoutDurationMs(game: Game, roundNumber?: number): number {
+  const timeoutEvents = [...game.timeEvents]
+    .filter(
+      (event) =>
+        (event.action === "timeout-start" || event.action === "timeout-end") &&
+        (!roundNumber || event.roundNumber === roundNumber)
+    )
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  let openStartedAt: string | null = null;
+  let total = 0;
+
+  timeoutEvents.forEach((event) => {
+    if (event.action === "timeout-start") {
+      openStartedAt = event.createdAt;
+      return;
+    }
+
+    if (event.action === "timeout-end" && openStartedAt) {
+      total += getDurationMs(openStartedAt, event.createdAt);
+      openStartedAt = null;
+    }
+  });
+
+  if (openStartedAt) {
+    total += getDurationMs(openStartedAt, new Date().toISOString());
+  }
+
+  return total;
+}
 
 export const getPlayerTurnDurationTotalMs = (game: Game, playerId: PlayerId): number =>
   game.rounds.reduce(

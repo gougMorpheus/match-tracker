@@ -45,6 +45,7 @@ import {
   getPlayerSecondaryTotal,
   getTurnBaseDurationMs,
   isSessionRunning,
+  isTimeoutActive,
   isTurnPaused
 } from "../utils/gameCalculations";
 import {
@@ -110,6 +111,8 @@ interface GameStoreValue {
   rewindLastTurn: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
   pauseActiveTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   startGameTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
+  startTimeout: (gameId: string, turnRef?: TurnRef) => Promise<void>;
+  endTimeout: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   reopenGame: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   deleteGameEvent: (gameId: string, eventId: string) => Promise<void>;
@@ -1490,6 +1493,83 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
   );
 
+  const startTimeout = useCallback(
+    async (gameId: string, turnRef?: TurnRef) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed" || isTimeoutActive(game)) {
+          return;
+        }
+
+        const targetTurn = getTurnByRef(game, turnRef);
+        if (!targetTurn || !targetTurn.timing.startedAt || targetTurn.timing.endedAt || isTurnPaused(targetTurn)) {
+          return;
+        }
+
+        const now = getNowIso();
+        enqueueTimeEvents(game, [
+          {
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "turn-pause",
+            createdAt: now
+          },
+          {
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "timeout-start",
+            createdAt: now
+          }
+        ], "Time-out starten");
+        void flushSyncQueue();
+      }),
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+  );
+
+  const endTimeout = useCallback(
+    async (gameId: string, turnRef?: TurnRef) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game || game.status === "completed" || !isTimeoutActive(game)) {
+          return;
+        }
+
+        const targetTurn = getTurnByRef(game, turnRef);
+        const now = getNowIso();
+        const eventsToAdd: Array<{
+          action: TimeEventAction;
+          playerId?: PlayerId;
+          roundNumber?: number;
+          turnNumber?: number;
+          createdAt?: string;
+        }> = [
+          {
+            playerId: targetTurn?.playerId,
+            roundNumber: targetTurn?.roundNumber,
+            turnNumber: targetTurn?.turnNumber,
+            action: "timeout-end",
+            createdAt: now
+          }
+        ];
+
+        if (targetTurn && targetTurn.timing.startedAt && !targetTurn.timing.endedAt && isTurnPaused(targetTurn)) {
+          eventsToAdd.push({
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "turn-resume",
+            createdAt: now
+          });
+        }
+
+        enqueueTimeEvents(game, eventsToAdd, "Time-out beenden");
+        void flushSyncQueue();
+      }),
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+  );
+
   const reopenGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
@@ -1664,6 +1744,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       rewindLastTurn,
       pauseActiveTimer,
       startGameTimer,
+      startTimeout,
+      endTimeout,
       reopenGame,
       updateGameEvent,
       deleteGameEvent,
@@ -1695,12 +1777,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       isLoading,
       isMutating,
       pauseActiveTimer,
+      endTimeout,
       refreshGames,
       setTimerCorrections,
       resetAllGameTimers,
       reopenGame,
       rewindLastTurn,
       redoGameAction,
+      startTimeout,
       startGameTimer,
       updateGameDetails,
       updateGameEvent,

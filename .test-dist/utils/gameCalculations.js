@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isSessionRunning = exports.getSessionDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = void 0;
-exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = void 0;
+exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.isSessionRunning = exports.getSessionDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = void 0;
+exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = void 0;
+exports.getTimeoutDurationMs = getTimeoutDurationMs;
 const time_1 = require("./time");
 const sumValues = (items) => items.reduce((total, item) => total + item.value, 0);
 const clampFloor = (value) => Math.max(value, 0);
@@ -86,7 +87,7 @@ exports.getCompletedTurnDurationMs = getCompletedTurnDurationMs;
 const getRoundBaseDurationMs = (round) => round.turns.reduce((total, turn) => total + (0, exports.getTurnBaseDurationMs)(turn), 0);
 exports.getRoundBaseDurationMs = getRoundBaseDurationMs;
 const getRoundDurationMs = (round, game) => clampFloor(round.turns.reduce((total, turn) => total + (0, exports.getTurnDurationMs)(turn, game), 0) +
-    (game ? (0, exports.getRoundCorrectionMs)(game, round.roundNumber) : 0));
+    (game ? (0, exports.getRoundCorrectionMs)(game, round.roundNumber) + getTimeoutDurationMs(game, round.roundNumber) : 0));
 exports.getRoundDurationMs = getRoundDurationMs;
 const getCompletedRoundDurationMs = (round, game) => round.startedAt && round.endedAt ? (0, exports.getRoundDurationMs)(round, game) : null;
 exports.getCompletedRoundDurationMs = getCompletedRoundDurationMs;
@@ -127,6 +128,36 @@ const isSessionRunning = (game) => {
     return latestSessionEvent?.action === "session-start";
 };
 exports.isSessionRunning = isSessionRunning;
+const isTimeoutActive = (game) => {
+    const timeoutEvents = [...game.timeEvents]
+        .filter((event) => event.action === "timeout-start" || event.action === "timeout-end")
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    const latestTimeoutEvent = timeoutEvents[timeoutEvents.length - 1];
+    return latestTimeoutEvent?.action === "timeout-start";
+};
+exports.isTimeoutActive = isTimeoutActive;
+function getTimeoutDurationMs(game, roundNumber) {
+    const timeoutEvents = [...game.timeEvents]
+        .filter((event) => (event.action === "timeout-start" || event.action === "timeout-end") &&
+        (!roundNumber || event.roundNumber === roundNumber))
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    let openStartedAt = null;
+    let total = 0;
+    timeoutEvents.forEach((event) => {
+        if (event.action === "timeout-start") {
+            openStartedAt = event.createdAt;
+            return;
+        }
+        if (event.action === "timeout-end" && openStartedAt) {
+            total += (0, time_1.getDurationMs)(openStartedAt, event.createdAt);
+            openStartedAt = null;
+        }
+    });
+    if (openStartedAt) {
+        total += (0, time_1.getDurationMs)(openStartedAt, new Date().toISOString());
+    }
+    return total;
+}
 const getPlayerTurnDurationTotalMs = (game, playerId) => game.rounds.reduce((total, round) => total +
     round.turns.reduce((turnTotal, turn) => turnTotal + (turn.playerId === playerId ? (0, exports.getTurnDurationMs)(turn, game) : 0), 0), 0);
 exports.getPlayerTurnDurationTotalMs = getPlayerTurnDurationTotalMs;

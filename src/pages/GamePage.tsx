@@ -22,6 +22,7 @@ import {
   getTotalCorrectionMs,
   getTurnBaseDurationMs,
   getTurnDurationMs,
+  isTimeoutActive,
   isTurnPaused
 } from "../utils/gameCalculations";
 import { isGameAdminPassword } from "../utils/gameSecurity";
@@ -96,6 +97,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     updateGameDetails,
     pauseActiveTimer,
     startGameTimer,
+    startTimeout,
+    endTimeout,
     reopenGame,
     finishGame,
     deleteGame,
@@ -149,6 +152,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     [game]
   );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
+  const timeoutActive = game ? isTimeoutActive(game) : false;
   const {
     playerOptions,
     latestArmyByPlayerName,
@@ -231,6 +235,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
+    if (timeoutActive) {
+      const interval = window.setInterval(() => {
+        setTick((current) => current + 1);
+      }, 1000);
+
+      return () => window.clearInterval(interval);
+    }
+
     const runningTurn = latestTurn;
     if (
       !runningTurn?.timing.startedAt ||
@@ -245,7 +257,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [detailsOpen, isEditingGame, latestTurn]);
+  }, [detailsOpen, isEditingGame, latestTurn, timeoutActive]);
 
   useEffect(() => {
     if (!game) {
@@ -370,8 +382,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const showOverview = isClosed || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
-  const isTimerRunning = !isClosed && hasActiveTurn && !isPaused;
-  const timerStatusLabel = isTimerRunning ? "Laeuft" : "Gestoppt";
+  const isTimerRunning = !isClosed && !timeoutActive && hasActiveTurn && !isPaused;
+  const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
   const currentRoundNumber = selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
   const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
@@ -678,6 +690,28 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     await redoGameAction(game.id);
   };
 
+  const handleStartTimeout = async () => {
+    if (!selectedTurn || !isTimerRunning) {
+      return;
+    }
+
+    await startTimeout(game.id, {
+      roundNumber: selectedTurn.roundNumber,
+      turnNumber: selectedTurn.turnNumber
+    });
+  };
+
+  const handleEndTimeout = async () => {
+    if (!selectedTurn || !timeoutActive) {
+      return;
+    }
+
+    await endTimeout(game.id, {
+      roundNumber: selectedTurn.roundNumber,
+      turnNumber: selectedTurn.turnNumber
+    });
+  };
+
   const handleAdvance = async () => {
     if (canGoForwardToExistingTurn) {
       const nextTurn = allTurns[selectedTurnIndex + 1];
@@ -758,7 +792,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
                 Spiel: {isClosed ? "zu" : "offen"}
               </span>
-              <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""}`}>
+              <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""} ${timeoutActive ? "status-pill--timeout" : ""}`}>
                 Timer: {timerStatusLabel}
               </span>
             </div>
@@ -788,6 +822,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
                   ...(!showOverview
                     ? [
+                        {
+                          label: "Time-out starten",
+                          onClick: () => void handleStartTimeout(),
+                          disabled: isMutating || !isTimerRunning || timeoutActive
+                        },
                         {
                           label: "Timer korrigieren",
                           onClick: () => void openTimerAdjustDialog(),
@@ -833,6 +872,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           className={`action-feedback-flash action-feedback-flash--${actionFlash}`}
           aria-hidden="true"
         />
+      ) : null}
+      {timeoutActive ? (
+        <div className="timeout-banner" role="status">
+          <strong>Time-out aktiv</strong>
+          <span>Spielzeit laeuft, Spielerzeit ist pausiert.</span>
+        </div>
       ) : null}
       {reopenPasswordOpen ? (
         <PasswordDialog
@@ -1448,63 +1493,77 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       ) : null}
 
       {!showOverview ? (
-        <div className="game-bottom-dock">
-          <button
-            type="button"
-            className="primary-button compact-button"
-            onClick={() => void handleAdvance()}
-            disabled={isMutating}
-          >
-            Weiter
-          </button>
-          <button
-            type="button"
-            className="ghost-button compact-button"
-            onClick={() => void handleGoBack()}
-            disabled={isMutating || !canGoBack}
-          >
-            Zurueck
-          </button>
-          <button
-            type="button"
-            className="ghost-button compact-button game-bottom-dock__undo"
-            onClick={() => void handleUndoLastEvent()}
-            disabled={isMutating || !undoActionLabel}
-            title={undoLabel}
-          >
-            {undoLabel}
-          </button>
-          <button
-            type="button"
-            className="secondary-button compact-button"
-            onClick={() =>
-              void (
-                isTimerRunning
-                  ? pauseActiveTimer(
-                      game.id,
-                      selectedTurn
-                        ? {
-                            roundNumber: selectedTurn.roundNumber,
-                            turnNumber: selectedTurn.turnNumber
-                          }
-                        : undefined
-                    )
-                  : startGameTimer(
-                      game.id,
-                      selectedTurn
-                        ? {
-                            roundNumber: selectedTurn.roundNumber,
-                            turnNumber: selectedTurn.turnNumber
-                          }
-                        : undefined
-                    )
-              )
-            }
-            disabled={isMutating}
-          >
-            {isTimerRunning ? "Timer aus" : "Timer an"}
-          </button>
-        </div>
+        <>
+          {timeoutActive ? (
+            <div className="game-timeout-dock">
+              <button
+                type="button"
+                className="danger-button compact-button"
+                onClick={() => void handleEndTimeout()}
+                disabled={isMutating}
+              >
+                Time-out beenden
+              </button>
+            </div>
+          ) : null}
+          <div className="game-bottom-dock">
+            <button
+              type="button"
+              className="primary-button compact-button"
+              onClick={() => void handleAdvance()}
+              disabled={isMutating || timeoutActive}
+            >
+              Weiter
+            </button>
+            <button
+              type="button"
+              className="ghost-button compact-button"
+              onClick={() => void handleGoBack()}
+              disabled={isMutating || !canGoBack || timeoutActive}
+            >
+              Zurueck
+            </button>
+            <button
+              type="button"
+              className="ghost-button compact-button game-bottom-dock__undo"
+              onClick={() => void handleUndoLastEvent()}
+              disabled={isMutating || !undoActionLabel}
+              title={undoLabel}
+            >
+              {undoLabel}
+            </button>
+            <button
+              type="button"
+              className="secondary-button compact-button"
+              onClick={() =>
+                void (
+                  isTimerRunning
+                    ? pauseActiveTimer(
+                        game.id,
+                        selectedTurn
+                          ? {
+                              roundNumber: selectedTurn.roundNumber,
+                              turnNumber: selectedTurn.turnNumber
+                            }
+                          : undefined
+                      )
+                    : startGameTimer(
+                        game.id,
+                        selectedTurn
+                          ? {
+                              roundNumber: selectedTurn.roundNumber,
+                              turnNumber: selectedTurn.turnNumber
+                            }
+                          : undefined
+                      )
+                )
+              }
+              disabled={isMutating || timeoutActive}
+            >
+              {isTimerRunning ? "Timer aus" : "Timer an"}
+            </button>
+          </div>
+        </>
       ) : null}
     </Layout>
   );

@@ -45,7 +45,9 @@ const timeActions = new Set<TimeEventAction>([
   "turn-start",
   "turn-end",
   "turn-pause",
-  "turn-resume"
+  "turn-resume",
+  "timeout-start",
+  "timeout-end"
 ]);
 
 const createPlayerId = (gameId: string, slot: 1 | 2): PlayerId => `${gameId}:player-${slot}`;
@@ -552,7 +554,9 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
         event.event_type === "turn-start" ||
         event.event_type === "turn-end" ||
         event.event_type === "turn-pause" ||
-        event.event_type === "turn-resume";
+        event.event_type === "turn-resume" ||
+        event.event_type === "timeout-start" ||
+        event.event_type === "timeout-end";
 
       timeEvents.push({
         id: event.id,

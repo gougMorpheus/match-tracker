@@ -13,7 +13,9 @@ export type TimeEventAction =
   | "turn-start"
   | "turn-end"
   | "turn-pause"
-  | "turn-resume";
+  | "turn-resume"
+  | "timeout-start"
+  | "timeout-end";
 export type GameResult = "win" | "loss" | "tie";
 
 export interface Army {
