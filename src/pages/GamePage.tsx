@@ -556,8 +556,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     closeDeleteDialog();
-    await deleteGame(game.id);
-    window.location.hash = "/games";
+    try {
+      await deleteGame(game.id);
+    } finally {
+      onBack();
+    }
   };
 
   const closeNoteDialog = () => {

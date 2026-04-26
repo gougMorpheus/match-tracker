@@ -258,8 +258,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const queueRef = useRef(syncQueue);
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
-  const advanceGameRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
-  const rewindLastTurnRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => {
     gamesRef.current = games;
@@ -745,26 +743,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        if (entry.kind === "advance-turn") {
-          const currentTurn = getLatestTurn(entry.afterGame);
-          await rewindLastTurnRef.current(
-            gameId,
-            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
-            true,
-            false
-          );
-        } else if (entry.kind === "rewind-turn") {
-          const currentTurn = getLatestTurn(entry.afterGame);
-          await advanceGameRef.current(
-            gameId,
-            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
-            true,
-            false
-          );
-        } else {
-          replaceGame(entry.beforeGame);
-          enqueueSnapshotSync(entry.afterGame, entry.beforeGame);
-        }
+        replaceGame(entry.beforeGame);
+        enqueueSnapshotSync(entry.afterGame, entry.beforeGame);
         setHistoryStacksByGameId((currentStacks) => {
           const currentStack = currentStacks[gameId] ?? { undo: [], redo: [] };
           return {
@@ -777,7 +757,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
         void flushSyncQueue();
       }),
-    [enqueueSnapshotSync, flushSyncQueue, getGame, historyStacksByGameId, replaceGame, runMutation]
+    [enqueueSnapshotSync, flushSyncQueue, historyStacksByGameId, replaceGame, runMutation]
   );
 
   const redoGameAction = useCallback(
@@ -789,26 +769,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        if (entry.kind === "advance-turn") {
-          const currentTurn = getLatestTurn(entry.beforeGame);
-          await advanceGameRef.current(
-            gameId,
-            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
-            true,
-            false
-          );
-        } else if (entry.kind === "rewind-turn") {
-          const currentTurn = getLatestTurn(entry.beforeGame);
-          await rewindLastTurnRef.current(
-            gameId,
-            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
-            true,
-            false
-          );
-        } else {
-          replaceGame(entry.afterGame);
-          enqueueSnapshotSync(entry.beforeGame, entry.afterGame);
-        }
+        replaceGame(entry.afterGame);
+        enqueueSnapshotSync(entry.beforeGame, entry.afterGame);
         setHistoryStacksByGameId((currentStacks) => {
           const currentStack = currentStacks[gameId] ?? { undo: [], redo: [] };
           return {
@@ -821,7 +783,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
         void flushSyncQueue();
       }),
-    [enqueueSnapshotSync, flushSyncQueue, getGame, historyStacksByGameId, replaceGame, runMutation]
+    [enqueueSnapshotSync, flushSyncQueue, historyStacksByGameId, replaceGame, runMutation]
   );
 
   const createGame = useCallback(
@@ -1445,11 +1407,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }),
     [enqueueTimeEvents, flushSyncQueue, getGame, getPreviousTurnByRef, getTurnByRef, runMutation]
   );
-
-  useEffect(() => {
-    advanceGameRef.current = advanceGame;
-    rewindLastTurnRef.current = rewindLastTurn;
-  }, [advanceGame, rewindLastTurn]);
 
   const pauseActiveTimer = useCallback(
     async (gameId: string, turnRef?: TurnRef) =>
