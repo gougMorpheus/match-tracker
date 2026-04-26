@@ -197,17 +197,16 @@ const getLatestAddedEventId = (beforeGame: Game, afterGame: Game): string | null
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]?.id ?? null;
 };
 
-const getTimeHistoryLabel = (baseLabel: string, game: Game): string => {
-  if (baseLabel !== "Weiter") {
+const getTimeHistoryLabel = (baseLabel: string, turnRef?: TurnRef | null): string => {
+  if (baseLabel !== "Weiter" && baseLabel !== "Zurueck") {
     return baseLabel;
   }
 
-  if (game.status === "completed") {
-    return "Spiel beenden";
+  if (!turnRef) {
+    return baseLabel;
   }
 
-  const latestTurn = getLatestTurn(game);
-  return latestTurn ? `Weiter R${latestTurn.roundNumber} Z${latestTurn.turnNumber}` : "Weiter";
+  return `${baseLabel} R${turnRef.roundNumber} Z${turnRef.turnNumber}`;
 };
 
 const mergeRemoteWithPending = (
@@ -447,17 +446,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const commitGameSnapshot = useCallback(
-    (
-      label: string,
-      beforeGame: Game,
-      afterGame: Game,
-      options: { recordHistory?: boolean } = {}
-    ): Game => {
+    (label: string, beforeGame: Game, afterGame: Game): Game => {
       const nextGame = replaceGame(afterGame);
       enqueueSnapshotSync(beforeGame, nextGame);
-      if (options.recordHistory !== false) {
-        recordHistoryAction(label, beforeGame, nextGame);
-      }
+      recordHistoryAction(label, beforeGame, nextGame);
       return nextGame;
     },
     [enqueueSnapshotSync, recordHistoryAction, replaceGame]
@@ -1002,16 +994,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         turnNumber?: number;
         createdAt?: string;
       }>,
-      label = "Zeit geaendert"
+      label = "Zeit geaendert",
+      historyTurnRef?: TurnRef | null
     ) => {
       if (!timeEvents.length) {
         return game;
       }
 
       const nextGame = appendLocalTimeEvents(game, timeEvents);
-      return commitGameSnapshot(getTimeHistoryLabel(label, nextGame), game, nextGame, {
-        recordHistory: false
-      });
+      return commitGameSnapshot(getTimeHistoryLabel(label, historyTurnRef), game, nextGame);
     },
     [commitGameSnapshot]
   );
@@ -1122,7 +1113,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           if (keepTimerRunning) {
             pushPauseForRunningTurns(getTurnKey(nextExistingTurn));
             pushStartStateForTurn(nextExistingTurn, true);
-            enqueueTimeEvents(game, eventsToAdd, "Weiter");
+            enqueueTimeEvents(game, eventsToAdd, "Weiter", nextExistingTurn);
             void flushSyncQueue();
           }
           return;
@@ -1162,7 +1153,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
 
-          enqueueTimeEvents(game, eventsToAdd, "Weiter");
+          enqueueTimeEvents(game, eventsToAdd, "Weiter", {
+            roundNumber: firstRoundNumber,
+            turnNumber: 1
+          });
           void flushSyncQueue();
           return;
         }
@@ -1204,7 +1198,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const currentRoundHasTwoTurns = currentRound.turns.length >= 2 && (currentTurn?.turnNumber ?? 0) >= 2;
         if (currentRound.roundNumber >= MAX_ROUNDS && currentRoundHasTwoTurns) {
           closeCurrentGame();
-          enqueueTimeEvents(game, eventsToAdd, "Weiter");
+          enqueueTimeEvents(game, eventsToAdd, "Spiel beenden");
           void flushSyncQueue();
           return;
         }
@@ -1290,7 +1284,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         }
 
-        enqueueTimeEvents(game, eventsToAdd, "Weiter");
+        enqueueTimeEvents(game, eventsToAdd, "Weiter", {
+          roundNumber: currentRound.roundNumber,
+          turnNumber: 2
+        });
         void flushSyncQueue();
       }),
     [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation]
@@ -1364,7 +1361,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         if (eventsToAdd.length) {
-          enqueueTimeEvents(game, eventsToAdd, "Timer zu vorherigem Zug");
+          enqueueTimeEvents(game, eventsToAdd, "Zurueck", targetTurn);
           void flushSyncQueue();
         }
       }),
