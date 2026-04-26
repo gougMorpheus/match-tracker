@@ -967,6 +967,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 player={player}
                 emphasized={activePlayerId === player.id}
                 defender={game.defenderPlayerId === player.id}
+                timerRunning={isTimerRunning && activePlayerId === player.id}
                 noteAction={
                   <button
                     type="button"
