@@ -2160,6 +2160,14 @@ textarea {
   min-height: 34px;
 }
 
+.game-bottom-dock__undo {
+  overflow: hidden;
+  font-size: 0.72rem;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bottom-nav {
   position: fixed;
   left: 0;

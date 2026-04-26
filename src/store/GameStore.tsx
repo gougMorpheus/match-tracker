@@ -16,9 +16,12 @@ import {
 } from "../services/gamesRepository";
 import type {
   CommandPointType,
+  CommandPointEvent,
   CreateGameInput,
   Game,
+  NoteEvent,
   PlayerId,
+  ScoreEvent,
   ScoreType,
   TimeEventAction,
   TurnRef
@@ -77,6 +80,8 @@ interface TimerCorrectionInput {
   turnMs: number;
 }
 
+export type RestorableGameEvent = ScoreEvent | CommandPointEvent | NoteEvent;
+
 interface GameStoreValue {
   games: Game[];
   isLoading: boolean;
@@ -98,6 +103,7 @@ interface GameStoreValue {
   reopenGame: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   deleteGameEvent: (gameId: string, eventId: string) => Promise<void>;
+  restoreGameEvent: (gameId: string, event: RestorableGameEvent) => Promise<void>;
   finishGame: (gameId: string) => Promise<void>;
   deleteGame: (gameId: string) => Promise<void>;
   importGames: (games: Game[]) => Promise<void>;
@@ -1370,6 +1376,46 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [enqueueEventDelete, enqueueGameUpsert, flushSyncQueue, mutateGame, runMutation]
   );
 
+  const restoreGameEvent = useCallback(
+    async (gameId: string, event: RestorableGameEvent) =>
+      runMutation(async () => {
+        const nextGame = mutateGame(gameId, (currentGame) => {
+          if (event.type === "score") {
+            return syncDerivedGameState({
+              ...currentGame,
+              scoreEvents: [
+                ...currentGame.scoreEvents.filter((scoreEvent) => scoreEvent.id !== event.id),
+                event
+              ]
+            });
+          }
+
+          if (event.type === "command-point") {
+            return syncDerivedGameState({
+              ...currentGame,
+              commandPointEvents: [
+                ...currentGame.commandPointEvents.filter((commandPointEvent) => commandPointEvent.id !== event.id),
+                event
+              ]
+            });
+          }
+
+          return syncDerivedGameState({
+            ...currentGame,
+            noteEvents: [
+              ...currentGame.noteEvents.filter((noteEvent) => noteEvent.id !== event.id),
+              event
+            ]
+          });
+        });
+
+        enqueueGameUpsert(nextGame.id);
+        enqueueEventUpsert(nextGame.id, event.id);
+        void flushSyncQueue();
+      }),
+    [enqueueEventUpsert, enqueueGameUpsert, flushSyncQueue, mutateGame, runMutation]
+  );
+
   const finishGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
@@ -1478,6 +1524,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       reopenGame,
       updateGameEvent,
       deleteGameEvent,
+      restoreGameEvent,
       finishGame,
       deleteGame,
       importGames,
@@ -1507,6 +1554,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       resetAllGameTimers,
       reopenGame,
       rewindLastTurn,
+      restoreGameEvent,
       startGameTimer,
       updateGameDetails,
       updateGameEvent

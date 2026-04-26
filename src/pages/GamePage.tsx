@@ -8,6 +8,7 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { useGameStore } from "../store/GameStore";
+import type { RestorableGameEvent } from "../store/GameStore";
 import type { CreateGameInput, Game, PlayerId } from "../types/game";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
@@ -57,6 +58,30 @@ interface EditableEventItem {
   createdAt: string;
 }
 
+const getEditableEventActionLabel = (event?: EditableEventItem | null): string => {
+  if (!event) {
+    return "Undo";
+  }
+
+  if (event.kind === "note") {
+    return `Undo: ${event.playerName} Notiz`;
+  }
+
+  const value = event.value ?? 0;
+  const amount = event.displayValue ?? Math.abs(value);
+  const sign = value < 0 ? "-" : "+";
+  const eventTypeLabel =
+    event.eventType === "primary"
+      ? "Prim"
+      : event.eventType === "secondary"
+        ? "Sek"
+        : event.eventType === "legacy-total"
+          ? "Ges"
+          : "CP";
+
+  return `Undo: ${event.playerName} ${sign}${amount} ${eventTypeLabel}`;
+};
+
 const createGameFormState = (game: Game): CreateGameInput => ({
   playerOneName: game.players[0].name,
   playerOneArmy: game.players[0].army.name,
@@ -98,7 +123,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     startGameTimer,
     reopenGame,
     finishGame,
-    deleteGame
+    deleteGame,
+    restoreGameEvent
   } = useGameStore();
   const [, setTick] = useState(0);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -125,6 +151,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [deletePasswordOpen, setDeletePasswordOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePasswordError, setDeletePasswordError] = useState("");
+  const [redoEvent, setRedoEvent] = useState<RestorableGameEvent | null>(null);
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
@@ -218,6 +245,36 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     [editableEvents, entryFilterPlayerId, entryFilterType]
   );
   const latestEditableEvent = editableEvents[0];
+  const undoLabel = getEditableEventActionLabel(latestEditableEvent);
+  const redoLabel = getEditableEventActionLabel(
+    redoEvent
+      ? editableEvents.find((event) => event.id === redoEvent.id) ?? {
+          id: redoEvent.id,
+          playerId: redoEvent.playerId,
+          playerName: game?.players.find((player) => player.id === redoEvent.playerId)?.name ?? "-",
+          kind: redoEvent.type === "command-point" ? "cp" : redoEvent.type,
+          eventType:
+            redoEvent.type === "command-point"
+              ? redoEvent.cpType === "gained"
+                ? "cp-gained"
+                : "cp-spent"
+              : redoEvent.type === "score"
+                ? redoEvent.scoreType
+                : "note",
+          label: "",
+          value: redoEvent.type === "note" ? undefined : redoEvent.value,
+          displayValue: redoEvent.type === "note" ? undefined : Math.abs(redoEvent.value),
+          note: redoEvent.type === "note" ? redoEvent.note : redoEvent.note,
+          roundNumber: redoEvent.roundNumber,
+          turnNumber: redoEvent.turnNumber,
+          createdAt: redoEvent.createdAt
+        }
+      : null
+  ).replace("Undo:", "Redo:");
+
+  useEffect(() => {
+    setRedoEvent(null);
+  }, [gameId]);
 
   useEffect(() => {
     if (detailsOpen || isEditingGame) {
@@ -492,6 +549,18 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     setEditingNote("");
   };
 
+  const getRestorableEvent = (event: EditableEventItem): RestorableGameEvent | null => {
+    if (event.kind === "score") {
+      return game.scoreEvents.find((scoreEvent) => scoreEvent.id === event.id) ?? null;
+    }
+
+    if (event.kind === "cp") {
+      return game.commandPointEvents.find((commandPointEvent) => commandPointEvent.id === event.id) ?? null;
+    }
+
+    return game.noteEvents.find((noteEvent) => noteEvent.id === event.id) ?? null;
+  };
+
   const saveEditedEvent = async (event: EditableEventItem) => {
     const parsedValue = event.kind === "note" ? undefined : Math.abs(Number(editingValue));
     const nextValue =
@@ -507,6 +576,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       value_number: nextValue,
       note: editingNote.trim() || null
     });
+    setRedoEvent(null);
     closeEditor();
   };
 
@@ -614,6 +684,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     await deleteGameEvent(game.id, event.id);
+    setRedoEvent(null);
     if (editingEventId === event.id) {
       closeEditor();
     }
@@ -631,6 +702,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       roundNumber: selectedRound?.roundNumber,
       turnNumber: selectedTurn?.turnNumber
     });
+    setRedoEvent(null);
     closeNoteDialog();
   };
 
@@ -658,10 +730,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
+    const eventToRestore = getRestorableEvent(latestEditableEvent);
     await deleteGameEvent(game.id, latestEditableEvent.id);
+    setRedoEvent(eventToRestore);
     if (editingEventId === latestEditableEvent.id) {
       closeEditor();
     }
+  };
+
+  const handleRedoEvent = async () => {
+    if (!redoEvent) {
+      return;
+    }
+
+    await restoreGameEvent(game.id, redoEvent);
+    setRedoEvent(null);
   };
 
   const handleAdvance = async () => {
@@ -766,6 +849,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 items: [
                   { label: "Spieldetails", onClick: openGameDetails },
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
+                  {
+                    label: redoEvent ? redoLabel : "Redo",
+                    onClick: () => void handleRedoEvent(),
+                    disabled: isMutating || !redoEvent || isClosed
+                  },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
                   ...(!showOverview
                     ? [
@@ -995,6 +1083,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         roundNumber: selectedRound?.roundNumber,
                         turnNumber: selectedTurn?.turnNumber
                       });
+                      setRedoEvent(null);
                       setActionFlash("cp");
                     }}
                     onScoreChange={async (playerId, scoreType, direction, amount) => {
@@ -1016,6 +1105,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         roundNumber: selectedRound?.roundNumber,
                         turnNumber: selectedTurn?.turnNumber
                       });
+                      setRedoEvent(null);
                       setActionFlash("score");
                     }}
                   />
@@ -1447,11 +1537,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           </button>
           <button
             type="button"
-            className="ghost-button compact-button"
+            className="ghost-button compact-button game-bottom-dock__undo"
             onClick={() => void handleUndoLastEvent()}
             disabled={isMutating || !latestEditableEvent}
+            title={latestEditableEvent ? undoLabel : "Undo"}
           >
-            Undo
+            {undoLabel}
           </button>
           <button
             type="button"
