@@ -83,6 +83,7 @@ interface GameHistoryEntry {
   id: string;
   gameId: string;
   label: string;
+  kind: "snapshot" | "advance-turn" | "rewind-turn";
   beforeGame: Game;
   afterGame: Game;
   createdAt: string;
@@ -257,6 +258,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const queueRef = useRef(syncQueue);
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
+  const advanceGameRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
+  const rewindLastTurnRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => {
     gamesRef.current = games;
@@ -423,13 +426,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [enqueueEventDelete, enqueueEventUpsert, enqueueGameUpsert]
   );
 
-  const recordHistoryAction = useCallback((label: string, beforeGame: Game, afterGame: Game) => {
+  const recordHistoryAction = useCallback((
+    label: string,
+    beforeGame: Game,
+    afterGame: Game,
+    kind: GameHistoryEntry["kind"] = "snapshot"
+  ) => {
     setHistoryStacksByGameId((currentStacks) => {
       const currentStack = currentStacks[afterGame.id] ?? { undo: [], redo: [] };
       const nextEntry: GameHistoryEntry = {
         id: createId("history"),
         gameId: afterGame.id,
         label,
+        kind,
         beforeGame,
         afterGame,
         createdAt: getNowIso()
@@ -446,10 +455,18 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const commitGameSnapshot = useCallback(
-    (label: string, beforeGame: Game, afterGame: Game): Game => {
+    (
+      label: string,
+      beforeGame: Game,
+      afterGame: Game,
+      kind: GameHistoryEntry["kind"] = "snapshot",
+      recordHistory = true
+    ): Game => {
       const nextGame = replaceGame(afterGame);
       enqueueSnapshotSync(beforeGame, nextGame);
-      recordHistoryAction(label, beforeGame, nextGame);
+      if (recordHistory) {
+        recordHistoryAction(label, beforeGame, nextGame, kind);
+      }
       return nextGame;
     },
     [enqueueSnapshotSync, recordHistoryAction, replaceGame]
@@ -729,8 +746,26 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const currentGame = getGame(gameId);
-        replaceGame(entry.beforeGame);
-        enqueueSnapshotSync(currentGame ?? entry.afterGame, entry.beforeGame);
+        if (entry.kind === "advance-turn") {
+          const currentTurn = getLatestTurn(currentGame ?? entry.afterGame);
+          await rewindLastTurnRef.current(
+            gameId,
+            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
+            true,
+            false
+          );
+        } else if (entry.kind === "rewind-turn") {
+          const currentTurn = getLatestTurn(currentGame ?? entry.afterGame);
+          await advanceGameRef.current(
+            gameId,
+            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
+            true,
+            false
+          );
+        } else {
+          replaceGame(entry.beforeGame);
+          enqueueSnapshotSync(currentGame ?? entry.afterGame, entry.beforeGame);
+        }
         setHistoryStacksByGameId((currentStacks) => {
           const currentStack = currentStacks[gameId] ?? { undo: [], redo: [] };
           return {
@@ -756,8 +791,26 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const currentGame = getGame(gameId);
-        replaceGame(entry.afterGame);
-        enqueueSnapshotSync(currentGame ?? entry.beforeGame, entry.afterGame);
+        if (entry.kind === "advance-turn") {
+          const currentTurn = getLatestTurn(currentGame ?? entry.beforeGame);
+          await advanceGameRef.current(
+            gameId,
+            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
+            true,
+            false
+          );
+        } else if (entry.kind === "rewind-turn") {
+          const currentTurn = getLatestTurn(currentGame ?? entry.beforeGame);
+          await rewindLastTurnRef.current(
+            gameId,
+            currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
+            true,
+            false
+          );
+        } else {
+          replaceGame(entry.afterGame);
+          enqueueSnapshotSync(currentGame ?? entry.beforeGame, entry.afterGame);
+        }
         setHistoryStacksByGameId((currentStacks) => {
           const currentStack = currentStacks[gameId] ?? { undo: [], redo: [] };
           return {
@@ -995,20 +1048,22 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         createdAt?: string;
       }>,
       label = "Zeit geaendert",
-      historyTurnRef?: TurnRef | null
+      historyTurnRef?: TurnRef | null,
+      kind: GameHistoryEntry["kind"] = "snapshot",
+      recordHistory = true
     ) => {
       if (!timeEvents.length) {
         return game;
       }
 
       const nextGame = appendLocalTimeEvents(game, timeEvents);
-      return commitGameSnapshot(getTimeHistoryLabel(label, historyTurnRef), game, nextGame);
+      return commitGameSnapshot(getTimeHistoryLabel(label, historyTurnRef), game, nextGame, kind, recordHistory);
     },
     [commitGameSnapshot]
   );
 
   const advanceGame = useCallback(
-    async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false) =>
+    async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false, recordHistory = true) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
@@ -1113,7 +1168,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           if (keepTimerRunning) {
             pushPauseForRunningTurns(getTurnKey(nextExistingTurn));
             pushStartStateForTurn(nextExistingTurn, true);
-            enqueueTimeEvents(game, eventsToAdd, "Weiter", currentTurn ?? nextExistingTurn);
+            enqueueTimeEvents(
+              game,
+              eventsToAdd,
+              "Weiter",
+              currentTurn ?? nextExistingTurn,
+              recordHistory ? "advance-turn" : "snapshot",
+              recordHistory
+            );
             void flushSyncQueue();
           }
           return;
@@ -1153,10 +1215,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
 
-          enqueueTimeEvents(game, eventsToAdd, "Weiter", {
-            roundNumber: firstRoundNumber,
-            turnNumber: 1
-          });
+          enqueueTimeEvents(
+            game,
+            eventsToAdd,
+            "Weiter",
+            {
+              roundNumber: firstRoundNumber,
+              turnNumber: 1
+            },
+            recordHistory ? "advance-turn" : "snapshot",
+            recordHistory
+          );
           void flushSyncQueue();
           return;
         }
@@ -1198,7 +1267,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const currentRoundHasTwoTurns = currentRound.turns.length >= 2 && (currentTurn?.turnNumber ?? 0) >= 2;
         if (currentRound.roundNumber >= MAX_ROUNDS && currentRoundHasTwoTurns) {
           closeCurrentGame();
-          enqueueTimeEvents(game, eventsToAdd, "Spiel beenden");
+          enqueueTimeEvents(game, eventsToAdd, "Spiel beenden", undefined, "snapshot", recordHistory);
           void flushSyncQueue();
           return;
         }
@@ -1284,14 +1353,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         }
 
-        enqueueTimeEvents(game, eventsToAdd, "Weiter", currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 });
+        enqueueTimeEvents(
+          game,
+          eventsToAdd,
+          "Weiter",
+          currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 },
+          recordHistory ? "advance-turn" : "snapshot",
+          recordHistory
+        );
         void flushSyncQueue();
       }),
     [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation]
   );
 
   const rewindLastTurn = useCallback(
-    async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false) =>
+    async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false, recordHistory = true) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
@@ -1358,12 +1434,24 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         if (eventsToAdd.length) {
-          enqueueTimeEvents(game, eventsToAdd, "Zurueck", currentTurn ?? targetTurn);
+          enqueueTimeEvents(
+            game,
+            eventsToAdd,
+            "Zurueck",
+            currentTurn ?? targetTurn,
+            recordHistory ? "rewind-turn" : "snapshot",
+            recordHistory
+          );
           void flushSyncQueue();
         }
       }),
     [enqueueTimeEvents, flushSyncQueue, getGame, getPreviousTurnByRef, getTurnByRef, runMutation]
   );
+
+  useEffect(() => {
+    advanceGameRef.current = advanceGame;
+    rewindLastTurnRef.current = rewindLastTurn;
+  }, [advanceGame, rewindLastTurn]);
 
   const pauseActiveTimer = useCallback(
     async (gameId: string, turnRef?: TurnRef) =>
