@@ -25,7 +25,11 @@ import {
   isTimeoutActive,
   isTurnPaused
 } from "../utils/gameCalculations";
-import { getDisplayedRoundTurns, getTimerFocusTurn, shouldRunTimerTicker } from "../utils/timerFocus";
+import {
+  getDisplayedRoundTurns,
+  getTimerFocusTurn,
+  shouldRunTimerRenderTicker
+} from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
@@ -385,7 +389,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     const focusTurn = timerFocusTurn;
-    if (shouldRunTimerTicker(focusTurn, timeoutActive, isClosed)) {
+    if (shouldRunTimerRenderTicker(focusTurn, timeoutActive, isClosed)) {
       const interval = window.setInterval(() => {
         setTick((current) => current + 1);
       }, 1000);
@@ -1545,7 +1549,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="primary-button compact-button"
               onClick={() => void handleAdvance()}
-              disabled={isMutating || timeoutActive}
+              disabled={isMutating}
             >
               Weiter
             </button>
@@ -1553,7 +1557,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="ghost-button compact-button"
               onClick={() => void handleGoBack()}
-              disabled={isMutating || !canGoBack || timeoutActive}
+              disabled={isMutating || !canGoBack}
             >
               Zurueck
             </button>
@@ -1589,10 +1593,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                               turnNumber: selectedTurn.turnNumber
                             }
                           : undefined
-                      )
+                        )
                 )
               }
-              disabled={isMutating || timeoutActive}
+              disabled={isMutating}
             >
               {isTimerRunning ? "Timer aus" : "Timer an"}
             </button>

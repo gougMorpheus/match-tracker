@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const {
   getDisplayedRoundTurns,
   getTimerFocusTurn,
+  shouldRunTimerRenderTicker,
   shouldRunTimerTicker
 } = require("../.test-dist/utils/timerFocus.js");
 
@@ -60,6 +61,8 @@ const runTimerFocusTests = () => {
     assert.equal(shouldRunTimerTicker(pausedTurn), false);
     assert.equal(shouldRunTimerTicker(pausedTurn, true), false);
     assert.equal(shouldRunTimerTicker(pausedTurn, false, true), false);
+    assert.equal(shouldRunTimerRenderTicker(pausedTurn, true), true);
+    assert.equal(shouldRunTimerRenderTicker(pausedTurn, true, true), false);
   }
 
   {

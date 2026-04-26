@@ -11,6 +11,13 @@ export const shouldRunTimerTicker = (
 ): boolean =>
   !isClosed && !timeoutActive && Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn));
 
+// Display-only ticker: keep rerendering during timeout so the live totals stay current.
+export const shouldRunTimerRenderTicker = (
+  turn?: Turn,
+  timeoutActive = false,
+  isClosed = false
+): boolean => !isClosed && (timeoutActive || shouldRunTimerTicker(turn, false, false));
+
 export const getDisplayedRoundTurns = (
   round: Round,
   selectedTurn?: Turn,

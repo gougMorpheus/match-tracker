@@ -2202,7 +2202,7 @@ textarea {
 .game-timeout-dock {
   position: fixed;
   left: 50%;
-  bottom: 4.2rem;
+  bottom: 3.35rem;
   z-index: 27;
   display: grid;
   width: min(calc(100% - 1.2rem), 760px);
