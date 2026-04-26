@@ -447,10 +447,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const commitGameSnapshot = useCallback(
-    (label: string, beforeGame: Game, afterGame: Game): Game => {
+    (
+      label: string,
+      beforeGame: Game,
+      afterGame: Game,
+      options: { recordHistory?: boolean } = {}
+    ): Game => {
       const nextGame = replaceGame(afterGame);
       enqueueSnapshotSync(beforeGame, nextGame);
-      recordHistoryAction(label, beforeGame, nextGame);
+      if (options.recordHistory !== false) {
+        recordHistoryAction(label, beforeGame, nextGame);
+      }
       return nextGame;
     },
     [enqueueSnapshotSync, recordHistoryAction, replaceGame]
@@ -1002,7 +1009,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
 
       const nextGame = appendLocalTimeEvents(game, timeEvents);
-      return commitGameSnapshot(getTimeHistoryLabel(label, nextGame), game, nextGame);
+      return commitGameSnapshot(getTimeHistoryLabel(label, nextGame), game, nextGame, {
+        recordHistory: false
+      });
     },
     [commitGameSnapshot]
   );
