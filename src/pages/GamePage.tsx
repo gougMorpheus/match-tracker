@@ -557,7 +557,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
     closeDeleteDialog();
     onBack();
-    void deleteGame(game.id);
+    window.setTimeout(() => {
+      void deleteGame(game.id);
+    }, 0);
   };
 
   const closeNoteDialog = () => {
