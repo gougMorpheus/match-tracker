@@ -127,6 +127,16 @@ export const getPlayerCommandPointsGained = (game: Game, playerId: PlayerId): nu
 export const getPlayerCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
   sumValues(getPlayerCommandPointEvents(game, playerId, "spent"));
 
+export const getPlayerCurrentRoundCommandPointsGained = (game: Game, playerId: PlayerId): number =>
+  getPlayerCommandPointEvents(game, playerId, "gained").filter(
+    (event) => event.roundNumber === getCurrentRoundNumber(game)
+  ).reduce((total, event) => total + event.value, 0);
+
+export const getPlayerCurrentRoundCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
+  getPlayerCommandPointEvents(game, playerId, "spent").filter(
+    (event) => event.roundNumber === getCurrentRoundNumber(game)
+  ).reduce((total, event) => total + event.value, 0);
+
 export const getTurnBaseDurationMs = (turn: Turn): number => {
   const totalDuration = getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
   const pausedDuration = turn.timing.pauses.reduce(

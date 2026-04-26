@@ -6,6 +6,8 @@ import {
   getPlayerCurrentRoundPrimaryTotal,
   getPlayerCurrentRoundSecondaryTotal,
   getPlayerCurrentRoundTotalScore,
+  getPlayerCurrentRoundCommandPointsGained,
+  getPlayerCurrentRoundCommandPointsSpent,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
@@ -37,6 +39,8 @@ export const PlayerScoreboard = ({
   const currentRoundPrimary = getPlayerCurrentRoundPrimaryTotal(game, player.id);
   const currentRoundSecondary = getPlayerCurrentRoundSecondaryTotal(game, player.id);
   const currentRoundTotal = getPlayerCurrentRoundTotalScore(game, player.id);
+  const currentRoundCpGained = getPlayerCurrentRoundCommandPointsGained(game, player.id);
+  const currentRoundCpSpent = getPlayerCurrentRoundCommandPointsSpent(game, player.id);
   const cp = getPlayerCommandPoints(game, player.id);
   const cpGained = getPlayerCommandPointsGained(game, player.id);
   const cpSpent = getPlayerCommandPointsSpent(game, player.id);
@@ -82,8 +86,9 @@ export const PlayerScoreboard = ({
             <span>CP</span>
             <strong>{cp}</strong>
           </div>
+          <span className="scoreboard-stat__meta">+{cpGained} / -{cpSpent}</span>
           <span className="scoreboard-stat__meta">
-            +{cpGained} / -{cpSpent}
+            Rd +{currentRoundCpGained} / -{currentRoundCpSpent}
           </span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--time">
