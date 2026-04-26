@@ -745,9 +745,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        const currentGame = getGame(gameId);
         if (entry.kind === "advance-turn") {
-          const currentTurn = getLatestTurn(currentGame ?? entry.afterGame);
+          const currentTurn = getLatestTurn(entry.afterGame);
           await rewindLastTurnRef.current(
             gameId,
             currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
@@ -755,7 +754,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             false
           );
         } else if (entry.kind === "rewind-turn") {
-          const currentTurn = getLatestTurn(currentGame ?? entry.afterGame);
+          const currentTurn = getLatestTurn(entry.afterGame);
           await advanceGameRef.current(
             gameId,
             currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
@@ -764,7 +763,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           );
         } else {
           replaceGame(entry.beforeGame);
-          enqueueSnapshotSync(currentGame ?? entry.afterGame, entry.beforeGame);
+          enqueueSnapshotSync(entry.afterGame, entry.beforeGame);
         }
         setHistoryStacksByGameId((currentStacks) => {
           const currentStack = currentStacks[gameId] ?? { undo: [], redo: [] };
@@ -790,9 +789,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        const currentGame = getGame(gameId);
         if (entry.kind === "advance-turn") {
-          const currentTurn = getLatestTurn(currentGame ?? entry.beforeGame);
+          const currentTurn = getLatestTurn(entry.beforeGame);
           await advanceGameRef.current(
             gameId,
             currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
@@ -800,7 +798,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             false
           );
         } else if (entry.kind === "rewind-turn") {
-          const currentTurn = getLatestTurn(currentGame ?? entry.beforeGame);
+          const currentTurn = getLatestTurn(entry.beforeGame);
           await rewindLastTurnRef.current(
             gameId,
             currentTurn ? { roundNumber: currentTurn.roundNumber, turnNumber: currentTurn.turnNumber } : undefined,
@@ -809,7 +807,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           );
         } else {
           replaceGame(entry.afterGame);
-          enqueueSnapshotSync(currentGame ?? entry.beforeGame, entry.afterGame);
+          enqueueSnapshotSync(entry.beforeGame, entry.afterGame);
         }
         setHistoryStacksByGameId((currentStacks) => {
           const currentStack = currentStacks[gameId] ?? { undo: [], redo: [] };
