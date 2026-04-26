@@ -371,17 +371,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const canGoBack = selectedTurnIndex > 0;
   const canGoForwardToExistingTurn =
     selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1;
-  const selectedRoundTurns =
-    selectedRound?.turns.filter((turn) =>
-      selectedTurn ? turn.turnNumber <= selectedTurn.turnNumber : true
-    ) ?? [];
-  const selectedRoundDurationMs = selectedRound
-    ? Math.max(
-        selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
-          getRoundCorrectionMs(game, selectedRound.roundNumber),
-        0
-      )
-    : 0;
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
@@ -391,6 +380,19 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isTimerRunning = !isClosed && !timeoutActive && hasActiveTurn && !isPaused;
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
+  const displayTurn = isTimerRunning || timeoutActive ? latestTurn ?? selectedTurn : selectedTurn;
+  const displayRound = isTimerRunning || timeoutActive ? latestRound ?? selectedRound : selectedRound;
+  const selectedRoundTurns =
+    displayRound?.turns.filter((turn) =>
+      displayTurn ? turn.turnNumber <= displayTurn.turnNumber : true
+    ) ?? [];
+  const selectedRoundDurationMs = displayRound
+    ? Math.max(
+        selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
+          getRoundCorrectionMs(game, displayRound.roundNumber),
+        0
+      )
+    : 0;
   const currentRoundNumber = selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
   const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
@@ -790,10 +792,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       subtitle={
         <div className="game-header-stats">
           <span>
-            Runde {selectedRound?.roundNumber ?? 0} ({formatDuration(selectedRoundDurationMs)})
+            Runde {displayRound?.roundNumber ?? 0} ({formatDuration(selectedRoundDurationMs)})
           </span>
           <span>
-            Zug {selectedTurn?.turnNumber ?? 0} ({formatDuration(selectedTurn ? getTurnDurationMs(selectedTurn, game) : 0)})
+            Zug {displayTurn?.turnNumber ?? 0} ({formatDuration(displayTurn ? getTurnDurationMs(displayTurn, game) : 0)})
           </span>
           <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
         </div>
