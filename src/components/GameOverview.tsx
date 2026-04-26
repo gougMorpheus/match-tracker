@@ -5,6 +5,7 @@ import {
   getPlayerComparableTotalScore,
   getPlayerCommandPointsGained,
   getPlayerCommandPointsSpent,
+  getGameDurationMs,
   getPlayerTurnDurationTotalMs,
   hasComparableCommandPointData,
   hasDetailedScoreData,
@@ -553,6 +554,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
           <div className="overview-summary-item">
             <span>Ende</span>
             <strong>{formatClockTime(game.endedAt)}</strong>
+          </div>
+          <div className="overview-summary-item">
+            <span>Gesamtzeit</span>
+            <strong>{formatDuration(getGameDurationMs(game))}</strong>
           </div>
           {game.deployment ? (
             <div className="overview-summary-item">

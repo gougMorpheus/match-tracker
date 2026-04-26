@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface FloatingMenuItem {
   label: string;
@@ -24,9 +24,26 @@ export const FloatingMenu = ({
   ariaLabel = "Navigation"
 }: FloatingMenuProps) => {
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (menuRef.current && target && !menuRef.current.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [open]);
 
   return (
-    <div className={`floating-menu ${fixed ? "floating-menu--fixed" : ""}`}>
+    <div ref={menuRef} className={`floating-menu ${fixed ? "floating-menu--fixed" : ""}`}>
       <button
         type="button"
         className="ghost-button compact-button floating-menu__trigger"

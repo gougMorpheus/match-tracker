@@ -801,9 +801,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               <span className={`status-pill status-pill--${isClosed ? "completed" : "active"}`}>
                 Spiel: {isClosed ? "zu" : "offen"}
               </span>
-              <span className={`status-pill ${isTimerRunning ? "status-pill--active" : ""} ${timeoutActive ? "status-pill--timeout" : ""}`}>
-                Timer: {timerStatusLabel}
-              </span>
+              {!(showOverview && isClosed) ? (
+                <span
+                  className={`status-pill ${isTimerRunning ? "status-pill--active" : ""} ${timeoutActive ? "status-pill--timeout" : ""}`}
+                >
+                  Timer: {timerStatusLabel}
+                </span>
+              ) : null}
             </div>
           </div>
           <FloatingMenu
