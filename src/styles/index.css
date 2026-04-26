@@ -2055,6 +2055,10 @@ textarea {
   width: min(100%, 760px);
 }
 
+.game-overview-modal {
+  width: min(100%, 1080px);
+}
+
 .modal-list {
   max-height: min(62vh, 520px);
   overflow-y: auto;

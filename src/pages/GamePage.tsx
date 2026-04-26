@@ -117,6 +117,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [noteDraft, setNoteDraft] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [entriesOpen, setEntriesOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
   const [timerAdjustOpen, setTimerAdjustOpen] = useState(false);
   const [timerAdjustTurnSeconds, setTimerAdjustTurnSeconds] = useState("0");
   const [timerAdjustRoundSeconds, setTimerAdjustRoundSeconds] = useState("0");
@@ -326,6 +327,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     previousRoundRef.current = nextRound;
+  }, [game]);
+
+  useEffect(() => {
+    if (!game) {
+      setOverviewOpen(false);
+    }
   }, [game]);
 
   useEffect(() => {
@@ -690,6 +697,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     await redoGameAction(game.id);
   };
 
+  const openOverviewWindow = () => {
+    setOverviewOpen(true);
+  };
+
+  const closeOverviewWindow = () => {
+    setOverviewOpen(false);
+  };
+
   const handleStartTimeout = async () => {
     if (!selectedTurn || !isTimerRunning) {
       return;
@@ -813,6 +828,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 label: "Optionen",
                 items: [
                   { label: "Spieldetails", onClick: openGameDetails },
+                  ...(!showOverview
+                    ? [
+                        {
+                          label: "Spieluebersicht",
+                          onClick: openOverviewWindow
+                        }
+                      ]
+                    : []),
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   {
                     label: redoLabel,
@@ -877,6 +900,28 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         <div className="timeout-banner" role="status">
           <strong>Time-out aktiv</strong>
           <span>Spielzeit laeuft, Spielerzeit ist pausiert.</span>
+        </div>
+      ) : null}
+      {overviewOpen && !showOverview ? (
+        <div className="modal-backdrop">
+          <div className="modal-card modal-card--wide game-overview-modal">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spieluebersicht</h2>
+                  <p className="muted-copy">Zwischenstand waehrend des laufenden Spiels</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={closeOverviewWindow}
+                >
+                  Schliessen
+                </button>
+              </div>
+              <GameOverview game={game} />
+            </div>
+          </div>
         </div>
       ) : null}
       {reopenPasswordOpen ? (
