@@ -25,7 +25,7 @@ import {
   isTimeoutActive,
   isTurnPaused
 } from "../utils/gameCalculations";
-import { getTimerFocusTurn, shouldRunTimerTicker } from "../utils/timerFocus";
+import { getDisplayedRoundTurns, getTimerFocusTurn, shouldRunTimerTicker } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
@@ -356,10 +356,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const displayTurn = timerFocusTurn ?? selectedTurn;
   const displayRound =
     timerFocusTurn ? game.rounds.find((round) => round.roundNumber === timerFocusTurn.roundNumber) ?? selectedRound : selectedRound;
-  const selectedRoundTurns =
-    displayRound?.turns.filter((turn) =>
-      displayTurn ? turn.turnNumber <= displayTurn.turnNumber : true
-    ) ?? [];
+  const selectedRoundTurns = displayRound
+    ? getDisplayedRoundTurns(displayRound, displayTurn, isTimerRunning, timeoutActive)
+    : [];
   const selectedRoundDurationMs = displayRound
     ? Math.max(
         selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +

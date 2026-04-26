@@ -1,5 +1,9 @@
 const assert = require("node:assert/strict");
-const { getTimerFocusTurn, shouldRunTimerTicker } = require("../.test-dist/utils/timerFocus.js");
+const {
+  getDisplayedRoundTurns,
+  getTimerFocusTurn,
+  shouldRunTimerTicker
+} = require("../.test-dist/utils/timerFocus.js");
 
 const createTurn = (overrides = {}) => ({
   id: "turn-1",
@@ -11,6 +15,15 @@ const createTurn = (overrides = {}) => ({
     endedAt: undefined,
     pauses: []
   },
+  ...overrides
+});
+
+const createRound = (overrides = {}) => ({
+  id: "round-1",
+  roundNumber: 1,
+  startedAt: "2026-04-20T18:30:00.000Z",
+  endedAt: undefined,
+  turns: [createTurn(), createTurn({ id: "turn-2", turnNumber: 2, playerId: "player-2" })],
   ...overrides
 });
 
@@ -75,6 +88,20 @@ const runTimerFocusTests = () => {
 
     assert.equal(getTimerFocusTurn(selectedTurn, latestTurn), selectedTurn);
     assert.equal(shouldRunTimerTicker(getTimerFocusTurn(selectedTurn, latestTurn)), true);
+  }
+
+  {
+    const round = createRound();
+    const selectedTurn = round.turns[0];
+
+    assert.deepEqual(
+      getDisplayedRoundTurns(round, selectedTurn, true, false).map((turn) => turn.turnNumber),
+      [1, 2]
+    );
+    assert.deepEqual(
+      getDisplayedRoundTurns(round, selectedTurn, false, false).map((turn) => turn.turnNumber),
+      [1]
+    );
   }
 };
 

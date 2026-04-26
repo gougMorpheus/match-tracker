@@ -1,4 +1,4 @@
-import type { Turn } from "../types/game";
+import type { Round, Turn } from "../types/game";
 import { isTurnPaused } from "./gameCalculations";
 
 export const getTimerFocusTurn = (selectedTurn?: Turn, latestTurn?: Turn): Turn | undefined =>
@@ -10,3 +10,16 @@ export const shouldRunTimerTicker = (
   isClosed = false
 ): boolean =>
   !isClosed && !timeoutActive && Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn));
+
+export const getDisplayedRoundTurns = (
+  round: Round,
+  selectedTurn?: Turn,
+  timerRunning = false,
+  timeoutActive = false
+): Turn[] => {
+  if (timerRunning || timeoutActive || !selectedTurn) {
+    return round.turns;
+  }
+
+  return round.turns.filter((turn) => turn.turnNumber <= selectedTurn.turnNumber);
+};
