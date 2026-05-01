@@ -5,6 +5,7 @@ create table if not exists public.games (
   created_at timestamptz not null default now(),
   started_at timestamptz not null default now(),
   ended_at timestamptz null,
+  deleted_at timestamptz null,
   game_date timestamptz null,
   player1_name text not null,
   player1_army text not null,
@@ -22,6 +23,7 @@ create table if not exists public.games (
 
 alter table public.games add column if not exists deployment text null;
 alter table public.games add column if not exists primary_mission text null;
+alter table public.games add column if not exists deleted_at timestamptz null;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

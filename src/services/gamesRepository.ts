@@ -135,6 +135,21 @@ const createDefaultFinishMeta = (): { finishReason: GameFinishReason | undefined
   finishReason: undefined
 });
 
+const parseJsonObject = (value: string | null): Record<string, unknown> => {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+};
+
 const createPlayerDetachmentsFromInput = (payload: CreateGameInput): Record<string, string> => ({
   "player-1": payload.playerOneDetachment.trim(),
   "player-2": payload.playerTwoDetachment.trim()
@@ -269,6 +284,48 @@ const parseFinishMeta = (value: string | null): { finishReason: GameFinishReason
   }
 };
 
+const parseDeletedMeta = (value: string | null): { deletedAt: string | undefined } => {
+  const parsed = parseJsonObject(value);
+  const deletedMeta = parsed.deletedMeta;
+
+  if (!deletedMeta || typeof deletedMeta !== "object" || Array.isArray(deletedMeta)) {
+    return {
+      deletedAt: undefined
+    };
+  }
+
+  const deletedAt = (deletedMeta as Record<string, unknown>).deletedAt;
+  return {
+    deletedAt: typeof deletedAt === "string" && deletedAt.trim() ? deletedAt : undefined
+  };
+};
+
+const getRowDeletedAt = (row: SupabaseGameRecord): string | undefined => {
+  const deletedAt = (row as SupabaseGameRecord & { deleted_at?: string | null }).deleted_at;
+  return typeof deletedAt === "string" && deletedAt.trim()
+    ? deletedAt
+    : parseDeletedMeta(row.notes).deletedAt;
+};
+
+const isSupabaseGameDeleted = (row: SupabaseGameRecord): boolean =>
+  Boolean(getRowDeletedAt(row));
+
+const serializeSoftDeletedNotes = (value: string | null, deletedAt: string): string => {
+  const parsed = parseJsonObject(value);
+  const existingDeletedMeta =
+    parsed.deletedMeta && typeof parsed.deletedMeta === "object" && !Array.isArray(parsed.deletedMeta)
+      ? parsed.deletedMeta as Record<string, unknown>
+      : {};
+
+  return JSON.stringify({
+    ...parsed,
+    deletedMeta: {
+      ...existingDeletedMeta,
+      deletedAt
+    }
+  });
+};
+
 const serializeGameNotes = (
   timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
@@ -317,6 +374,11 @@ const hasMissingScenarioColumnError = (message: string): boolean => {
     normalizedMessage.includes("deployment") ||
     normalizedMessage.includes("primary_mission")
   );
+};
+
+const hasMissingDeletedAtColumnError = (message: string): boolean => {
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("deleted_at");
 };
 
 const stripOptionalScenarioFields = <
@@ -976,7 +1038,9 @@ export const gamesRepository = {
       throw new Error(`Spiele konnten nicht geladen werden: ${error.message}`);
     }
 
-    const games = (data ?? []) as SupabaseGameRecord[];
+    const games = ((data ?? []) as SupabaseGameRecord[]).filter(
+      (game) => !isSupabaseGameDeleted(game)
+    );
     const events = await fetchEventsForGameIds(games.map((game) => game.id));
 
     return games.map((game) =>
@@ -997,6 +1061,10 @@ export const gamesRepository = {
 
     if (error) {
       throw new Error(`Spiel konnte nicht geladen werden: ${error.message}`);
+    }
+
+    if (isSupabaseGameDeleted(data as SupabaseGameRecord)) {
+      throw new Error("Spiel wurde geloescht.");
     }
 
     const events = await fetchEventsForGameIds([gameId]);
@@ -1120,7 +1188,32 @@ export const gamesRepository = {
 
   async deleteGame(gameId: string): Promise<void> {
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("games").delete().eq("id", gameId);
+    const { data, error: loadError } = await supabase
+      .from("games")
+      .select("*")
+      .eq("id", gameId)
+      .single();
+
+    if (loadError) {
+      throw new Error(`Spiel konnte nicht geladen werden: ${loadError.message}`);
+    }
+
+    const deletedAt = getNowIso();
+    const softDeletePayload: UpdateSupabaseGamePayload = {
+      deleted_at: deletedAt,
+      notes: serializeSoftDeletedNotes((data as SupabaseGameRecord).notes, deletedAt)
+    };
+
+    let { error } = await supabase.from("games").update(softDeletePayload).eq("id", gameId);
+
+    if (error && hasMissingDeletedAtColumnError(error.message)) {
+      ({ error } = await supabase
+        .from("games")
+        .update({
+          notes: softDeletePayload.notes
+        })
+        .eq("id", gameId));
+    }
 
     if (error) {
       throw new Error(`Spiel konnte nicht geloescht werden: ${error.message}`);

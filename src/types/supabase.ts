@@ -15,6 +15,7 @@ export interface Database {
           created_at: string;
           started_at: string;
           ended_at: string | null;
+          deleted_at: string | null;
           game_date: string | null;
           player1_name: string;
           player1_army: string;
@@ -34,6 +35,7 @@ export interface Database {
           created_at?: string;
           started_at?: string;
           ended_at?: string | null;
+          deleted_at?: string | null;
           game_date?: string | null;
           player1_name: string;
           player1_army: string;
@@ -53,6 +55,7 @@ export interface Database {
           created_at?: string;
           started_at?: string;
           ended_at?: string | null;
+          deleted_at?: string | null;
           game_date?: string | null;
           player1_name?: string;
           player1_army?: string;
