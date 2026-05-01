@@ -63,7 +63,7 @@ export const prepareGameForStats = (game: Game): Game | null => {
   }
 
   if (game.scoreDetailLevel !== "full") {
-    return game;
+    return null;
   }
 
   const validTurns = game.rounds.flatMap((round) =>
@@ -686,6 +686,15 @@ const hasPlayerCommandPointData = (game: Game, playerId: PlayerId): boolean =>
 const hasCompletedTimingData = (game: Game): boolean =>
   game.rounds.some((round) => round.turns.some((turn) => getCompletedTurnDurationMs(turn, game) !== null));
 
+const getStatsGameDurationMs = (game: Game): number | null => {
+  if (!game.startedAt || !game.endedAt) {
+    return null;
+  }
+
+  const sessionDuration = getSessionDurationMs(game);
+  return sessionDuration > 0 ? sessionDuration : getDurationMs(game.startedAt, game.endedAt);
+};
+
 export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
   const playerNames = Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.name))));
 
@@ -720,8 +729,7 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
         .filter(({ game, player }) => getPlayerComparableTotalScore(game, player.id) !== null)
         .map(({ game, player }) => getPlayerTotalScore(game, player.id));
       const durationValues = playerGames
-        .filter(({ game }) => hasCompletedTimingData(game))
-        .map(({ game }) => getCompletedGameDurationMs(game))
+        .map(({ game }) => getStatsGameDurationMs(game))
         .filter((value): value is number => value !== null);
       const spentCpValues = playerGames
         .filter(({ game, player }) => hasPlayerCommandPointData(game, player.id))
@@ -830,7 +838,7 @@ export const createScenarioPerformanceAggregates = (
     const existing = grouped.get(label) ?? { scores: [], durations: [], games: 0 };
     existing.games += 1;
     existing.scores.push(getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id));
-    const duration = getCompletedGameDurationMs(game);
+    const duration = getStatsGameDurationMs(game);
     if (duration !== null) {
       existing.durations.push(duration);
     }
@@ -913,7 +921,7 @@ export const createStatsOverview = (games: Game[]): StatsOverview => {
   const playerCount = new Set(playerEntries.map((player) => player.name)).size;
   const armyCount = new Set(playerEntries.map((player) => player.army.name)).size;
   const completedDurations = games
-    .map((game) => getCompletedGameDurationMs(game))
+    .map((game) => getStatsGameDurationMs(game))
     .filter((duration): duration is number => duration !== null);
   const roundsValues = games.filter((game) => game.rounds.length > 0).map((game) => game.rounds.length);
   const comparableScoreGames = games.filter((game) => hasComparableScoreData(game));
@@ -1004,7 +1012,7 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
     const scoreB = getPlayerTotalScore(game, game.players[1].id);
 
     existing.count += 1;
-    const completedDuration = getCompletedGameDurationMs(game);
+    const completedDuration = getStatsGameDurationMs(game);
     if (completedDuration !== null) {
       existing.durations.push(completedDuration);
     }

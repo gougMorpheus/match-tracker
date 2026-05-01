@@ -101,6 +101,7 @@ const runGameCalculationsTests = () => {
     assert.equal(overview.games, 1);
     assert.equal(overview.players, 2);
     assert.equal(overview.armies, 2);
+    assert.equal(overview.averageDurationMs, 45 * 60 * 1000);
     assert.equal(overview.averageCombinedScore, 25);
     assert.equal(overview.averagePlayerOneScore, 9);
     assert.equal(overview.averagePlayerTwoScore, 16);
@@ -236,10 +237,7 @@ const runGameCalculationsTests = () => {
       }
     };
 
-    const [statsGame] = prepareGamesForStats([legacyGame]);
-    assert.ok(statsGame);
-    assert.equal(statsGame.scoreDetailLevel, "total-only");
-    assert.equal(statsGame.legacyScoreTotals["game-legacy:player-1"], 78);
+    assert.equal(prepareGamesForStats([legacyGame]).length, 0);
   }
 
   {
