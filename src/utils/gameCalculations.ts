@@ -20,6 +20,85 @@ const getTurnCorrectionKey = (roundNumber: number, turnNumber: number): string =
   `${roundNumber}:${turnNumber}`;
 const averageOrNull = (values: number[]): number | null =>
   values.length ? sumValues(values.map((value) => ({ value }))) / values.length : null;
+const MIN_STATS_TURN_DURATION_MS = 60 * 1000;
+const getTurnKey = (roundNumber?: number, turnNumber?: number): string | null =>
+  roundNumber && turnNumber ? `${roundNumber}:${turnNumber}` : null;
+
+const hasCommandPointEarnedInTurn = (game: Game, turn: Turn): boolean =>
+  game.commandPointEvents.some(
+    (event) =>
+      event.cpType === "gained" &&
+      event.playerId === turn.playerId &&
+      event.roundNumber === turn.roundNumber &&
+      event.turnNumber === turn.turnNumber
+  );
+
+const isStatsEligibleTurn = (game: Game, turn: Turn): boolean =>
+  getTurnDurationMs(turn, game) >= MIN_STATS_TURN_DURATION_MS && hasCommandPointEarnedInTurn(game, turn);
+
+const hasStatsTurnKey = (
+  validTurnKeys: Set<string>,
+  event: { roundNumber?: number; turnNumber?: number }
+): boolean => {
+  const turnKey = getTurnKey(event.roundNumber, event.turnNumber);
+  return turnKey ? validTurnKeys.has(turnKey) : false;
+};
+
+export const isStatsEligibleGame = (game: Game): boolean =>
+  game.finishReason !== "interrupted" && game.finishReason !== "abandoned";
+
+export const prepareGameForStats = (game: Game): Game | null => {
+  if (!isStatsEligibleGame(game)) {
+    return null;
+  }
+
+  const validTurns = game.rounds.flatMap((round) =>
+    round.turns.filter((turn) => isStatsEligibleTurn(game, turn))
+  );
+  const validTurnKeys = new Set(
+    validTurns.map((turn) => `${turn.roundNumber}:${turn.turnNumber}`)
+  );
+
+  if (!validTurnKeys.size) {
+    return null;
+  }
+
+  const rounds = game.rounds
+    .map((round) => ({
+      ...round,
+      turns: round.turns.filter((turn) =>
+        validTurnKeys.has(`${turn.roundNumber}:${turn.turnNumber}`)
+      )
+    }))
+    .filter((round) => round.turns.length > 0);
+  const validRoundKeys = new Set(rounds.map((round) => String(round.roundNumber)));
+
+  return {
+    ...game,
+    rounds,
+    scoreEvents: game.scoreEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event)),
+    commandPointEvents: game.commandPointEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event)),
+    noteEvents: game.noteEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event)),
+    timeEvents: game.timeEvents.filter((event) => {
+      const turnKey = getTurnKey(event.roundNumber, event.turnNumber);
+      if (turnKey) {
+        return validTurnKeys.has(turnKey);
+      }
+
+      return event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : true;
+    }),
+    timerCorrections: {
+      totalMs: 0,
+      rounds: {},
+      turns: Object.fromEntries(
+        Object.entries(game.timerCorrections.turns).filter(([turnKey]) => validTurnKeys.has(turnKey))
+      )
+    }
+  };
+};
+
+export const prepareGamesForStats = (games: Game[]): Game[] =>
+  games.map((game) => prepareGameForStats(game)).filter((game): game is Game => Boolean(game));
 
 export const getPlayerScoreEvents = (
   game: Game,

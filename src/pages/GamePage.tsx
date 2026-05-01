@@ -8,7 +8,7 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { useGameStore } from "../store/GameStore";
-import type { CreateGameInput, Game, PlayerId } from "../types/game";
+import type { CreateGameInput, Game, GameFinishReason, PlayerId } from "../types/game";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
   getCurrentRoundNumber,
@@ -17,9 +17,7 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
-  getRoundCorrectionMs,
   getSessionDurationMs,
-  getTotalCorrectionMs,
   getTurnBaseDurationMs,
   getTurnDurationMs,
   isTimeoutActive,
@@ -125,8 +123,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [timerAdjustOpen, setTimerAdjustOpen] = useState(false);
   const [timerAdjustTurnSeconds, setTimerAdjustTurnSeconds] = useState("0");
-  const [timerAdjustRoundSeconds, setTimerAdjustRoundSeconds] = useState("0");
-  const [timerAdjustTotalSeconds, setTimerAdjustTotalSeconds] = useState("0");
+  const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const [roundChangePulse, setRoundChangePulse] = useState<number | null>(null);
   const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
@@ -365,8 +362,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     : [];
   const selectedRoundDurationMs = displayRound
     ? Math.max(
-        selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
-          getRoundCorrectionMs(game, displayRound.roundNumber),
+        selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0),
         0
       )
     : 0;
@@ -586,8 +582,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     setTimerAdjustTurnSeconds(String(Math.round(getTurnDurationMs(selectedTurn, game) / 1000)));
-    setTimerAdjustRoundSeconds(String(Math.round(selectedRoundDurationMs / 1000)));
-    setTimerAdjustTotalSeconds(String(Math.round(getGameDurationMs(game) / 1000)));
     setTimerAdjustOpen(true);
   };
 
@@ -601,11 +595,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     const targetTurnMs = Math.max(0, Math.round(Number(timerAdjustTurnSeconds) || 0) * 1000);
-    const targetRoundMs = Math.max(0, Math.round(Number(timerAdjustRoundSeconds) || 0) * 1000);
-    const targetTotalMs = Math.max(0, Math.round(Number(timerAdjustTotalSeconds) || 0) * 1000);
     const turnBaseMs = getTurnBaseDurationMs(selectedTurn);
-    const roundBaseMs = selectedRoundTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0);
-    const totalBaseMs = Math.max(getGameDurationMs(game) - getTotalCorrectionMs(game), 0);
 
     await setTimerCorrections({
       gameId: game.id,
@@ -613,9 +603,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         roundNumber: selectedTurn.roundNumber,
         turnNumber: selectedTurn.turnNumber
       },
-      turnMs: targetTurnMs - turnBaseMs,
-      roundMs: targetRoundMs - roundBaseMs,
-      totalMs: targetTotalMs - totalBaseMs
+      turnMs: targetTurnMs - turnBaseMs
     });
 
     closeTimerAdjustDialog();
@@ -625,9 +613,20 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     await resetAllGameTimers(game.id);
 
     setTimerAdjustTurnSeconds("0");
-    setTimerAdjustRoundSeconds("0");
-    setTimerAdjustTotalSeconds("0");
     closeTimerAdjustDialog();
+  };
+
+  const openFinishDialog = () => {
+    setFinishDialogOpen(true);
+  };
+
+  const closeFinishDialog = () => {
+    setFinishDialogOpen(false);
+  };
+
+  const handleFinishGame = async (finishReason: GameFinishReason) => {
+    await finishGame(game.id, finishReason);
+    closeFinishDialog();
   };
 
   const handleDeleteEvent = async (event: EditableEventItem) => {
@@ -870,7 +869,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       }
                     : {
                         label: "Spiel beenden",
-                        onClick: () => void finishGame(game.id),
+                        onClick: openFinishDialog,
                         disabled: isMutating,
                         danger: true
                       },
@@ -995,26 +994,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   onChange={(event) => setTimerAdjustTurnSeconds(event.target.value)}
                 />
               </label>
-              <label className="field">
-                <span>Runde in Sekunden</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={timerAdjustRoundSeconds}
-                  disabled={isMutating}
-                  onChange={(event) => setTimerAdjustRoundSeconds(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Gesamt in Sekunden</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={timerAdjustTotalSeconds}
-                  disabled={isMutating}
-                  onChange={(event) => setTimerAdjustTotalSeconds(event.target.value)}
-                />
-              </label>
+              <p className="muted-copy">
+                Korrekturen werden nur auf den ausgewaehlten Zug geschrieben.
+              </p>
               <div className="button-row button-row--compact">
                 <button
                   type="button"
@@ -1031,6 +1013,69 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   onClick={() => void handleResetTimerAdjustments()}
                 >
                   Zuruecksetzen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {finishDialogOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Spiel beenden</h2>
+                  <p className="muted-copy">Wie soll dieses Spiel gewertet werden?</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={closeFinishDialog}
+                >
+                  Schliessen
+                </button>
+              </div>
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleFinishGame("interrupted")}
+                >
+                  Spiel unterbrochen
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleFinishGame("abandoned")}
+                >
+                  Spiel abgebrochen
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleFinishGame("player-1-conceded")}
+                >
+                  {game.players[0].name} hat aufgegeben
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleFinishGame("player-2-conceded")}
+                >
+                  {game.players[1].name} hat aufgegeben
+                </button>
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleFinishGame("completed")}
+                >
+                  Spiel beendet
                 </button>
               </div>
             </div>

@@ -18,6 +18,7 @@ import type {
   CommandPointType,
   CreateGameInput,
   Game,
+  GameFinishReason,
   PlayerId,
   ScoreType,
   TimeEventAction,
@@ -74,10 +75,10 @@ interface EventPayload {
 interface TimerCorrectionInput {
   gameId: string;
   turnRef: TurnRef;
-  totalMs: number;
-  roundMs: number;
   turnMs: number;
 }
+
+type SyncStatus = "idle" | "syncing" | "success" | "error";
 
 interface GameHistoryEntry {
   id: string;
@@ -99,6 +100,8 @@ interface GameStoreValue {
   isLoading: boolean;
   isMutating: boolean;
   errorMessage: string | null;
+  syncStatus: SyncStatus;
+  lastSyncAt: string | null;
   createGame: (input: CreateGameInput) => Promise<Game>;
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
@@ -121,7 +124,7 @@ interface GameStoreValue {
   redoGameAction: (gameId: string) => Promise<void>;
   getUndoActionLabel: (gameId: string) => string | null;
   getRedoActionLabel: (gameId: string) => string | null;
-  finishGame: (gameId: string) => Promise<void>;
+  finishGame: (gameId: string, finishReason?: GameFinishReason) => Promise<void>;
   deleteGame: (gameId: string) => Promise<void>;
   importGames: (games: Game[]) => Promise<void>;
   exportGames: () => Game[];
@@ -254,6 +257,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const [isLoading, setIsLoading] = useState(games.length === 0);
   const [isMutating, setIsMutating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const gamesRef = useRef(games);
   const queueRef = useRef(syncQueue);
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
@@ -542,9 +547,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       if (!queueRef.current.length) {
         setErrorMessage(null);
       }
+      setLastSyncAt(getNowIso());
+      setSyncStatus("success");
       return true;
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      setSyncStatus("error");
       return false;
     }
   }, []);
@@ -558,8 +566,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       const configError = getSupabaseConfigError();
       if (configError) {
         setErrorMessage(configError);
+        setSyncStatus("error");
         return false;
       }
+
+      setSyncStatus("syncing");
 
       while (queueRef.current.length) {
         const nextItem = queueRef.current[0];
@@ -602,12 +613,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           removeQueueItem(nextItem.id);
         } catch (error) {
           setErrorMessage(getErrorMessage(error));
+          setSyncStatus("error");
           return false;
         }
       }
 
-      await pullRemoteGames();
-      return true;
+      const pulled = await pullRemoteGames();
+      if (pulled) {
+        setLastSyncAt(getNowIso());
+        setSyncStatus("success");
+      }
+      return pulled;
     })().finally(() => {
       flushPromiseRef.current = null;
     });
@@ -619,10 +635,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     const configError = getSupabaseConfigError();
     if (configError) {
       setErrorMessage(configError);
+      setSyncStatus("error");
       setIsLoading(false);
       return;
     }
 
+    setSyncStatus("syncing");
     setIsLoading(gamesRef.current.length === 0);
     if (queueRef.current.length) {
       await flushSyncQueue();
@@ -851,7 +869,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const setTimerCorrections = useCallback(
-    async ({ gameId, turnRef, totalMs, roundMs, turnMs }: TimerCorrectionInput) =>
+    async ({ gameId, turnRef, turnMs }: TimerCorrectionInput) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game) {
@@ -861,26 +879,18 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const nextGame = {
           ...game,
           timerCorrections: (() => {
-          const nextTurns = { ...game.timerCorrections.turns };
-          const nextRounds = { ...game.timerCorrections.rounds };
-          const turnKey = `${turnRef.roundNumber}:${turnRef.turnNumber}`;
-          const roundKey = String(turnRef.roundNumber);
+            const nextTurns = { ...game.timerCorrections.turns };
+            const turnKey = `${turnRef.roundNumber}:${turnRef.turnNumber}`;
 
-          if (turnMs) {
-            nextTurns[turnKey] = turnMs;
-          } else {
-            delete nextTurns[turnKey];
-          }
-
-          if (roundMs) {
-            nextRounds[roundKey] = roundMs;
-          } else {
-            delete nextRounds[roundKey];
-          }
+            if (turnMs) {
+              nextTurns[turnKey] = turnMs;
+            } else {
+              delete nextTurns[turnKey];
+            }
 
             return {
-              totalMs,
-              rounds: nextRounds,
+              totalMs: 0,
+              rounds: {},
               turns: nextTurns
             };
           })()
@@ -1729,7 +1739,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const finishGame = useCallback(
-    async (gameId: string) =>
+    async (gameId: string, finishReason: GameFinishReason = "completed") =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game) {
@@ -1773,10 +1783,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           action: "game-end"
         });
 
-        enqueueTimeEvents(game, eventsToAdd, "Spiel beenden");
+        const nextGame = {
+          ...appendLocalTimeEvents(game, eventsToAdd),
+          finishReason
+        };
+        commitGameSnapshot("Spiel beenden", game, nextGame);
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
   );
 
   const deleteGame = useCallback(
@@ -1820,6 +1834,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       isLoading,
       isMutating,
       errorMessage,
+      syncStatus,
+      lastSyncAt,
       createGame,
       getGame,
       refreshGames,
@@ -1865,6 +1881,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       importGames,
       isLoading,
       isMutating,
+      lastSyncAt,
       pauseActiveTimer,
       endTimeout,
       refreshGames,
@@ -1875,6 +1892,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       redoGameAction,
       startTimeout,
       startGameTimer,
+      syncStatus,
       updateGameDetails,
       updateGameEvent,
       undoGameAction,

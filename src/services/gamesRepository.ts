@@ -2,6 +2,7 @@ import type {
   CommandPointEvent,
   CreateGameInput,
   Game,
+  GameFinishReason,
   NoteEvent,
   PlayerId,
   Round,
@@ -126,6 +127,10 @@ const createDefaultScenarioMeta = (): { deployment: string; primaryMission: stri
   primaryMission: ""
 });
 
+const createDefaultFinishMeta = (): { finishReason: GameFinishReason | undefined } => ({
+  finishReason: undefined
+});
+
 const createPlayerDetachmentsFromInput = (payload: CreateGameInput): Record<string, string> => ({
   "player-1": payload.playerOneDetachment.trim(),
   "player-2": payload.playerTwoDetachment.trim()
@@ -233,12 +238,40 @@ const parseScenarioMeta = (value: string | null): { deployment: string; primaryM
   }
 };
 
+const parseFinishMeta = (value: string | null): { finishReason: GameFinishReason | undefined } => {
+  if (!value) {
+    return createDefaultFinishMeta();
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      finishMeta?: {
+        finishReason?: GameFinishReason;
+      };
+    };
+    const reason = parsed?.finishMeta?.finishReason;
+    return {
+      finishReason:
+        reason === "completed" ||
+        reason === "interrupted" ||
+        reason === "abandoned" ||
+        reason === "player-1-conceded" ||
+        reason === "player-2-conceded"
+          ? reason
+          : undefined
+    };
+  } catch {
+    return createDefaultFinishMeta();
+  }
+};
+
 const serializeGameNotes = (
   timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
   legacyScoreTotals: Record<string, number>,
   playerDetachments: Record<string, string>,
-  scenarioMeta?: { deployment: string; primaryMission: string }
+  scenarioMeta?: { deployment: string; primaryMission: string },
+  finishReason?: GameFinishReason
 ): string | null => {
   const hasCorrections =
     Boolean(timerCorrections.totalMs) ||
@@ -249,8 +282,9 @@ const serializeGameNotes = (
   const hasScenarioMeta = Boolean(
     scenarioMeta?.deployment.trim() || scenarioMeta?.primaryMission.trim()
   );
+  const hasFinishMeta = Boolean(finishReason && finishReason !== "completed");
 
-  if (!hasCorrections && !hasScoreMeta && !hasPlayerMeta && !hasScenarioMeta) {
+  if (!hasCorrections && !hasScoreMeta && !hasPlayerMeta && !hasScenarioMeta && !hasFinishMeta) {
     return null;
   }
 
@@ -266,6 +300,9 @@ const serializeGameNotes = (
     scenarioMeta: {
       deployment: scenarioMeta?.deployment.trim() ?? "",
       primaryMission: scenarioMeta?.primaryMission.trim() ?? ""
+    },
+    finishMeta: {
+      finishReason: finishReason ?? "completed"
     }
   });
 };
@@ -594,12 +631,14 @@ export const mapSupabaseGameToAppGame = (
   const scoreMeta = parseScoreMeta(row.notes);
   const playerDetachments = parsePlayerMeta(row.notes);
   const scenarioMeta = parseScenarioMeta(row.notes);
+  const finishMeta = parseFinishMeta(row.notes);
 
   return {
     id: row.id,
     createdAt: row.created_at,
     updatedAt: getUpdatedAt(row, events),
     status: endedAt ? "completed" : "active",
+    finishReason: endedAt ? finishMeta.finishReason ?? "completed" : undefined,
     scoreDetailLevel: scoreMeta.scoreDetailLevel,
     gamePoints: row.player1_max_points,
     scheduledDate: date,
@@ -664,7 +703,8 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
     {
       deployment: payload.deployment,
       primaryMission: payload.primaryMission
-    }
+    },
+    "completed"
   )
 });
 
@@ -720,7 +760,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   }, {
     deployment: game.deployment,
     primaryMission: game.primaryMission
-  })
+  }, game.finishReason)
 });
 
 export const createImportedEventPayloads = (persistedGame: Game, importedGame: Game): CreateSupabaseEventPayload[] => {
@@ -823,7 +863,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   }, {
     deployment: game.deployment,
     primaryMission: game.primaryMission
-  })
+  }, game.finishReason)
 });
 
 export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayload[] => {

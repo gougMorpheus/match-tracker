@@ -15,8 +15,14 @@ const {
   getSessionDurationMs,
   getTurnDurationMs,
   getTurnRecords,
-  isTurnPaused
+  isTurnPaused,
+  prepareGamesForStats
 } = require("../.test-dist/utils/gameCalculations.js");
+const {
+  appendLocalCommandPointEvent,
+  appendLocalScoreEvent,
+  appendLocalTimeEvents
+} = require("../.test-dist/utils/gameState.js");
 const {
   createCompletedGameFixture,
   createPausedActiveGameFixture
@@ -131,6 +137,83 @@ const runGameCalculationsTests = () => {
     assert.equal(turnRecords.longestTurn?.durationMs, 15 * 60 * 1000);
     assert.equal(turnRecords.highestScoringTurn?.playerName, "Bob");
     assert.equal(turnRecords.highestScoringTurn?.totalScore, 16);
+  }
+
+  {
+    let game = createCompletedGameFixture("game-stats-filter");
+    const [playerOne, playerTwo] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "round-start", roundNumber: 2, createdAt: "2026-04-20T19:01:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 2,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:01:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 2,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:01:30.000Z"
+      },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 2,
+        createdAt: "2026-04-20T19:02:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 2,
+        createdAt: "2026-04-20T19:08:00.000Z"
+      },
+      { action: "round-end", roundNumber: 2, createdAt: "2026-04-20T19:08:00.000Z" }
+    ]);
+    game = appendLocalCommandPointEvent(game, {
+      playerId: playerOne.id,
+      cpType: "gained",
+      value: 1,
+      roundNumber: 2,
+      turnNumber: 1,
+      createdAt: "2026-04-20T19:01:10.000Z"
+    });
+    game = appendLocalScoreEvent(game, {
+      playerId: playerOne.id,
+      scoreType: "primary",
+      value: 20,
+      roundNumber: 2,
+      turnNumber: 1,
+      createdAt: "2026-04-20T19:01:20.000Z"
+    });
+    game = appendLocalScoreEvent(game, {
+      playerId: playerTwo.id,
+      scoreType: "primary",
+      value: 20,
+      roundNumber: 2,
+      turnNumber: 2,
+      createdAt: "2026-04-20T19:03:00.000Z"
+    });
+
+    const [statsGame] = prepareGamesForStats([game]);
+    assert.ok(statsGame);
+    assert.equal(statsGame.rounds.length, 1);
+    assert.equal(getPlayerPrimaryTotal(statsGame, playerOne.id), 5);
+    assert.equal(getPlayerPrimaryTotal(statsGame, playerTwo.id), 10);
+  }
+
+  {
+    const interruptedGame = {
+      ...createCompletedGameFixture("game-interrupted"),
+      finishReason: "interrupted"
+    };
+
+    assert.equal(prepareGamesForStats([interruptedGame]).length, 0);
   }
 };
 

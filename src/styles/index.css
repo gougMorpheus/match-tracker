@@ -154,6 +154,26 @@ textarea {
   color: var(--accent);
 }
 
+.sync-indicator {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sync-indicator--success {
+  color: var(--success);
+}
+
+.sync-indicator--syncing {
+  color: var(--accent);
+}
+
+.sync-indicator--error {
+  color: var(--danger);
+}
+
 .stack {
   display: grid;
   gap: 1rem;

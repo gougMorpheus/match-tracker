@@ -20,6 +20,7 @@ import {
   filterGames,
   getFilterOptions,
   getTurnRecords,
+  prepareGamesForStats,
   type TurnRecord
 } from "../utils/gameCalculations";
 import { formatDateLabel, formatDuration } from "../utils/time";
@@ -576,7 +577,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [activeDurationRoundLabel, setActiveDurationRoundLabel] = useState<string | null>(null);
   const [activeScoreRoundLabel, setActiveScoreRoundLabel] = useState<string | null>(null);
   const [activeCpPointId, setActiveCpPointId] = useState<string | null>(null);
-  const filteredGames = useMemo(() => filterGames(games, filters), [games, filters]);
+  const filteredGames = useMemo(
+    () => prepareGamesForStats(filterGames(games, filters)),
+    [games, filters]
+  );
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
   const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
   const playerAggregates = useMemo(() => createPlayerAggregates(filteredGames), [filteredGames]);

@@ -1,5 +1,11 @@
 export type PlayerId = string;
 export type GameStatus = "active" | "completed";
+export type GameFinishReason =
+  | "completed"
+  | "interrupted"
+  | "abandoned"
+  | "player-1-conceded"
+  | "player-2-conceded";
 export type ScoreType = "primary" | "secondary" | "legacy-total";
 export type CommandPointType = "gained" | "spent";
 export type ScoreDetailLevel = "full" | "total-only" | "none";
@@ -109,6 +115,7 @@ export interface Game {
   createdAt: string;
   updatedAt: string;
   status: GameStatus;
+  finishReason?: GameFinishReason;
   scoreDetailLevel: ScoreDetailLevel;
   gamePoints: number;
   scheduledDate: string;
