@@ -1449,6 +1449,55 @@ textarea {
   text-align: right;
 }
 
+.score-limit-warning {
+  position: fixed;
+  top: 5.25rem;
+  left: 50%;
+  z-index: 36;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  width: min(calc(100vw - 1.5rem), 32rem);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 16px;
+  background: rgba(69, 43, 10, 0.94);
+  color: #ffedd5;
+  box-shadow: 0 18px 42px rgba(8, 15, 28, 0.36);
+  transform: translateX(-50%);
+  animation: score-limit-warning 220ms ease-out;
+}
+
+.score-limit-warning strong,
+.score-limit-warning p {
+  margin: 0;
+}
+
+.score-limit-warning strong {
+  display: block;
+  font-size: 0.86rem;
+}
+
+.score-limit-warning p {
+  margin-top: 0.2rem;
+  color: #fed7aa;
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+.score-limit-warning > span {
+  color: #fde68a;
+  font-size: 0.86rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.score-limit-warning .ghost-button {
+  min-height: 30px;
+  padding: 0.35rem 0.55rem;
+}
+
 .game-page .primary-button--large {
   min-height: 38px;
   font-size: 0.82rem;
@@ -2043,6 +2092,18 @@ textarea {
 
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes score-limit-warning {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -0.4rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }
 

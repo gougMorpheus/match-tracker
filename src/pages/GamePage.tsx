@@ -8,7 +8,7 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { useGameStore } from "../store/GameStore";
-import type { CreateGameInput, Game, GameFinishReason, PlayerId } from "../types/game";
+import type { CreateGameInput, Game, GameFinishReason, PlayerId, ScoreType } from "../types/game";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
   getCurrentRoundNumber,
@@ -65,6 +65,20 @@ interface EditableEventItem {
   createdAt: string;
 }
 
+interface ScoreLimitWarning {
+  id: string;
+  playerName: string;
+  scoreLabel: string;
+  thresholds: number[];
+  total: number;
+}
+
+const SCORE_LIMITS: Record<ScoreType, number[]> = {
+  primary: [50],
+  secondary: [20, 40, 54],
+  "legacy-total": []
+};
+
 const createGameFormState = (game: Game): CreateGameInput => ({
   playerOneName: game.players[0].name,
   playerOneArmy: game.players[0].army.name,
@@ -83,6 +97,18 @@ const createGameFormState = (game: Game): CreateGameInput => ({
 
 const getRoundSurfaceClassName = (roundNumber?: number) =>
   roundNumber && roundNumber % 2 === 0 ? "round-surface round-surface--even" : "round-surface round-surface--odd";
+
+const getScoreLimitLabel = (scoreType: ScoreType): string =>
+  scoreType === "primary" ? "Primary" : scoreType === "secondary" ? "Secondary" : "Gesamt";
+
+const getCrossedScoreLimits = (
+  scoreType: ScoreType,
+  previousScore: number,
+  nextScore: number
+): number[] =>
+  SCORE_LIMITS[scoreType].filter(
+    (threshold) => previousScore < threshold && nextScore >= threshold
+  );
 
 export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProps) => {
   const {
@@ -129,6 +155,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [timerAdjustTurnSeconds, setTimerAdjustTurnSeconds] = useState("0");
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
+  const [scoreLimitWarning, setScoreLimitWarning] = useState<ScoreLimitWarning | null>(null);
   const [roundChangePulse, setRoundChangePulse] = useState<number | null>(null);
   const [selectedTurnKey, setSelectedTurnKey] = useState<string | null>(null);
   const [entryFilterPlayerId, setEntryFilterPlayerId] = useState<"all" | PlayerId>("all");
@@ -916,6 +943,27 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           aria-hidden="true"
         />
       ) : null}
+      {scoreLimitWarning ? (
+        <div key={scoreLimitWarning.id} className="score-limit-warning" role="alert">
+          <div>
+            <strong>
+              {scoreLimitWarning.playerName}: {scoreLimitWarning.scoreLabel} Limit erreicht
+            </strong>
+            <p>
+              {scoreLimitWarning.thresholds.join(" / ")} Punkte erreicht oder ueberschritten.
+              Bitte pruefen, ob das Limit erreicht ist.
+            </p>
+          </div>
+          <span>{scoreLimitWarning.total} Pkt</span>
+          <button
+            type="button"
+            className="ghost-button compact-button"
+            onClick={() => setScoreLimitWarning(null)}
+          >
+            OK
+          </button>
+        </div>
+      ) : null}
       {timeoutActive ? (
         <div className="timeout-banner" role="status">
           <strong>Time-out aktiv</strong>
@@ -1230,6 +1278,24 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         roundNumber: selectedRound?.roundNumber,
                         turnNumber: selectedTurn?.turnNumber
                       });
+                      if (direction === "plus") {
+                        const crossedLimits = getCrossedScoreLimits(
+                          scoreType,
+                          currentScore,
+                          currentScore + safeAmount
+                        );
+                        if (crossedLimits.length) {
+                          const playerName =
+                            game.players.find((entry) => entry.id === playerId)?.name ?? "Spieler";
+                          setScoreLimitWarning({
+                            id: `${playerId}-${scoreType}-${crossedLimits.join("-")}-${Date.now()}`,
+                            playerName,
+                            scoreLabel: getScoreLimitLabel(scoreType),
+                            thresholds: crossedLimits,
+                            total: currentScore + safeAmount
+                          });
+                        }
+                      }
                       setActionFlash("score");
                     }}
                   />
