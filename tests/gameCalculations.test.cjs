@@ -237,7 +237,28 @@ const runGameCalculationsTests = () => {
       }
     };
 
-    assert.equal(prepareGamesForStats([legacyGame]).length, 0);
+    assert.equal(prepareGamesForStats([legacyGame]).length, 1);
+  }
+
+  {
+    const legacyGame = {
+      ...createCompletedGameFixture("game-legacy-stats"),
+      scoreDetailLevel: "total-only",
+      rounds: [],
+      scoreEvents: [],
+      commandPointEvents: [],
+      timeEvents: [],
+      legacyScoreTotals: {
+        "game-legacy-stats:player-1": 78,
+        "game-legacy-stats:player-2": 64
+      }
+    };
+    const overview = createStatsOverview([createCompletedGameFixture("game-stats-overview"), legacyGame]);
+
+    assert.equal(overview.games, 2);
+    assert.equal(overview.averageDurationMs, 27 * 60 * 1000);
+    assert.equal(overview.averageRounds, 1);
+    assert.equal(overview.averageCombinedScore, 83.5);
   }
 
   {

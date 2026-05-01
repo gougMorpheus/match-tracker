@@ -63,7 +63,7 @@ export const prepareGameForStats = (game: Game): Game | null => {
   }
 
   if (game.scoreDetailLevel !== "full") {
-    return null;
+    return game;
   }
 
   const validTurns = game.rounds.flatMap((round) =>
@@ -686,8 +686,11 @@ const hasPlayerCommandPointData = (game: Game, playerId: PlayerId): boolean =>
 const hasCompletedTimingData = (game: Game): boolean =>
   game.rounds.some((round) => round.turns.some((turn) => getCompletedTurnDurationMs(turn, game) !== null));
 
+const hasDetailedTimingStats = (game: Game): boolean =>
+  game.scoreDetailLevel === "full" && hasCompletedTimingData(game);
+
 const getStatsGameDurationMs = (game: Game): number | null => {
-  if (!game.startedAt || !game.endedAt || !hasCompletedTimingData(game)) {
+  if (!game.startedAt || !game.endedAt || !hasDetailedTimingStats(game)) {
     return null;
   }
 
@@ -732,10 +735,11 @@ export const createPlayerAggregates = (games: Game[], durationSourceGames: Game[
         .filter(({ game, player }) => getPlayerComparableTotalScore(game, player.id) !== null)
         .map(({ game, player }) => getPlayerTotalScore(game, player.id));
       const durationValues = playerGames
+        .filter(({ game }) => game.scoreDetailLevel === "full")
         .map(({ game }) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
         .filter((value): value is number => value !== null);
       const spentCpValues = playerGames
-        .filter(({ game, player }) => hasPlayerCommandPointData(game, player.id))
+        .filter(({ game, player }) => game.scoreDetailLevel === "full" && hasPlayerCommandPointData(game, player.id))
         .map(({ game, player }) => getPlayerCommandPointsSpent(game, player.id));
 
       return {
@@ -843,7 +847,10 @@ export const createScenarioPerformanceAggregates = (
     const existing = grouped.get(label) ?? { scores: [], durations: [], games: 0 };
     existing.games += 1;
     existing.scores.push(getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id));
-    const duration = getStatsGameDurationMs(durationSourceById.get(game.id) ?? game);
+    const duration =
+      game.scoreDetailLevel === "full"
+        ? getStatsGameDurationMs(durationSourceById.get(game.id) ?? game)
+        : null;
     if (duration !== null) {
       existing.durations.push(duration);
     }
@@ -929,7 +936,9 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
   const completedDurations = games
     .map((game) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
     .filter((duration): duration is number => duration !== null);
-  const roundsValues = games.filter((game) => game.rounds.length > 0).map((game) => game.rounds.length);
+  const roundsValues = games
+    .filter((game) => game.scoreDetailLevel === "full" && game.rounds.length > 0)
+    .map((game) => game.rounds.length);
   const comparableScoreGames = games.filter((game) => hasComparableScoreData(game));
   const combinedScoreValues = comparableScoreGames.map(
     (game) => getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id)
@@ -937,9 +946,11 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
   const playerOneScoreValues = comparableScoreGames.map((game) => getPlayerTotalScore(game, game.players[0].id));
   const playerTwoScoreValues = comparableScoreGames.map((game) => getPlayerTotalScore(game, game.players[1].id));
   const spentCpValues = games.flatMap((game) =>
-    game.players
-      .filter((player) => hasPlayerCommandPointData(game, player.id))
-      .map((player) => getPlayerCommandPointsSpent(game, player.id))
+    game.scoreDetailLevel === "full"
+      ? game.players
+          .filter((player) => hasPlayerCommandPointData(game, player.id))
+          .map((player) => getPlayerCommandPointsSpent(game, player.id))
+      : []
   );
 
   return {
@@ -1019,7 +1030,10 @@ export const createMatchupAggregates = (games: Game[], durationSourceGames: Game
     const scoreB = getPlayerTotalScore(game, game.players[1].id);
 
     existing.count += 1;
-    const completedDuration = getStatsGameDurationMs(durationSourceById.get(game.id) ?? game);
+    const completedDuration =
+      game.scoreDetailLevel === "full"
+        ? getStatsGameDurationMs(durationSourceById.get(game.id) ?? game)
+        : null;
     if (completedDuration !== null) {
       existing.durations.push(completedDuration);
     }
@@ -1045,6 +1059,10 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
   const grouped = new Map<number, number[]>();
 
   games.forEach((game) => {
+    if (game.scoreDetailLevel !== "full") {
+      return;
+    }
+
     game.rounds.forEach((round) => {
       const duration = getCompletedRoundDurationMs(round, game);
       if (duration === null) {
@@ -1105,6 +1123,10 @@ export const createPlayerTurnDurationAggregates = (games: Game[]): PlayerTurnDur
   const grouped = new Map<string, number[]>();
 
   games.forEach((game) => {
+    if (game.scoreDetailLevel !== "full") {
+      return;
+    }
+
     game.rounds.forEach((round) => {
       round.turns.forEach((turn) => {
         const player = game.players.find((entry) => entry.id === turn.playerId);
@@ -1132,82 +1154,87 @@ export const createPlayerTurnDurationAggregates = (games: Game[]): PlayerTurnDur
 
 export const createCpScoreCorrelationPoints = (games: Game[]): CpScorePoint[] =>
   games.flatMap((game) =>
-    game.players
-      .filter(
-        (player) =>
-          hasPlayerCommandPointData(game, player.id) && getPlayerComparableTotalScore(game, player.id) !== null
-      )
-      .map((player) => ({
-        playerName: player.name,
-        gameId: game.id,
-        scheduledDate: game.scheduledDate,
-        scheduledTime: game.scheduledTime,
-        cpSpent: getPlayerCommandPointsSpent(game, player.id),
-        totalScore: getPlayerTotalScore(game, player.id),
-        primaryScore: getPlayerComparablePrimaryScore(game, player.id),
-        secondaryScore: getPlayerComparableSecondaryScore(game, player.id)
-      }))
+    game.scoreDetailLevel === "full"
+      ? game.players
+          .filter(
+            (player) =>
+              hasPlayerCommandPointData(game, player.id) &&
+              getPlayerComparableTotalScore(game, player.id) !== null
+          )
+          .map((player) => ({
+            playerName: player.name,
+            gameId: game.id,
+            scheduledDate: game.scheduledDate,
+            scheduledTime: game.scheduledTime,
+            cpSpent: getPlayerCommandPointsSpent(game, player.id),
+            totalScore: getPlayerTotalScore(game, player.id),
+            primaryScore: getPlayerComparablePrimaryScore(game, player.id),
+            secondaryScore: getPlayerComparableSecondaryScore(game, player.id)
+          }))
+      : []
   );
 
 export const getTurnRecords = (
   games: Game[]
 ): { longestTurn: TurnRecord | null; fastestTurn: TurnRecord | null; highestScoringTurn: TurnRecord | null } => {
   const turnRecords = games.flatMap((game) =>
-    game.rounds.flatMap((round) =>
-      round.turns
-        .map((turn) => {
-          const player = game.players.find((entry) => entry.id === turn.playerId);
-          const durationMs = getCompletedTurnDurationMs(turn, game);
-          if (!player || durationMs === null) {
-            return null;
-          }
+    game.scoreDetailLevel === "full"
+      ? game.rounds.flatMap((round) =>
+          round.turns
+            .map((turn) => {
+              const player = game.players.find((entry) => entry.id === turn.playerId);
+              const durationMs = getCompletedTurnDurationMs(turn, game);
+              if (!player || durationMs === null) {
+                return null;
+              }
 
-          return {
-            gameId: game.id,
-            scheduledDate: game.scheduledDate,
-            scheduledTime: game.scheduledTime,
-            playerName: player.name,
-            armyName: player.army.name,
-            roundNumber: round.roundNumber,
-            turnNumber: turn.turnNumber,
-            durationMs,
-            primaryScore: sumValues(
-              game.scoreEvents
-                .filter(
-                  (event) =>
-                    event.playerId === turn.playerId &&
-                    event.roundNumber === round.roundNumber &&
-                    event.turnNumber === turn.turnNumber &&
-                    event.scoreType === "primary"
+              return {
+                gameId: game.id,
+                scheduledDate: game.scheduledDate,
+                scheduledTime: game.scheduledTime,
+                playerName: player.name,
+                armyName: player.army.name,
+                roundNumber: round.roundNumber,
+                turnNumber: turn.turnNumber,
+                durationMs,
+                primaryScore: sumValues(
+                  game.scoreEvents
+                    .filter(
+                      (event) =>
+                        event.playerId === turn.playerId &&
+                        event.roundNumber === round.roundNumber &&
+                        event.turnNumber === turn.turnNumber &&
+                        event.scoreType === "primary"
+                    )
+                    .map((event) => ({ value: event.value }))
+                ),
+                secondaryScore: sumValues(
+                  game.scoreEvents
+                    .filter(
+                      (event) =>
+                        event.playerId === turn.playerId &&
+                        event.roundNumber === round.roundNumber &&
+                        event.turnNumber === turn.turnNumber &&
+                        event.scoreType === "secondary"
+                    )
+                    .map((event) => ({ value: event.value }))
+                ),
+                totalScore: sumValues(
+                  game.scoreEvents
+                    .filter(
+                      (event) =>
+                        event.playerId === turn.playerId &&
+                        event.roundNumber === round.roundNumber &&
+                        event.turnNumber === turn.turnNumber &&
+                        event.scoreType !== "legacy-total"
+                    )
+                    .map((event) => ({ value: event.value }))
                 )
-                .map((event) => ({ value: event.value }))
-            ),
-            secondaryScore: sumValues(
-              game.scoreEvents
-                .filter(
-                  (event) =>
-                    event.playerId === turn.playerId &&
-                    event.roundNumber === round.roundNumber &&
-                    event.turnNumber === turn.turnNumber &&
-                    event.scoreType === "secondary"
-                )
-                .map((event) => ({ value: event.value }))
-            ),
-            totalScore: sumValues(
-              game.scoreEvents
-                .filter(
-                  (event) =>
-                    event.playerId === turn.playerId &&
-                    event.roundNumber === round.roundNumber &&
-                    event.turnNumber === turn.turnNumber &&
-                    event.scoreType !== "legacy-total"
-                )
-                .map((event) => ({ value: event.value }))
-            )
-          } satisfies TurnRecord;
-        })
-        .filter((record): record is TurnRecord => Boolean(record))
-    )
+              } satisfies TurnRecord;
+            })
+            .filter((record): record is TurnRecord => Boolean(record))
+        )
+      : []
   );
 
   if (!turnRecords.length) {
