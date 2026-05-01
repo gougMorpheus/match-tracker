@@ -36,6 +36,16 @@ const hasCommandPointEarnedInTurn = (game: Game, turn: Turn): boolean =>
 const isStatsEligibleTurn = (game: Game, turn: Turn): boolean =>
   getTurnDurationMs(turn, game) >= MIN_STATS_TURN_DURATION_MS && hasCommandPointEarnedInTurn(game, turn);
 
+export const getCountedRounds = (game: Game): Round[] => {
+  if (game.scoreDetailLevel !== "full") {
+    return game.rounds;
+  }
+
+  return game.rounds.filter((round) =>
+    round.turns.some((turn) => isStatsEligibleTurn(game, turn))
+  );
+};
+
 const hasStatsTurnKey = (
   validTurnKeys: Set<string>,
   event: { roundNumber?: number; turnNumber?: number }
@@ -529,7 +539,7 @@ export const createGameSummary = (game: Game): GameSummary => ({
   scheduledDate: game.scheduledDate,
   scheduledTime: game.scheduledTime,
   totalDurationMs: hasCompletedTimingData(game) ? getGameDurationMs(game) : null,
-  roundCount: game.rounds.length,
+  roundCount: getCountedRounds(game).length,
   players: [
     createSummaryPlayer(game, game.players[0].id),
     createSummaryPlayer(game, game.players[1].id)

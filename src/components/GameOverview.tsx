@@ -6,6 +6,7 @@ import {
   getPlayerCommandPointsGained,
   getPlayerCommandPointsSpent,
   getGameDurationMs,
+  getCountedRounds,
   getPlayerTurnDurationTotalMs,
   hasComparableCommandPointData,
   hasDetailedScoreData,
@@ -54,14 +55,15 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   const formatScoreValue = (value: number | null) => (value === null ? "-" : value);
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
+  const countedRounds = getCountedRounds(game);
 
-  const roundRows = game.rounds.map((round) => ({
+  const roundRows = countedRounds.map((round) => ({
     id: round.id,
     label: `Runde ${round.roundNumber}`,
     durationMs: getRoundDurationMs(round, game)
   }));
   const maxRoundDuration = Math.max(...roundRows.map((round) => round.durationMs), 1);
-  const roundScoreRows: RoundScoreRow[] = game.rounds.map((round) => {
+  const roundScoreRows: RoundScoreRow[] = countedRounds.map((round) => {
     const values = Object.fromEntries(
       orderedPlayers.map((player) => [
         player.id,
@@ -110,7 +112,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     });
   });
 
-  const roundTimeRows: RoundTimeRow[] = game.rounds.map((round) => {
+  const roundTimeRows: RoundTimeRow[] = countedRounds.map((round) => {
     const values = Object.fromEntries(
       orderedPlayers.map((player) => [player.id, 0])
     ) as RoundTimeRow["values"];

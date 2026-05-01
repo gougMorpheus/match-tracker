@@ -1,11 +1,13 @@
 const assert = require("node:assert/strict");
 const {
   createCpScoreCorrelationPoints,
+  createGameSummary,
   createPlayerTurnDurationAggregates,
   createRoundScoreAggregates,
   createStatsOverview,
   filterGames,
   getCurrentRoundNumber,
+  getCountedRounds,
   getPlayerCommandPoints,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
@@ -207,6 +209,8 @@ const runGameCalculationsTests = () => {
     assert.equal(statsGame.rounds.length, 1);
     assert.equal(getPlayerPrimaryTotal(statsGame, playerOne.id), 5);
     assert.equal(getPlayerPrimaryTotal(statsGame, playerTwo.id), 10);
+    assert.equal(getCountedRounds(game).length, 1);
+    assert.equal(createGameSummary(game).roundCount, 1);
   }
 
   {
