@@ -52,6 +52,10 @@ export const prepareGameForStats = (game: Game): Game | null => {
     return null;
   }
 
+  if (game.scoreDetailLevel !== "full") {
+    return game;
+  }
+
   const validTurns = game.rounds.flatMap((round) =>
     round.turns.filter((turn) => isStatsEligibleTurn(game, turn))
   );

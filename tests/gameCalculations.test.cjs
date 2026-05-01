@@ -215,6 +215,26 @@ const runGameCalculationsTests = () => {
 
     assert.equal(prepareGamesForStats([interruptedGame]).length, 0);
   }
+
+  {
+    const legacyGame = {
+      ...createCompletedGameFixture("game-legacy"),
+      scoreDetailLevel: "total-only",
+      rounds: [],
+      scoreEvents: [],
+      commandPointEvents: [],
+      timeEvents: [],
+      legacyScoreTotals: {
+        "game-legacy:player-1": 78,
+        "game-legacy:player-2": 64
+      }
+    };
+
+    const [statsGame] = prepareGamesForStats([legacyGame]);
+    assert.ok(statsGame);
+    assert.equal(statsGame.scoreDetailLevel, "total-only");
+    assert.equal(statsGame.legacyScoreTotals["game-legacy:player-1"], 78);
+  }
 };
 
 module.exports = {
