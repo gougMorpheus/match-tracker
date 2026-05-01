@@ -56,6 +56,7 @@ import {
   createEventSyncQueueItem,
   createGameSyncQueueItem,
   getSyncErrorMessage,
+  isTransientSyncError,
   loadCachedGames,
   loadSyncQueue,
   saveCachedGames,
@@ -153,6 +154,11 @@ const getErrorMessage = (error: unknown): string => getSyncErrorMessage(error);
 const clampNonNegative = (value: number): number => Math.max(value, 0);
 const MAX_ROUNDS = 5;
 const HISTORY_LIMIT = 50;
+const RESUME_SYNC_DELAY_MS = 1200;
+
+const canAttemptRemoteSync = (): boolean =>
+  typeof document === "undefined" ||
+  (!document.hidden && (typeof navigator === "undefined" || navigator.onLine));
 
 const getTurnKey = (turnRef?: TurnRef | null): string | null =>
   turnRef ? `${turnRef.roundNumber}:${turnRef.turnNumber}` : null;
@@ -266,6 +272,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const queueRef = useRef(syncQueue);
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
+  const resumeSyncTimerRef = useRef<number | null>(null);
   const advanceGameRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
   const rewindLastTurnRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
 
@@ -538,6 +545,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const pullRemoteGames = useCallback(async () => {
+    if (!canAttemptRemoteSync()) {
+      return false;
+    }
+
     const configError = getSupabaseConfigError();
     if (configError) {
       setErrorMessage(configError);
@@ -554,13 +565,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       setSyncStatus("success");
       return true;
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      if (!isTransientSyncError(error)) {
+        setErrorMessage(getErrorMessage(error));
+      }
       setSyncStatus("error");
       return false;
     }
   }, []);
 
   const flushSyncQueue = useCallback(async (): Promise<boolean> => {
+    if (!canAttemptRemoteSync()) {
+      return false;
+    }
+
     if (flushPromiseRef.current) {
       return flushPromiseRef.current;
     }
@@ -615,7 +632,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           await gamesRepository.upsertEvent(eventPayload);
           removeQueueItem(nextItem.id);
         } catch (error) {
-          setErrorMessage(getErrorMessage(error));
+          if (!isTransientSyncError(error)) {
+            setErrorMessage(getErrorMessage(error));
+          }
           setSyncStatus("error");
           return false;
         }
@@ -635,6 +654,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, [pullRemoteGames, removeQueueItem]);
 
   const refreshGames = useCallback(async () => {
+    if (!canAttemptRemoteSync()) {
+      setIsLoading(false);
+      return;
+    }
+
     const configError = getSupabaseConfigError();
     if (configError) {
       setErrorMessage(configError);
@@ -654,6 +678,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, [flushSyncQueue, pullRemoteGames]);
 
   const scheduleRemoteRefresh = useCallback(() => {
+    if (!canAttemptRemoteSync()) {
+      return;
+    }
+
     if (refreshTimerRef.current) {
       window.clearTimeout(refreshTimerRef.current);
     }
@@ -680,9 +708,39 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     const handleOnline = () => {
       void refreshGames();
     };
+    const handleOffline = () => {
+      setSyncStatus("idle");
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (resumeSyncTimerRef.current) {
+          window.clearTimeout(resumeSyncTimerRef.current);
+          resumeSyncTimerRef.current = null;
+        }
+        return;
+      }
+
+      if (resumeSyncTimerRef.current) {
+        window.clearTimeout(resumeSyncTimerRef.current);
+      }
+      resumeSyncTimerRef.current = window.setTimeout(() => {
+        resumeSyncTimerRef.current = null;
+        void refreshGames();
+      }, RESUME_SYNC_DELAY_MS);
+    };
 
     window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (resumeSyncTimerRef.current) {
+        window.clearTimeout(resumeSyncTimerRef.current);
+        resumeSyncTimerRef.current = null;
+      }
+    };
   }, [refreshGames]);
 
   useEffect(() => {
@@ -723,6 +781,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     () => () => {
       if (refreshTimerRef.current) {
         window.clearTimeout(refreshTimerRef.current);
+      }
+      if (resumeSyncTimerRef.current) {
+        window.clearTimeout(resumeSyncTimerRef.current);
       }
     },
     []

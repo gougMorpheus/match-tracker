@@ -1,7 +1,7 @@
 import type { Game } from "../types/game";
 import { createId } from "./id";
 import { mapPersistedGame } from "./gameState";
-import { normalizeSupabaseErrorMessage } from "./supabaseErrors";
+import { isTransientSupabaseErrorMessage, normalizeSupabaseErrorMessage } from "./supabaseErrors";
 
 const GAMES_CACHE_KEY = "match-tracker.local-games.v1";
 const SYNC_QUEUE_KEY = "match-tracker.sync-queue.v2";
@@ -136,4 +136,9 @@ export const createEventSyncQueueItem = (
 export const getSyncErrorMessage = (error: unknown): string => {
   const rawMessage = error instanceof Error ? error.message : "Synchronisierung fehlgeschlagen.";
   return normalizeSupabaseErrorMessage(rawMessage);
+};
+
+export const isTransientSyncError = (error: unknown): boolean => {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? "");
+  return isTransientSupabaseErrorMessage(rawMessage);
 };

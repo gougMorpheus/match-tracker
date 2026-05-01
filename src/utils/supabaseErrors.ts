@@ -1,5 +1,19 @@
 const SCHEMA_CACHE_ERROR = "Could not find the table 'public.games' in the schema cache";
 
+export const isTransientSupabaseErrorMessage = (message: string): boolean => {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("failed to fetch") ||
+    normalizedMessage.includes("networkerror") ||
+    normalizedMessage.includes("network error") ||
+    normalizedMessage.includes("load failed") ||
+    normalizedMessage.includes("the network connection was lost") ||
+    normalizedMessage.includes("internet connection appears to be offline") ||
+    normalizedMessage.includes("aborted") ||
+    normalizedMessage.includes("timeout")
+  );
+};
+
 export const normalizeSupabaseErrorMessage = (message: string): string => {
   if (
     message.includes(SCHEMA_CACHE_ERROR) ||
