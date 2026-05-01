@@ -1494,12 +1494,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const targetTurn = getPreviousTurnByRef(game, turnRef);
-        if (!targetTurn || !keepTimerRunning) {
+        const currentTurn = getTurnByRef(game, turnRef);
+        const shouldRewindToSetup =
+          !targetTurn &&
+          Boolean(currentTurn) &&
+          currentTurn?.roundNumber === 1 &&
+          currentTurn.turnNumber === 1 &&
+          game.timeEvents.some((event) => event.action === "setup-start");
+
+        if ((!targetTurn && !shouldRewindToSetup) || !keepTimerRunning) {
           return;
         }
 
         const now = getNowIso();
-        const currentTurn = getTurnByRef(game, turnRef);
         const eventsToAdd: Array<{
           action: TimeEventAction;
           playerId?: PlayerId;
@@ -1530,7 +1537,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           });
         });
 
-        if (!targetTurn.timing.startedAt) {
+        if (shouldRewindToSetup) {
+          if (!isSetupRunning(game)) {
+            eventsToAdd.push({
+              action: "setup-start",
+              createdAt: now
+            });
+          }
+        } else if (targetTurn && !targetTurn.timing.startedAt) {
           eventsToAdd.push({
             playerId: targetTurn.playerId,
             roundNumber: targetTurn.roundNumber,
@@ -1539,9 +1553,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             createdAt: now
           });
         } else if (
-          targetTurn.timing.endedAt ||
-          isTurnPaused(targetTurn) ||
-          getTurnKey(currentTurn) !== getTurnKey(targetTurn)
+          targetTurn &&
+          (targetTurn.timing.endedAt ||
+            isTurnPaused(targetTurn) ||
+            getTurnKey(currentTurn) !== getTurnKey(targetTurn))
         ) {
           eventsToAdd.push({
             playerId: targetTurn.playerId,
@@ -1557,7 +1572,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             game,
             eventsToAdd,
             "Zurueck",
-            currentTurn ?? targetTurn,
+            currentTurn ?? targetTurn ?? null,
             recordHistory ? "rewind-turn" : "snapshot",
             recordHistory
           );
@@ -1580,13 +1595,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        const targetTurn = getTurnByRef(game, turnRef);
-        if (!targetTurn && isSetupRunning(game)) {
+        if (!turnRef && isSetupRunning(game)) {
           enqueueTimeEvents(game, [{ action: "setup-pause" }], "Timer aus");
           void flushSyncQueue();
           return;
         }
 
+        const targetTurn = getTurnByRef(game, turnRef);
         if (!targetTurn || !targetTurn.timing.startedAt || targetTurn.timing.endedAt || isTurnPaused(targetTurn)) {
           return;
         }
@@ -1655,7 +1670,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           });
         }
 
-        if (targetTurn) {
+        if (!turnRef && game.timeEvents.some((event) => event.action === "setup-start")) {
+          if (isSetupPaused(game)) {
+            eventsToAdd.push({
+              action: "setup-resume",
+              createdAt: now
+            });
+          } else if (!isSetupRunning(game)) {
+            eventsToAdd.push({
+              action: "setup-start",
+              createdAt: now
+            });
+          }
+        } else if (targetTurn) {
           if (targetRound && !targetRound.startedAt) {
             eventsToAdd.push({
               playerId: targetTurn.playerId,

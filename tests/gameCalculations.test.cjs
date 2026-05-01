@@ -101,7 +101,7 @@ const runGameCalculationsTests = () => {
     assert.equal(overview.games, 1);
     assert.equal(overview.players, 2);
     assert.equal(overview.armies, 2);
-    assert.equal(overview.averageDurationMs, 45 * 60 * 1000);
+    assert.equal(overview.averageDurationMs, 27 * 60 * 1000);
     assert.equal(overview.averageCombinedScore, 25);
     assert.equal(overview.averagePlayerOneScore, 9);
     assert.equal(overview.averagePlayerTwoScore, 16);

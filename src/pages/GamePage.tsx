@@ -78,6 +78,7 @@ const SCORE_LIMITS: Record<ScoreType, number[]> = {
   secondary: [20, 40, 54],
   "legacy-total": []
 };
+const SETUP_TURN_KEY = "setup";
 
 const createGameFormState = (game: Game): CreateGameInput => ({
   playerOneName: game.players[0].name,
@@ -301,6 +302,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         return latestKey;
       }
 
+      if (
+        current === SETUP_TURN_KEY &&
+        game.timeEvents.some((event) => event.action === "setup-start")
+      ) {
+        return current;
+      }
+
       return allTurns.some((turn) => turn.key === current) ? current : latestKey;
     });
   }, [allTurns, game, latestTurn]);
@@ -369,16 +377,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
   const latestRound = game.rounds[game.rounds.length - 1];
   const selectedTurn =
-    allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
+    selectedTurnKey === SETUP_TURN_KEY
+      ? undefined
+      : allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
   const timerFocusTurn = getTimerFocusTurn(selectedTurn, latestTurn);
   const selectedTurnIndex = selectedTurn
     ? allTurns.findIndex((turn) => turn.key === `${selectedTurn.roundNumber}:${selectedTurn.turnNumber}`)
     : -1;
   const selectedRound =
     game.rounds.find((round) => round.roundNumber === selectedTurn?.roundNumber) ?? latestRound;
-  const canGoBack = selectedTurnIndex > 0;
+  const hasSetupPhase = game.timeEvents.some((event) => event.action === "setup-start");
+  const isSetupSelected = selectedTurnKey === SETUP_TURN_KEY;
+  const canGoBack = selectedTurnIndex > 0 || (selectedTurnIndex === 0 && hasSetupPhase);
   const canGoForwardToExistingTurn =
-    selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1;
+    (isSetupSelected && allTurns.length > 0) ||
+    (selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1);
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
@@ -386,7 +399,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const showOverview = isClosed || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
-  const isSetupScreen = !showOverview && !latestRound;
+  const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
   const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
   const displayTurn = timerFocusTurn ?? selectedTurn;
@@ -765,6 +778,17 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleAdvance = async () => {
+    if (isSetupSelected) {
+      const firstTurn = allTurns[0];
+      if (firstTurn) {
+        if (isTimerRunning) {
+          await advanceGame(game.id, undefined, true);
+        }
+        setSelectedTurnKey(firstTurn.key);
+      }
+      return;
+    }
+
     if (canGoForwardToExistingTurn) {
       const nextTurn = allTurns[selectedTurnIndex + 1];
       if (nextTurn) {
@@ -818,6 +842,23 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         );
       }
       setSelectedTurnKey(previousTurn.key);
+      return;
+    }
+
+    if (selectedTurnIndex === 0 && hasSetupPhase) {
+      if (isTimerRunning) {
+        await rewindLastTurn(
+          game.id,
+          selectedTurn
+            ? {
+                roundNumber: selectedTurn.roundNumber,
+                turnNumber: selectedTurn.turnNumber
+              }
+            : undefined,
+          true
+        );
+      }
+      setSelectedTurnKey(SETUP_TURN_KEY);
     }
   };
 

@@ -687,15 +687,18 @@ const hasCompletedTimingData = (game: Game): boolean =>
   game.rounds.some((round) => round.turns.some((turn) => getCompletedTurnDurationMs(turn, game) !== null));
 
 const getStatsGameDurationMs = (game: Game): number | null => {
-  if (!game.startedAt || !game.endedAt) {
+  if (!game.startedAt || !game.endedAt || !hasCompletedTimingData(game)) {
     return null;
   }
 
-  const sessionDuration = getSessionDurationMs(game);
-  return sessionDuration > 0 ? sessionDuration : getDurationMs(game.startedAt, game.endedAt);
+  return getGameDurationMs(game);
 };
 
-export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
+const createGameSourceById = (games: Game[]): Map<string, Game> =>
+  new Map(games.map((game) => [game.id, game]));
+
+export const createPlayerAggregates = (games: Game[], durationSourceGames: Game[] = games): PlayerAggregate[] => {
+  const durationSourceById = createGameSourceById(durationSourceGames);
   const playerNames = Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.name))));
 
   return playerNames
@@ -729,7 +732,7 @@ export const createPlayerAggregates = (games: Game[]): PlayerAggregate[] => {
         .filter(({ game, player }) => getPlayerComparableTotalScore(game, player.id) !== null)
         .map(({ game, player }) => getPlayerTotalScore(game, player.id));
       const durationValues = playerGames
-        .map(({ game }) => getStatsGameDurationMs(game))
+        .map(({ game }) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
         .filter((value): value is number => value !== null);
       const spentCpValues = playerGames
         .filter(({ game, player }) => hasPlayerCommandPointData(game, player.id))
@@ -823,11 +826,13 @@ export const createDeploymentLeaders = (games: Game[]): ScenarioLeader[] =>
 
 export const createScenarioPerformanceAggregates = (
   games: Game[],
-  scenarioSelector: (game: Game) => string
+  scenarioSelector: (game: Game) => string,
+  durationSourceGames: Game[] = games
 ): ScenarioPerformanceAggregate[] => {
   const leaders = createScenarioLeaders(games, scenarioSelector);
   const leaderByLabel = new Map(leaders.map((leader) => [leader.label, leader]));
   const grouped = new Map<string, { scores: number[]; durations: number[]; games: number }>();
+  const durationSourceById = createGameSourceById(durationSourceGames);
 
   games.forEach((game) => {
     const label = scenarioSelector(game).trim();
@@ -838,7 +843,7 @@ export const createScenarioPerformanceAggregates = (
     const existing = grouped.get(label) ?? { scores: [], durations: [], games: 0 };
     existing.games += 1;
     existing.scores.push(getPlayerTotalScore(game, game.players[0].id) + getPlayerTotalScore(game, game.players[1].id));
-    const duration = getStatsGameDurationMs(game);
+    const duration = getStatsGameDurationMs(durationSourceById.get(game.id) ?? game);
     if (duration !== null) {
       existing.durations.push(duration);
     }
@@ -916,12 +921,13 @@ export const filterGames = (games: Game[], filters: GameFilterState): Game[] => 
   });
 };
 
-export const createStatsOverview = (games: Game[]): StatsOverview => {
+export const createStatsOverview = (games: Game[], durationSourceGames: Game[] = games): StatsOverview => {
+  const durationSourceById = createGameSourceById(durationSourceGames);
   const playerEntries = games.flatMap((game) => game.players);
   const playerCount = new Set(playerEntries.map((player) => player.name)).size;
   const armyCount = new Set(playerEntries.map((player) => player.army.name)).size;
   const completedDurations = games
-    .map((game) => getStatsGameDurationMs(game))
+    .map((game) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
     .filter((duration): duration is number => duration !== null);
   const roundsValues = games.filter((game) => game.rounds.length > 0).map((game) => game.rounds.length);
   const comparableScoreGames = games.filter((game) => hasComparableScoreData(game));
@@ -996,8 +1002,9 @@ export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
     .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName));
 };
 
-export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
+export const createMatchupAggregates = (games: Game[], durationSourceGames: Game[] = games): MatchupAggregate[] => {
   const grouped = new Map<string, { count: number; durations: number[]; combinedScores: number[]; scoreDifferences: number[] }>();
+  const durationSourceById = createGameSourceById(durationSourceGames);
 
   games.forEach((game) => {
     const [armyA, armyB] = game.players.map((player) => player.army.name).sort((left, right) => left.localeCompare(right));
@@ -1012,7 +1019,7 @@ export const createMatchupAggregates = (games: Game[]): MatchupAggregate[] => {
     const scoreB = getPlayerTotalScore(game, game.players[1].id);
 
     existing.count += 1;
-    const completedDuration = getStatsGameDurationMs(game);
+    const completedDuration = getStatsGameDurationMs(durationSourceById.get(game.id) ?? game);
     if (completedDuration !== null) {
       existing.durations.push(completedDuration);
     }

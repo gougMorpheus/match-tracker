@@ -577,21 +577,35 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [activeDurationRoundLabel, setActiveDurationRoundLabel] = useState<string | null>(null);
   const [activeScoreRoundLabel, setActiveScoreRoundLabel] = useState<string | null>(null);
   const [activeCpPointId, setActiveCpPointId] = useState<string | null>(null);
+  const filteredSourceGames = useMemo(() => filterGames(games, filters), [games, filters]);
   const filteredGames = useMemo(
-    () => prepareGamesForStats(filterGames(games, filters)),
-    [games, filters]
+    () => prepareGamesForStats(filteredSourceGames),
+    [filteredSourceGames]
   );
+  const filteredStatsSourceGames = useMemo(() => {
+    const statsGameIds = new Set(filteredGames.map((game) => game.id));
+    return filteredSourceGames.filter((game) => statsGameIds.has(game.id));
+  }, [filteredGames, filteredSourceGames]);
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
-  const overview = useMemo(() => createStatsOverview(filteredGames), [filteredGames]);
-  const playerAggregates = useMemo(() => createPlayerAggregates(filteredGames), [filteredGames]);
+  const overview = useMemo(
+    () => createStatsOverview(filteredGames, filteredStatsSourceGames),
+    [filteredGames, filteredStatsSourceGames]
+  );
+  const playerAggregates = useMemo(
+    () => createPlayerAggregates(filteredGames, filteredStatsSourceGames),
+    [filteredGames, filteredStatsSourceGames]
+  );
   const armyAggregates = useMemo(() => createArmyAggregates(filteredGames), [filteredGames]);
   const missionLeaders = useMemo(() => createMissionLeaders(filteredGames), [filteredGames]);
   const deploymentLeaders = useMemo(() => createDeploymentLeaders(filteredGames), [filteredGames]);
   const deploymentPerformance = useMemo(
-    () => createScenarioPerformanceAggregates(filteredGames, (game) => game.deployment),
-    [filteredGames]
+    () => createScenarioPerformanceAggregates(filteredGames, (game) => game.deployment, filteredStatsSourceGames),
+    [filteredGames, filteredStatsSourceGames]
   );
-  const matchupAggregates = useMemo(() => createMatchupAggregates(filteredGames), [filteredGames]);
+  const matchupAggregates = useMemo(
+    () => createMatchupAggregates(filteredGames, filteredStatsSourceGames),
+    [filteredGames, filteredStatsSourceGames]
+  );
   const roundDurationAggregates = useMemo(() => createRoundDurationAggregates(filteredGames), [filteredGames]);
   const roundScoreAggregates = useMemo(() => createRoundScoreAggregates(filteredGames), [filteredGames]);
   const playerTurnDurationAggregates = useMemo(
