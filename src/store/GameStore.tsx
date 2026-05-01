@@ -45,6 +45,9 @@ import {
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
   getTurnBaseDurationMs,
+  isSetupActive,
+  isSetupPaused,
+  isSetupRunning,
   isSessionRunning,
   isTimeoutActive,
   isTurnPaused
@@ -1190,6 +1193,53 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         if (!currentRound) {
+          if (isSetupActive(game)) {
+            eventsToAdd.push({
+              action: "setup-end",
+              createdAt: now
+            });
+
+            eventsToAdd.push(
+              {
+                playerId: game.startingPlayerId,
+                roundNumber: 1,
+                action: "round-start",
+                createdAt: now
+              },
+              {
+                playerId: game.startingPlayerId,
+                roundNumber: 1,
+                turnNumber: 1,
+                action: "turn-start",
+                createdAt: now
+              }
+            );
+
+            if (!keepTimerRunning) {
+              eventsToAdd.push({
+                playerId: game.startingPlayerId,
+                roundNumber: 1,
+                turnNumber: 1,
+                action: "turn-pause",
+                createdAt: now
+              });
+            }
+
+            enqueueTimeEvents(
+              game,
+              eventsToAdd,
+              "Weiter",
+              {
+                roundNumber: 1,
+                turnNumber: 1
+              },
+              recordHistory ? "advance-turn" : "snapshot",
+              recordHistory
+            );
+            void flushSyncQueue();
+            return;
+          }
+
           const firstRoundNumber = 1;
           const shouldRun = keepTimerRunning;
           eventsToAdd.push(
@@ -1470,6 +1520,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const targetTurn = getTurnByRef(game, turnRef);
+        if (!targetTurn && isSetupRunning(game)) {
+          enqueueTimeEvents(game, [{ action: "setup-pause" }], "Timer aus");
+          void flushSyncQueue();
+          return;
+        }
+
         if (!targetTurn || !targetTurn.timing.startedAt || targetTurn.timing.endedAt || isTurnPaused(targetTurn)) {
           return;
         }
@@ -1566,6 +1622,26 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
         } else {
+          if (!targetRound) {
+            if (isSetupPaused(game)) {
+              eventsToAdd.push({
+                action: "setup-resume",
+                createdAt: now
+              });
+            } else if (!isSetupActive(game)) {
+              eventsToAdd.push({
+                action: "setup-start",
+                createdAt: now
+              });
+            }
+
+            if (eventsToAdd.length) {
+              enqueueTimeEvents(game, eventsToAdd, "Timer an");
+              void flushSyncQueue();
+            }
+            return;
+          }
+
           const nextRoundNumber = (targetRound?.roundNumber ?? 0) + 1;
           eventsToAdd.push(
             {
@@ -1754,6 +1830,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           roundNumber?: number;
           turnNumber?: number;
         }> = [];
+
+        if (isSetupActive(game)) {
+          eventsToAdd.push({
+            action: "setup-end"
+          });
+        }
 
         if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
           eventsToAdd.push({

@@ -210,6 +210,7 @@ export const syncDerivedGameState = (game: Game): Game => {
   ].sort((left, right) => left.localeCompare(right));
   const startedAt =
     sortedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
+    sortedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
     sortedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
     (hasTimeEvents ? undefined : game.startedAt);
   const endedAt =

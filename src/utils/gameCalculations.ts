@@ -246,6 +246,99 @@ export const getTurnDurationMs = (turn: Turn, game?: Game): number =>
 export const getCompletedTurnDurationMs = (turn: Turn, game?: Game): number | null =>
   turn.timing.startedAt && turn.timing.endedAt ? getTurnDurationMs(turn, game) : null;
 
+export const getSetupDurationMs = (game: Game): number => {
+  const setupEvents = [...game.timeEvents]
+    .filter(
+      (event) =>
+        event.action === "setup-start" ||
+        event.action === "setup-end" ||
+        event.action === "setup-pause" ||
+        event.action === "setup-resume"
+    )
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  let startedAt: string | null = null;
+  let pauseStartedAt: string | null = null;
+  let pausedDuration = 0;
+  let total = 0;
+
+  setupEvents.forEach((event) => {
+    if (event.action === "setup-start") {
+      startedAt = event.createdAt;
+      pauseStartedAt = null;
+      pausedDuration = 0;
+      return;
+    }
+
+    if (!startedAt) {
+      return;
+    }
+
+    if (event.action === "setup-pause" && !pauseStartedAt) {
+      pauseStartedAt = event.createdAt;
+      return;
+    }
+
+    if (event.action === "setup-resume" && pauseStartedAt) {
+      pausedDuration += getDurationMs(pauseStartedAt, event.createdAt);
+      pauseStartedAt = null;
+      return;
+    }
+
+    if (event.action === "setup-end") {
+      const endedAt = event.createdAt;
+      if (pauseStartedAt) {
+        pausedDuration += getDurationMs(pauseStartedAt, endedAt);
+        pauseStartedAt = null;
+      }
+      total += Math.max(getDurationMs(startedAt, endedAt) - pausedDuration, 0);
+      startedAt = null;
+      pausedDuration = 0;
+    }
+  });
+
+  if (startedAt) {
+    const now = new Date().toISOString();
+    const openPausedDuration = pauseStartedAt
+      ? pausedDuration + getDurationMs(pauseStartedAt, now)
+      : pausedDuration;
+    total += Math.max(getDurationMs(startedAt, now) - openPausedDuration, 0);
+  }
+
+  return total;
+};
+
+export const isSetupActive = (game: Game): boolean => {
+  const setupEvents = [...game.timeEvents]
+    .filter(
+      (event) =>
+        event.action === "setup-start" ||
+        event.action === "setup-end" ||
+        event.action === "setup-pause" ||
+        event.action === "setup-resume"
+    )
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const latest = setupEvents[setupEvents.length - 1];
+
+  return Boolean(setupEvents.length && latest?.action !== "setup-end");
+};
+
+export const isSetupPaused = (game: Game): boolean => {
+  const setupEvents = [...game.timeEvents]
+    .filter(
+      (event) =>
+        event.action === "setup-start" ||
+        event.action === "setup-end" ||
+        event.action === "setup-pause" ||
+        event.action === "setup-resume"
+    )
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const latest = setupEvents[setupEvents.length - 1];
+
+  return latest?.action === "setup-pause";
+};
+
+export const isSetupRunning = (game: Game): boolean => isSetupActive(game) && !isSetupPaused(game);
+
 export const getRoundBaseDurationMs = (round: Round): number =>
   round.turns.reduce((total, turn) => total + getTurnBaseDurationMs(turn), 0);
 
@@ -259,10 +352,11 @@ export const getCompletedRoundDurationMs = (round: Round, game?: Game): number |
   round.startedAt && round.endedAt ? getRoundDurationMs(round, game) : null;
 
 export const getGameBaseDurationMs = (game: Game): number =>
-  game.rounds.reduce((total, round) => total + getRoundBaseDurationMs(round), 0);
+  getSetupDurationMs(game) + game.rounds.reduce((total, round) => total + getRoundBaseDurationMs(round), 0);
 
 export const getGameDurationMs = (game: Game): number =>
   clampFloor(
+    getSetupDurationMs(game) +
     game.rounds.reduce((total, round) => total + getRoundDurationMs(round, game), 0) +
       getTotalCorrectionMs(game)
   );

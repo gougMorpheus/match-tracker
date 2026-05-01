@@ -12,6 +12,7 @@ const {
   getPlayerSecondaryTotal,
   getPlayerTurnDurationTotalMs,
   getRoundDurationMs,
+  getSetupDurationMs,
   getSessionDurationMs,
   getTurnDurationMs,
   getTurnRecords,
@@ -24,6 +25,7 @@ const {
   appendLocalTimeEvents
 } = require("../.test-dist/utils/gameState.js");
 const {
+  createBaseGame,
   createCompletedGameFixture,
   createPausedActiveGameFixture
 } = require("./helpers/gameFixtures.cjs");
@@ -234,6 +236,21 @@ const runGameCalculationsTests = () => {
     assert.ok(statsGame);
     assert.equal(statsGame.scoreDetailLevel, "total-only");
     assert.equal(statsGame.legacyScoreTotals["game-legacy:player-1"], 78);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-setup" });
+    game = appendLocalTimeEvents(game, [
+      { action: "session-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "setup-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "setup-pause", createdAt: "2026-04-20T18:05:00.000Z" },
+      { action: "setup-resume", createdAt: "2026-04-20T18:07:00.000Z" },
+      { action: "setup-end", createdAt: "2026-04-20T18:10:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:10:00.000Z" }
+    ]);
+
+    assert.equal(getSetupDurationMs(game), 8 * 60 * 1000);
   }
 };
 

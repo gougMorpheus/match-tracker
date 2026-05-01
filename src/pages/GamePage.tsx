@@ -17,9 +17,13 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
+  getSetupDurationMs,
   getSessionDurationMs,
   getTurnBaseDurationMs,
   getTurnDurationMs,
+  isSetupActive,
+  isSetupPaused,
+  isSetupRunning,
   isTimeoutActive,
   isTurnPaused
 } from "../utils/gameCalculations";
@@ -156,6 +160,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
   const timeoutActive = game ? isTimeoutActive(game) : false;
+  const setupActive = game ? isSetupActive(game) : false;
+  const setupRunning = game ? isSetupRunning(game) : false;
+  const setupPaused = game ? isSetupPaused(game) : false;
   const {
     playerOptions,
     latestArmyByPlayerName,
@@ -352,7 +359,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const showOverview = isClosed || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
-  const isTimerRunning = !isClosed && !timeoutActive && hasActiveTurn && !isPaused;
+  const isSetupScreen = !showOverview && !latestRound;
+  const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
   const displayTurn = timerFocusTurn ?? selectedTurn;
   const displayRound =
@@ -366,7 +374,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         0
       )
     : 0;
-  const currentRoundNumber = selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
+  const setupDurationMs = getSetupDurationMs(game);
+  const currentRoundNumber = isSetupScreen ? 0 : selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
   const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
       ? "game-page--round-even"
@@ -385,14 +394,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     const focusTurn = timerFocusTurn;
-    if (shouldRunTimerRenderTicker(focusTurn, timeoutActive, isClosed)) {
+    if (setupActive || shouldRunTimerRenderTicker(focusTurn, timeoutActive, isClosed)) {
       const interval = window.setInterval(() => {
         setTick((current) => current + 1);
       }, 1000);
 
       return () => window.clearInterval(interval);
     }
-  }, [detailsOpen, isEditingGame, isClosed, timeoutActive, timerFocusTurn]);
+  }, [detailsOpen, isEditingGame, isClosed, setupActive, timeoutActive, timerFocusTurn]);
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
@@ -791,10 +800,16 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       subtitle={
         <div className="game-header-stats">
           <span>
-            Runde {displayRound?.roundNumber ?? 0} ({formatDuration(selectedRoundDurationMs)})
+            {isSetupScreen
+              ? `Aufstellung (${formatDuration(setupDurationMs)})`
+              : `Runde ${displayRound?.roundNumber ?? 0} (${formatDuration(selectedRoundDurationMs)})`}
           </span>
           <span>
-            Zug {displayTurn?.turnNumber ?? 0} ({formatDuration(displayTurn ? getTurnDurationMs(displayTurn, game) : 0)})
+            {isSetupScreen
+              ? setupPaused
+                ? "Phase pausiert"
+                : "Runde 0"
+              : `Zug ${displayTurn?.turnNumber ?? 0} (${formatDuration(displayTurn ? getTurnDurationMs(displayTurn, game) : 0)})`}
           </span>
           <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
         </div>
@@ -1099,6 +1114,45 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
         {showOverview ? (
           <GameOverview game={game} />
+        ) : isSetupScreen ? (
+          <div className="stack">
+            <article className="scoreboard setup-scoreboard is-emphasized">
+              <div className="scoreboard__head">
+                <div>
+                  <h2>Aufstellung</h2>
+                  <p>Runde 0</p>
+                </div>
+                <div className="scoreboard__meta">
+                  <span className="meta-chip meta-chip--accent">
+                    {setupRunning ? "Aktiv" : setupPaused ? "Pausiert" : "Bereit"}
+                  </span>
+                </div>
+              </div>
+              <div className="scoreboard__grid scoreboard__grid--compact setup-scoreboard__grid">
+                <div className="scoreboard-stat scoreboard-stat--time">
+                  <div className="scoreboard-stat__top">
+                    <span>Zeit</span>
+                    <strong>{formatDuration(setupDurationMs)}</strong>
+                  </div>
+                  <span className="scoreboard-stat__meta">Zaehlt zur Gesamtzeit</span>
+                </div>
+                <div className="scoreboard-stat scoreboard-stat--accent">
+                  <div className="scoreboard-stat__top">
+                    <span>Mission</span>
+                    <strong>{game.primaryMission || "-"}</strong>
+                  </div>
+                  <span className="scoreboard-stat__meta">Primaermission</span>
+                </div>
+                <div className="scoreboard-stat">
+                  <div className="scoreboard-stat__top">
+                    <span>Aufstellung</span>
+                    <strong>{game.deployment || "-"}</strong>
+                  </div>
+                  <span className="scoreboard-stat__meta">Deployment</span>
+                </div>
+              </div>
+            </article>
+          </div>
         ) : (
           <div className="stack">
             {orderedPlayers.map((player) => (

@@ -749,6 +749,15 @@ textarea {
   gap: 0.24rem;
 }
 
+.game-page .setup-scoreboard__grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 0.24rem;
+}
+
+.game-page .setup-scoreboard__grid > div:first-child {
+  grid-column: 1 / -1;
+}
+
 .game-page .scoreboard-stat--primary {
   grid-area: primary;
 }

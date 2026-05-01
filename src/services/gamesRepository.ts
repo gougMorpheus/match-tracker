@@ -41,6 +41,10 @@ const timeActions = new Set<TimeEventAction>([
   "session-end",
   "game-start",
   "game-end",
+  "setup-start",
+  "setup-end",
+  "setup-pause",
+  "setup-resume",
   "round-start",
   "round-end",
   "turn-start",
@@ -493,6 +497,7 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
 const getDerivedStartedAt = (row: SupabaseGameRecord, timeEvents: TimeEvent[]): string | undefined => {
   const explicitStart =
     timeEvents.find((event) => event.action === "game-start")?.createdAt ??
+    timeEvents.find((event) => event.action === "setup-start")?.createdAt ??
     timeEvents.find((event) => event.action === "round-start")?.createdAt;
 
   if (explicitStart) {
