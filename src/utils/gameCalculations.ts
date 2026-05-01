@@ -220,10 +220,11 @@ export const getPlayerCurrentRoundCommandPointsSpent = (game: Game, playerId: Pl
     (event) => event.roundNumber === getCurrentRoundNumber(game)
   ).reduce((total, event) => total + event.value, 0);
 
-export const getTurnBaseDurationMs = (turn: Turn): number => {
-  const totalDuration = getDurationMs(turn.timing.startedAt, turn.timing.endedAt ?? new Date().toISOString());
+export const getTurnBaseDurationMs = (turn: Turn, fallbackEndedAt?: string): number => {
+  const effectiveEndedAt = turn.timing.endedAt ?? fallbackEndedAt ?? new Date().toISOString();
+  const totalDuration = getDurationMs(turn.timing.startedAt, effectiveEndedAt);
   const pausedDuration = turn.timing.pauses.reduce(
-    (total, pause) => total + getDurationMs(pause.startedAt, pause.endedAt ?? new Date().toISOString()),
+    (total, pause) => total + getDurationMs(pause.startedAt, pause.endedAt ?? effectiveEndedAt),
     0
   );
   return Math.max(totalDuration - pausedDuration, 0);
@@ -239,7 +240,7 @@ export const getTotalCorrectionMs = (game: Game): number => game.timerCorrection
 
 export const getTurnDurationMs = (turn: Turn, game?: Game): number =>
   clampFloor(
-    getTurnBaseDurationMs(turn) +
+    getTurnBaseDurationMs(turn, game?.endedAt) +
       (game ? getTurnCorrectionMs(game, turn.roundNumber, turn.turnNumber) : 0)
   );
 
@@ -297,7 +298,7 @@ export const getSetupDurationMs = (game: Game): number => {
   });
 
   if (startedAt) {
-    const now = new Date().toISOString();
+    const now = game.endedAt ?? new Date().toISOString();
     const openPausedDuration = pauseStartedAt
       ? pausedDuration + getDurationMs(pauseStartedAt, now)
       : pausedDuration;
@@ -342,6 +343,9 @@ export const isSetupRunning = (game: Game): boolean => isSetupActive(game) && !i
 export const getRoundBaseDurationMs = (round: Round): number =>
   round.turns.reduce((total, turn) => total + getTurnBaseDurationMs(turn), 0);
 
+const getRoundBaseDurationMsForGame = (round: Round, game: Game): number =>
+  round.turns.reduce((total, turn) => total + getTurnBaseDurationMs(turn, game.endedAt), 0);
+
 export const getRoundDurationMs = (round: Round, game?: Game): number =>
   clampFloor(
     round.turns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0) +
@@ -352,7 +356,7 @@ export const getCompletedRoundDurationMs = (round: Round, game?: Game): number |
   round.startedAt && round.endedAt ? getRoundDurationMs(round, game) : null;
 
 export const getGameBaseDurationMs = (game: Game): number =>
-  getSetupDurationMs(game) + game.rounds.reduce((total, round) => total + getRoundBaseDurationMs(round), 0);
+  getSetupDurationMs(game) + game.rounds.reduce((total, round) => total + getRoundBaseDurationMsForGame(round, game), 0);
 
 export const getGameDurationMs = (game: Game): number =>
   clampFloor(
@@ -385,7 +389,7 @@ export const getSessionDurationMs = (game: Game): number => {
   });
 
   if (openStartedAt) {
-    total += getDurationMs(openStartedAt, new Date().toISOString());
+    total += getDurationMs(openStartedAt, game.endedAt ?? new Date().toISOString());
   }
 
   return total;

@@ -252,6 +252,31 @@ const runGameCalculationsTests = () => {
 
     assert.equal(getSetupDurationMs(game), 8 * 60 * 1000);
   }
+
+  {
+    let game = createBaseGame({ id: "game-closed-open-turn" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "session-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      { action: "game-end", createdAt: "2026-04-20T18:12:00.000Z" }
+    ]);
+
+    const turn = game.rounds[0]?.turns[0];
+    assert.ok(turn);
+    assert.equal(getTurnDurationMs(turn, game), 12 * 60 * 1000);
+    assert.equal(getPlayerTurnDurationTotalMs(game, playerOne.id), 12 * 60 * 1000);
+    assert.equal(getSessionDurationMs(game), 12 * 60 * 1000);
+  }
 };
 
 module.exports = {
