@@ -1555,7 +1555,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 </button>
               </div>
               {game.noteEvents.length ? (
-                <div className="stack modal-list">
+                <div className="event-list modal-list">
                   {game.noteEvents
                     .slice()
                     .reverse()
@@ -1565,7 +1565,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       return (
                         <article
                           key={event.id}
-                          className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
+                          className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}`}
                         >
                           <div className="event-editor__meta">
                             <div className="event-editor__summary">
@@ -1578,7 +1578,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                               {formatClockTimeWithSeconds(event.createdAt)}
                             </span>
                           </div>
-                          <p className="muted-copy">{event.note}</p>
+                          <p className="event-list__detail">{event.note}</p>
                         </article>
                       );
                     })}
@@ -1651,11 +1651,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 </label>
               </div>
               {filteredEditableEvents.length ? (
-                <div className="stack modal-list">
+                <div className="event-list event-list--editable modal-list">
                   {filteredEditableEvents.map((event) => (
                     <article
                       key={event.id}
-                      className={`event-editor ${getRoundSurfaceClassName(event.roundNumber)}`}
+                      className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}`}
                     >
                       <div className="event-editor__meta">
                         <div className="event-editor__summary">
@@ -1725,7 +1725,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                           </div>
                         </div>
                       ) : (
-                        <p className="muted-copy">
+                        <p className="event-list__detail">
                           {typeof event.displayValue === "number"
                             ? `${event.displayValue}`
                             : event.note || "Keine Notiz"}

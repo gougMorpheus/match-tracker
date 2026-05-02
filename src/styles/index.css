@@ -2150,6 +2150,43 @@ textarea {
   background: var(--round-surface-odd);
 }
 
+.event-list {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.event-list__row {
+  display: grid;
+  gap: 0.24rem;
+  padding: 0.42rem 0.55rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: var(--round-surface-odd);
+}
+
+.event-list__row:last-child {
+  border-bottom: 0;
+}
+
+.event-list__detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.game-page .event-list .event-editor__meta,
+.event-list .event-editor__meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.42rem;
+}
+
 .event-editor:last-child {
   padding-bottom: 0.52rem;
 }
@@ -2163,7 +2200,7 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.42rem;
 }
 
 .event-editor__summary {
@@ -2177,7 +2214,7 @@ textarea {
 }
 
 .event-editor__context {
-  margin: 0.1rem 0 0;
+  margin: 0.06rem 0 0;
   font-size: 0.62rem;
   line-height: 1;
   color: var(--muted);
@@ -2196,14 +2233,14 @@ textarea {
 .event-editor__actions {
   display: inline-grid;
   grid-template-columns: repeat(2, auto);
-  gap: 0.22rem;
+  gap: 0.2rem;
   justify-content: end;
 }
 
 .event-editor__actions .compact-button {
-  min-height: 28px;
-  padding: 0.3rem 0.45rem;
-  font-size: 0.68rem;
+  min-height: 26px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.64rem;
 }
 
 .round-surface--odd {
