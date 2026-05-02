@@ -870,21 +870,23 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     <Layout
       title="Tracker"
       subtitle={
-        <div className="game-header-stats">
-          <span>
-            {isSetupScreen
-              ? `Aufstellung (${formatDuration(setupDurationMs)})`
-              : `Runde ${displayRound?.roundNumber ?? 0} (${formatDuration(selectedRoundDurationMs)})`}
-          </span>
-          <span>
-            {isSetupScreen
-              ? setupPaused
-                ? "Phase pausiert"
-                : "Runde 0"
-              : `Zug ${displayTurn?.turnNumber ?? 0} (${formatDuration(displayTurn ? getTurnDurationMs(displayTurn, game) : 0)})`}
-          </span>
-          <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
-        </div>
+        showOverview ? undefined : (
+          <div className="game-header-stats">
+            <span>
+              {isSetupScreen
+                ? `Aufstellung (${formatDuration(setupDurationMs)})`
+                : `Runde ${displayRound?.roundNumber ?? 0} (${formatDuration(selectedRoundDurationMs)})`}
+            </span>
+            <span>
+              {isSetupScreen
+                ? setupPaused
+                  ? "Phase pausiert"
+                  : "Runde 0"
+                : `Zug ${displayTurn?.turnNumber ?? 0} (${formatDuration(displayTurn ? getTurnDurationMs(displayTurn, game) : 0)})`}
+            </span>
+            <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
+          </div>
+        )
       }
       stickyHeader
       headerClassName={headerRoundClassName}

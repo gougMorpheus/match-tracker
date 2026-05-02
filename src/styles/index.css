@@ -877,7 +877,7 @@ textarea {
 .overview-summary-grid,
 .overview-player-grid {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.45rem;
 }
 
 .overview-summary-grid {
@@ -886,35 +886,43 @@ textarea {
 
 .overview-summary-grid--compact {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.45rem;
+  gap: 0.38rem;
 }
 
 .overview-summary-grid div,
 .overview-player-card {
   border-radius: 16px;
   background: var(--bg-soft);
-  padding: 0.75rem;
+  padding: 0.62rem;
 }
 
 .overview-summary-grid--compact div {
   display: grid;
   grid-template-rows: auto 1fr;
   align-content: start;
-  padding: 0.42rem 0.5rem;
+  padding: 0.36rem 0.46rem;
   border-radius: 14px;
-  min-height: 3.25rem;
+  min-height: 2.85rem;
 }
 
 .overview-summary-grid--compact strong {
-  margin-top: 0.22rem;
-  font-size: 0.82rem;
-  line-height: 1.1;
+  margin-top: 0.16rem;
+  font-size: 0.76rem;
+  line-height: 1.05;
   word-break: break-word;
 }
 
 .overview-summary-grid--compact span {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   line-height: 1;
+}
+
+.overview-summary-item--compact strong {
+  font-size: 0.68rem;
+}
+
+.overview-summary-item--compact span {
+  font-size: 0.52rem;
 }
 
 .overview-summary-grid span,
@@ -935,14 +943,14 @@ textarea {
 
 .overview-player-card__head {
   align-items: flex-start;
-  min-height: 3.5rem;
+  min-height: 2.5rem;
 }
 
 .overview-player-card__identity {
   min-width: 0;
   flex: 1;
   display: grid;
-  grid-template-rows: auto minmax(2.15rem, auto);
+  grid-template-rows: auto minmax(1.55rem, auto);
 }
 
 .overview-player-card__identity strong,
@@ -958,9 +966,9 @@ textarea {
 }
 
 .overview-player-card__identity p {
-  margin: 0.18rem 0 0;
+  margin: 0.1rem 0 0;
   line-height: 1.05;
-  min-height: 2.1rem;
+  min-height: 1.55rem;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -975,7 +983,7 @@ textarea {
 
 .overview-bar-list {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .overview-chart-grid {
@@ -989,8 +997,8 @@ textarea {
 
 .overview-chart-card {
   display: grid;
-  gap: 0.65rem;
-  padding: 0.85rem;
+  gap: 0.5rem;
+  padding: 0.72rem;
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid var(--border);
@@ -1040,6 +1048,26 @@ textarea {
   font-size: 0.72rem;
 }
 
+.overview-chart-legend__item {
+  border: 1px solid transparent;
+  appearance: none;
+  text-align: left;
+}
+
+.overview-chart-legend__item.is-active {
+  border-color: rgba(248, 250, 252, 0.28);
+  color: var(--text);
+}
+
+.overview-chart-legend__item.is-dimmed {
+  opacity: 0.45;
+}
+
+.overview-chart-total--selection {
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(56, 189, 248, 0.12);
+}
+
 .overview-chart-total strong {
   color: var(--text);
   font-size: 0.76rem;
@@ -1078,6 +1106,16 @@ textarea {
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.overview-chart__line.is-active {
+  stroke-width: 3.8;
+}
+
+.overview-chart__line.is-dimmed {
+  opacity: 0.26;
 }
 
 .overview-chart__label,
@@ -1088,6 +1126,32 @@ textarea {
 
 .overview-chart__label {
   font-weight: 600;
+}
+
+.overview-chart__point.is-active {
+  stroke-width: 2.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(1.12);
+}
+
+.overview-chart__point.is-dimmed {
+  opacity: 0.35;
+}
+
+.overview-chart__bar {
+  cursor: pointer;
+  opacity: 0.88;
+}
+
+.overview-chart__bar.is-active {
+  opacity: 1;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+}
+
+.overview-chart__bar.is-dimmed {
+  opacity: 0.28;
 }
 
 .stats-ranked-chart__label,
@@ -1212,6 +1276,16 @@ textarea {
 
 .overview-score-bar {
   stroke: none;
+  cursor: pointer;
+}
+
+.overview-score-bar.is-active {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+}
+
+.overview-score-bar.is-dimmed {
+  opacity: 0.28;
 }
 
 .overview-score-bar.is-player-1.is-primary,
@@ -1328,6 +1402,16 @@ textarea {
 
 .overview-bar-row {
   align-items: center;
+  width: 100%;
+  border: 0;
+  padding: 0.42rem 0.5rem;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.overview-bar-row.is-active {
+  background: rgba(56, 189, 248, 0.08);
 }
 
 .overview-bar-row__meta {
