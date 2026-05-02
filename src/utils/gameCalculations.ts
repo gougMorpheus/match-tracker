@@ -406,16 +406,11 @@ export const getOfficialStatsGameDurationMs = (game: Game): number | null => {
     return null;
   }
 
-  const setupDuration = clampFloor(getSetupBaseDurationMs(game, false) + getSetupCorrectionMs(game));
-  const completedTurns = game.rounds.flatMap((round) => round.turns).filter((turn) => turn.timing.startedAt && turn.timing.endedAt);
-  if (!completedTurns.length && setupDuration === 0) {
+  if (!game.rounds.some((round) => round.turns.some((turn) => turn.timing.startedAt))) {
     return null;
   }
 
-  return clampFloor(
-    setupDuration +
-      completedTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0)
-  );
+  return getGameDurationMs(game);
 };
 
 export const isTimeoutActive = (game: Game): boolean => {
@@ -683,6 +678,7 @@ export interface StatsOverview {
   players: number;
   armies: number;
   averageDurationMs: number | null;
+  averagePlayerDurationMs: number | null;
   averageDurationGameCount: number;
   averageRounds: number | null;
   averageCombinedScore: number | null;
@@ -950,6 +946,14 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
   const completedDurations = games
     .map((game) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
     .filter((duration): duration is number => duration !== null);
+  const playerDurationValues = games.flatMap((game) => {
+    const durationSourceGame = durationSourceById.get(game.id) ?? game;
+    if (durationSourceGame.scoreDetailLevel !== "full" || getStatsGameDurationMs(durationSourceGame) === null) {
+      return [];
+    }
+
+    return durationSourceGame.players.map((player) => getPlayerTurnDurationTotalMs(durationSourceGame, player.id));
+  });
   const roundsValues = games
     .filter((game) => game.scoreDetailLevel === "full" && game.rounds.length > 0)
     .map((game) => game.rounds.length);
@@ -975,6 +979,7 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
     players: playerCount,
     armies: armyCount,
     averageDurationMs: averageOrNull(completedDurations),
+    averagePlayerDurationMs: averageOrNull(playerDurationValues),
     averageDurationGameCount: completedDurations.length,
     averageRounds: averageOrNull(roundsValues),
     averageCombinedScore: averageOrNull(combinedScoreValues),

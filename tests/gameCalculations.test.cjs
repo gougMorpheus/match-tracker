@@ -103,6 +103,7 @@ const runGameCalculationsTests = () => {
     assert.equal(overview.players, 2);
     assert.equal(overview.armies, 2);
     assert.equal(overview.averageDurationMs, 27 * 60 * 1000);
+    assert.equal(overview.averagePlayerDurationMs, 13.5 * 60 * 1000);
     assert.equal(overview.averageDurationGameCount, 1);
     assert.equal(overview.averageCombinedScore, 25);
     assert.equal(overview.averagePlayerScore, 12.5);
@@ -287,6 +288,7 @@ const runGameCalculationsTests = () => {
 
     assert.equal(overview.games, 2);
     assert.equal(overview.averageDurationMs, 27 * 60 * 1000);
+    assert.equal(overview.averagePlayerDurationMs, 13.5 * 60 * 1000);
     assert.equal(overview.averageDurationGameCount, 1);
     assert.equal(overview.averageRounds, 1);
     assert.equal(overview.averageCombinedScore, 83.5);
@@ -329,6 +331,7 @@ const runGameCalculationsTests = () => {
     assert.ok(turn);
     assert.equal(getTurnDurationMs(turn, game), 12 * 60 * 1000);
     assert.equal(getPlayerTurnDurationTotalMs(game, playerOne.id), 12 * 60 * 1000);
+    assert.equal(createStatsOverview([game]).averageDurationMs, 12 * 60 * 1000);
   }
 
   {

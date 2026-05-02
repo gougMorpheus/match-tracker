@@ -1016,6 +1016,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                 value={formatDurationMetric(overview.averageDurationMs)}
                 tone="time"
                 details={[
+                  { label: "Avg Spieler", value: formatDurationMetric(overview.averagePlayerDurationMs) },
                   { label: "Runden", value: formatMetric(overview.averageRounds) },
                   { label: "CP spent", value: formatMetric(overview.averageSpentCp) },
                   { label: "Spiele", value: String(overview.averageDurationGameCount) }
@@ -1023,7 +1024,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               />
               <AverageMetricCard
                 label="Avg Score"
-                value={formatMetric(overview.averagePlayerScore)}
+                value={formatMetric(overview.averageCombinedScore)}
                 tone="score"
                 details={[
                   { label: "Avg Spieler", value: formatMetric(overview.averagePlayerScore) },
@@ -1125,47 +1126,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   formatValue={(value) => value.toFixed(1)}
                   activeLabel={activeScoreRoundLabel}
                   onActivate={setActiveScoreRoundLabel}
-                />
-              </div>
-              <div className="stats-grid stats-grid--stats-page">
-                <StatCard
-                  label="Spiele"
-                  value={overview.games}
-                  tone="score"
-                  chart={defaultMetricCardChart(overview.games, String(overview.games), overviewGamesMax, "score")}
-                />
-                <StatCard
-                  label="Spieler"
-                  value={overview.players}
-                  tone="success"
-                  chart={defaultMetricCardChart(overview.players, String(overview.players), overviewGamesMax, "success")}
-                />
-                <StatCard
-                  label="Armeen"
-                  value={overview.armies}
-                  tone="warning"
-                  chart={defaultMetricCardChart(overview.armies, String(overview.armies), overviewGamesMax, "warning")}
-                />
-              </div>
-              <div className="stats-average-grid">
-                <AverageMetricCard
-                  label="Avg Dauer"
-                  value={formatDurationMetric(overview.averageDurationMs)}
-                  tone="time"
-                  details={[
-                    { label: "Runden", value: formatMetric(overview.averageRounds) },
-                    { label: "CP spent", value: formatMetric(overview.averageSpentCp) },
-                    { label: "Spiele", value: String(overview.averageDurationGameCount) }
-                  ]}
-                />
-                <AverageMetricCard
-                  label="Avg Score"
-                  value={formatMetric(overview.averagePlayerScore)}
-                  tone="score"
-                  details={[
-                    { label: "Avg Spieler", value: formatMetric(overview.averagePlayerScore) },
-                    { label: "Spiele", value: String(overview.averageScoreGameCount) }
-                  ]}
                 />
               </div>
             </CollapsibleSection>
