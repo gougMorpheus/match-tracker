@@ -2330,13 +2330,15 @@ textarea {
   }
 
   .overview-player-card__stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
-  .overview-player-stat,
-  .overview-player-stat--score,
+  .overview-player-stat--score {
+    grid-column: span 2;
+  }
+
   .overview-player-stat:not(.overview-player-stat--score) {
-    grid-column: span 1;
+    grid-column: span 3;
   }
 }
 

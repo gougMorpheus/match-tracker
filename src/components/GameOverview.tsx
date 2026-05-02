@@ -117,7 +117,9 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   const [selectedScore, setSelectedScore] = useState<ScoreSelection | null>(null);
   const [selectedTime, setSelectedTime] = useState<TimeSelection | null>(null);
   const [selectedRoundDuration, setSelectedRoundDuration] = useState<string | null>(null);
-  const [selectedEventMetric, setSelectedEventMetric] = useState<EventMetric | "all">("all");
+  const [selectedEventMetrics, setSelectedEventMetrics] = useState<EventMetric[]>(
+    EVENT_METRICS.map((metric) => metric.key)
+  );
   const [selectedEventPointId, setSelectedEventPointId] = useState<string | null>(null);
   const [openCharts, setOpenCharts] = useState<Record<string, boolean>>({
     score: true,
@@ -134,7 +136,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     setSelectedScore(null);
     setSelectedTime(null);
     setSelectedRoundDuration(null);
-    setSelectedEventMetric("all");
+    setSelectedEventMetrics(EVENT_METRICS.map((metric) => metric.key));
     setSelectedEventPointId(null);
     setOpenCharts({
       score: true,
@@ -390,9 +392,15 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   };
 
   const toggleEventMetric = (metric: EventMetric | "all") => {
-    setSelectedEventMetric((current) => {
-      setSelectedEventPointId(null);
-      return current === metric ? "all" : metric;
+    setSelectedEventPointId(null);
+    setSelectedEventMetrics((current) => {
+      if (metric === "all") {
+        return current.length === EVENT_METRICS.length ? [] : EVENT_METRICS.map((entry) => entry.key);
+      }
+
+      return current.includes(metric)
+        ? current.filter((entry) => entry !== metric)
+        : [...current, metric];
     });
   };
 
@@ -1085,9 +1093,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
       );
     }
 
-    const visiblePoints = eventPlotPoints.filter(
-      (point) => selectedEventMetric === "all" || point.metric === selectedEventMetric
-    );
+    const visiblePoints = eventPlotPoints.filter((point) => selectedEventMetrics.includes(point.metric));
     const maxElapsedMs = Math.max(...eventPlotPoints.map((point) => point.elapsedMs), 1);
     const maxValue = Math.max(...eventPlotPoints.map((point) => point.value), 1);
     const plotWidth = EVENT_CHART_WIDTH - EVENT_CHART_PADDING * 2;
@@ -1097,10 +1103,8 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
       EVENT_CHART_PADDING + EVENT_METRICS.findIndex((entry) => entry.key === metric) * yStep;
     const getX = (elapsedMs: number) => EVENT_CHART_PADDING + (elapsedMs / maxElapsedMs) * plotWidth;
     const pointRadius = (value: number) => 4 + (value / maxValue) * 8;
-    const metricSummary =
-      selectedEventMetric === "all"
-        ? `${visiblePoints.length} Events`
-        : `${EVENT_METRICS.find((metric) => metric.key === selectedEventMetric)?.label ?? "Events"} ${visiblePoints.length}`;
+    const allMetricsSelected = selectedEventMetrics.length === EVENT_METRICS.length;
+    const metricSummary = `${visiblePoints.length} Events`;
 
     return renderChartSection(
       "events",
@@ -1108,11 +1112,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
       eventSelectionLabel ?? metricSummary,
       <section className="overview-chart-card">
         <div className="overview-chart-card__head">
-          <strong>x: time, y: events</strong>
           <div className="overview-chart-legend overview-chart-legend--events">
             <button
               type="button"
-              className={`overview-chart-legend__item${selectedEventMetric === "all" ? " is-active" : ""}`}
+              className={`overview-chart-legend__item${allMetricsSelected ? " is-active" : ""}`}
               onClick={() => toggleEventMetric("all")}
             >
               Alle {eventPlotPoints.length}
@@ -1121,7 +1124,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
               <button
                 key={metric.key}
                 type="button"
-                className={`overview-chart-legend__item is-event-${metric.key}${selectedEventMetric === metric.key ? " is-active" : ""}`}
+                className={`overview-chart-legend__item is-event-${metric.key}${selectedEventMetrics.includes(metric.key) ? " is-active" : ""}`}
                 onClick={() => toggleEventMetric(metric.key)}
               >
                 {metric.label} {eventPlotPoints.filter((point) => point.metric === metric.key).length}
@@ -1286,7 +1289,6 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         </div>
         <section className="overview-chart-card">
           <div className="overview-chart-card__head">
-            <strong>x: time, y: events</strong>
             <div className="overview-chart-legend overview-chart-legend--events">
               {(["all", "time", "score", "cp", "note"] as const).map((category) => {
                 const label =
