@@ -1537,6 +1537,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const shouldRunNextTurn = keepTimerRunning;
+        const nextTurnRef: TurnRef = currentRoundHasTwoTurns
+          ? { roundNumber: currentRound.roundNumber + 1, turnNumber: 1 }
+          : { roundNumber: currentRound.roundNumber, turnNumber: 2 };
         if (currentRoundHasTwoTurns) {
           const nextRoundNumber = currentRound.roundNumber + 1;
           if (currentTurn?.timing.startedAt && !currentTurn.timing.endedAt) {
@@ -1621,14 +1624,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             game,
             eventsToAdd,
             "Weiter",
-            currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 },
+            currentTurn ?? nextTurnRef,
             recordHistory ? "advance-turn" : "snapshot",
             recordHistory,
-            (nextGame) =>
-              applyAutoCommandPoints(nextGame, {
-                roundNumber: currentRound.roundNumber,
-                turnNumber: 2
-              })
+            (nextGame) => applyAutoCommandPoints(nextGame, nextTurnRef)
           );
         void flushSyncQueue();
       }),

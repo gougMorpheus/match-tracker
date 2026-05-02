@@ -297,6 +297,18 @@ export const createLocalGame = (input: CreateGameInput): Game => {
         type: "time",
         action: "session-start",
         createdAt
+      },
+      {
+        id: createUuid(),
+        type: "time",
+        action: "game-start",
+        createdAt
+      },
+      {
+        id: createUuid(),
+        type: "time",
+        action: "setup-start",
+        createdAt
       }
     ]
   });
