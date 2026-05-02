@@ -266,6 +266,8 @@ export const getRoundCorrectionMs = (game: Game, roundNumber: number): number =>
 
 export const getTotalCorrectionMs = (game: Game): number => game.timerCorrections.totalMs ?? 0;
 
+export const getSetupCorrectionMs = (game: Game): number => getTurnCorrectionMs(game, 0, 1);
+
 export const getTurnDurationMs = (turn: Turn, game?: Game): number =>
   clampFloor(
     getTurnBaseDurationMs(turn, game?.endedAt) +
@@ -275,7 +277,7 @@ export const getTurnDurationMs = (turn: Turn, game?: Game): number =>
 export const getCompletedTurnDurationMs = (turn: Turn, game?: Game): number | null =>
   turn.timing.startedAt && turn.timing.endedAt ? getTurnDurationMs(turn, game) : null;
 
-export const getSetupDurationMs = (game: Game): number => {
+export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): number => {
   const setupEvents = [...game.timeEvents]
     .filter(
       (event) =>
@@ -325,7 +327,7 @@ export const getSetupDurationMs = (game: Game): number => {
     }
   });
 
-  if (startedAt) {
+  if (startedAt && includeOpenSetup) {
     const now = game.endedAt ?? new Date().toISOString();
     const openPausedDuration = pauseStartedAt
       ? pausedDuration + getDurationMs(pauseStartedAt, now)
@@ -335,6 +337,9 @@ export const getSetupDurationMs = (game: Game): number => {
 
   return total;
 };
+
+export const getSetupDurationMs = (game: Game): number =>
+  clampFloor(getSetupBaseDurationMs(game) + getSetupCorrectionMs(game));
 
 export const isSetupActive = (game: Game): boolean => {
   const setupEvents = [...game.timeEvents]
@@ -395,6 +400,23 @@ export const getGameDurationMs = (game: Game): number =>
 
 export const getCompletedGameDurationMs = (game: Game): number | null =>
   game.startedAt && game.endedAt ? getGameDurationMs(game) : null;
+
+export const getOfficialStatsGameDurationMs = (game: Game): number | null => {
+  if (!game.endedAt || game.scoreDetailLevel !== "full") {
+    return null;
+  }
+
+  const setupDuration = clampFloor(getSetupBaseDurationMs(game, false) + getSetupCorrectionMs(game));
+  const completedTurns = game.rounds.flatMap((round) => round.turns).filter((turn) => turn.timing.startedAt && turn.timing.endedAt);
+  if (!completedTurns.length && setupDuration === 0) {
+    return null;
+  }
+
+  return clampFloor(
+    setupDuration +
+      completedTurns.reduce((total, turn) => total + getTurnDurationMs(turn, game), 0)
+  );
+};
 
 export const getSessionDurationMs = (game: Game): number => {
   const sessionEvents = [...game.timeEvents]
@@ -608,6 +630,7 @@ export interface ArmyAggregate {
   averagePrimary: number | null;
   averageSecondary: number | null;
   averageTotal: number | null;
+  averageDurationMs: number | null;
 }
 
 export interface MatchupAggregate {
@@ -723,17 +746,17 @@ const hasPlayerCommandPointData = (game: Game, playerId: PlayerId): boolean =>
   hasComparableCommandPointData(game, playerId);
 
 const hasCompletedTimingData = (game: Game): boolean =>
-  game.rounds.some((round) => round.turns.some((turn) => getCompletedTurnDurationMs(turn, game) !== null));
+  getOfficialStatsGameDurationMs(game) !== null;
 
 const hasDetailedTimingStats = (game: Game): boolean =>
   game.scoreDetailLevel === "full" && hasCompletedTimingData(game);
 
 const getStatsGameDurationMs = (game: Game): number | null => {
-  if (!game.startedAt || !game.endedAt || !hasDetailedTimingStats(game)) {
+  if (!game.endedAt || !hasDetailedTimingStats(game)) {
     return null;
   }
 
-  return getGameDurationMs(game);
+  return getOfficialStatsGameDurationMs(game);
 };
 
 const createGameSourceById = (games: Game[]): Map<string, Game> =>
@@ -998,7 +1021,8 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
   };
 };
 
-export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
+export const createArmyAggregates = (games: Game[], durationSourceGames: Game[] = games): ArmyAggregate[] => {
+  const durationSourceById = createGameSourceById(durationSourceGames);
   const armyNames = Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.army.name))));
 
   return armyNames
@@ -1023,6 +1047,10 @@ export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
       const totalValues = armyGames
         .filter(({ game, player }) => getPlayerComparableTotalScore(game, player.id) !== null)
         .map(({ game, player }) => getPlayerTotalScore(game, player.id));
+      const durationValues = armyGames
+        .filter(({ game }) => game.scoreDetailLevel === "full")
+        .map(({ game }) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
+        .filter((value): value is number => value !== null);
 
       return {
         armyName,
@@ -1033,7 +1061,8 @@ export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
         winRate: scoredGames.length ? (wins / scoredGames.length) * 100 : null,
         averagePrimary: averageOrNull(primaryValues),
         averageSecondary: averageOrNull(secondaryValues),
-        averageTotal: averageOrNull(totalValues)
+        averageTotal: averageOrNull(totalValues),
+        averageDurationMs: averageOrNull(durationValues)
       };
     })
     .sort((left, right) => right.games - left.games || left.armyName.localeCompare(right.armyName));

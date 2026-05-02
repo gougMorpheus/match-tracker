@@ -2300,6 +2300,51 @@ textarea {
   font-size: 0.64rem;
 }
 
+.timer-adjust-list {
+  display: grid;
+  gap: 0;
+  max-height: min(56vh, 460px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.timer-adjust-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.2rem;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.48rem 0.58rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.timer-adjust-row:last-child {
+  border-bottom: 0;
+}
+
+.timer-adjust-row > span {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.timer-adjust-row strong {
+  font-size: 0.8rem;
+  line-height: 1.05;
+}
+
+.timer-adjust-row small {
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.1;
+}
+
+.timer-adjust-row input {
+  width: 100%;
+  text-align: right;
+}
+
 .round-surface--odd {
   background: var(--round-surface-odd);
 }

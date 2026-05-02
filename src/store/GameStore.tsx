@@ -44,6 +44,7 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
+  getSetupBaseDurationMs,
   getTurnBaseDurationMs,
   isSetupActive,
   isSetupPaused,
@@ -79,8 +80,12 @@ interface EventPayload {
 
 interface TimerCorrectionInput {
   gameId: string;
-  turnRef: TurnRef;
-  turnMs: number;
+  turnRef?: TurnRef;
+  turnMs?: number;
+  corrections?: Array<{
+    turnRef: TurnRef;
+    turnMs: number;
+  }>;
 }
 
 type SyncStatus = "idle" | "syncing" | "success" | "error";
@@ -972,24 +977,28 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const setTimerCorrections = useCallback(
-    async ({ gameId, turnRef, turnMs }: TimerCorrectionInput) =>
+    async ({ gameId, turnRef, turnMs, corrections }: TimerCorrectionInput) =>
       runMutation(async () => {
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
         }
+        const correctionItems = corrections ?? (turnRef ? [{ turnRef, turnMs: turnMs ?? 0 }] : []);
 
         const nextGame = {
           ...game,
           timerCorrections: (() => {
             const nextTurns = { ...game.timerCorrections.turns };
-            const turnKey = `${turnRef.roundNumber}:${turnRef.turnNumber}`;
 
-            if (turnMs) {
-              nextTurns[turnKey] = turnMs;
-            } else {
-              delete nextTurns[turnKey];
-            }
+            correctionItems.forEach((correction) => {
+              const turnKey = `${correction.turnRef.roundNumber}:${correction.turnRef.turnNumber}`;
+
+              if (correction.turnMs) {
+                nextTurns[turnKey] = correction.turnMs;
+              } else {
+                delete nextTurns[turnKey];
+              }
+            });
 
             return {
               totalMs: 0,
@@ -1019,13 +1028,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             totalMs: 0,
             rounds: {},
             turns: Object.fromEntries(
-              game.rounds
-                .flatMap((round) => round.turns)
-                .map((turn) => [
-                  `${turn.roundNumber}:${turn.turnNumber}`,
-                  -getTurnBaseDurationMs(turn)
-                ])
-                .filter(([, correction]) => correction !== 0)
+              [
+                ["0:1", -getSetupBaseDurationMs(game, false)] as const,
+                ...game.rounds
+                  .flatMap((round) => round.turns)
+                  .map((turn) => [
+                    `${turn.roundNumber}:${turn.turnNumber}`,
+                    -getTurnBaseDurationMs(turn, game.endedAt)
+                  ] as const)
+              ].filter(([, correction]) => correction !== 0)
             )
           }
         };

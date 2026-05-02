@@ -618,7 +618,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     () => createPlayerAggregates(filteredGames, filteredStatsSourceGames),
     [filteredGames, filteredStatsSourceGames]
   );
-  const armyAggregates = useMemo(() => createArmyAggregates(filteredGames), [filteredGames]);
+  const armyAggregates = useMemo(
+    () => createArmyAggregates(filteredGames, filteredStatsSourceGames),
+    [filteredGames, filteredStatsSourceGames]
+  );
   const missionLeaders = useMemo(() => createMissionLeaders(filteredGames), [filteredGames]);
   const deploymentLeaders = useMemo(() => createDeploymentLeaders(filteredGames), [filteredGames]);
   const deploymentPerformance = useMemo(
@@ -679,13 +682,15 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     value === null ? "-" : formatDuration(value);
   const formatRecord = (wins: number, losses: number, ties: number) =>
     `W/L/D ${wins}/${losses}/${ties}`;
+  const formatGamesAndDuration = (games: number, durationMs: number | null) =>
+    `${games} ${games === 1 ? "Spiel" : "Spiele"} | Dauer ${formatDurationMetric(durationMs)}`;
 
   const playerChartItems = useMemo(() => {
     if (playerChartMode === "duration") {
       return playerAggregates
         .filter((player) => player.games > 0 && player.averageDurationMs !== null)
         .sort(
-          (left, right) => (right.averageDurationMs ?? 0) - (left.averageDurationMs ?? 0) || right.games - left.games
+          (left, right) => (left.averageDurationMs ?? 0) - (right.averageDurationMs ?? 0) || right.games - left.games
         )
         .slice(0, topCount)
         .map((player) => ({
@@ -693,7 +698,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           value: player.averageDurationMs ?? 0,
           display: formatDurationMetric(player.averageDurationMs),
           tone: "time" as const,
-          detail: `${player.games} Spiele`
+          detail: formatGamesAndDuration(player.games, player.averageDurationMs)
         }));
     }
 
@@ -707,7 +712,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           value: player.averageTotal ?? 0,
           display: formatMetric(player.averageTotal),
           tone: "score" as const,
-          detail: `Prim ${formatMetric(player.averagePrimary)} | Sek ${formatMetric(player.averageSecondary)}`
+          detail: `Prim ${formatMetric(player.averagePrimary)} | Sek ${formatMetric(player.averageSecondary)} | ${formatGamesAndDuration(
+            player.games,
+            player.averageDurationMs
+          )}`
         }));
     }
 
@@ -720,7 +728,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
         value: player.winRate ?? 0,
         display: formatPercent(player.winRate),
         tone: "success" as const,
-        detail: formatRecord(player.wins, player.losses, player.ties)
+        detail: `${formatRecord(player.wins, player.losses, player.ties)} | ${formatGamesAndDuration(
+          player.games,
+          player.averageDurationMs
+        )}`
       }));
   }, [formatDurationMetric, playerAggregates, playerChartMode, topCount]);
 
@@ -735,7 +746,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           value: army.averageTotal ?? 0,
           display: formatMetric(army.averageTotal),
           tone: "score" as const,
-          detail: `Prim ${formatMetric(army.averagePrimary)} | Sek ${formatMetric(army.averageSecondary)}`
+          detail: `Prim ${formatMetric(army.averagePrimary)} | Sek ${formatMetric(army.averageSecondary)} | ${formatGamesAndDuration(
+            army.games,
+            army.averageDurationMs
+          )}`
         }));
     }
 
@@ -749,7 +763,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           value: army.winRate ?? 0,
           display: formatPercent(army.winRate),
           tone: "success" as const,
-          detail: formatRecord(army.wins, army.losses, army.ties)
+          detail: `${formatRecord(army.wins, army.losses, army.ties)} | ${formatGamesAndDuration(
+            army.games,
+            army.averageDurationMs
+          )}`
         }));
     }
 
@@ -762,7 +779,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
         value: army.games,
         display: String(army.games),
         tone: "warning" as const,
-        detail: `Winrate ${formatPercent(army.winRate)}`
+        detail: `Winrate ${formatPercent(army.winRate)} | ${formatGamesAndDuration(army.games, army.averageDurationMs)}`
       }));
   }, [armyAggregates, armyChartMode, topCount]);
 

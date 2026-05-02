@@ -8,7 +8,7 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { useGameStore } from "../store/GameStore";
-import type { CreateGameInput, Game, GameFinishReason, PlayerId, ScoreType } from "../types/game";
+import type { CreateGameInput, Game, GameFinishReason, PlayerId, ScoreType, TurnRef } from "../types/game";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
   getCurrentRoundNumber,
@@ -17,9 +17,12 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
+  getSetupBaseDurationMs,
   getSetupDurationMs,
   getSessionDurationMs,
+  getSetupCorrectionMs,
   getTurnBaseDurationMs,
+  getTurnCorrectionMs,
   getTurnDurationMs,
   isSetupActive,
   isSetupPaused,
@@ -158,7 +161,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [entriesOpen, setEntriesOpen] = useState(false);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [timerAdjustOpen, setTimerAdjustOpen] = useState(false);
-  const [timerAdjustTurnSeconds, setTimerAdjustTurnSeconds] = useState("0");
+  const [timerAdjustSecondsByKey, setTimerAdjustSecondsByKey] = useState<Record<string, string>>({});
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const [scoreLimitWarning, setScoreLimitWarning] = useState<ScoreLimitWarning | null>(null);
@@ -419,6 +422,28 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       )
     : 0;
   const setupDurationMs = getSetupDurationMs(game);
+  const timerAdjustmentRows: Array<{
+    key: string;
+    label: string;
+    turnRef: TurnRef;
+    baseMs: number;
+    currentMs: number;
+  }> = [
+    {
+      key: SETUP_TURN_KEY,
+      label: "R0 / Z1 Aufstellung",
+      turnRef: { roundNumber: 0, turnNumber: 1 },
+      baseMs: getSetupBaseDurationMs(game, false),
+      currentMs: setupDurationMs
+    },
+    ...allTurns.map((turn) => ({
+      key: `${turn.roundNumber}:${turn.turnNumber}`,
+      label: `R${turn.roundNumber} / Z${turn.turnNumber}`,
+      turnRef: { roundNumber: turn.roundNumber, turnNumber: turn.turnNumber },
+      baseMs: getTurnBaseDurationMs(turn, game.endedAt),
+      currentMs: getTurnDurationMs(turn, game)
+    }))
+  ];
   const currentRoundNumber = isSetupScreen ? 0 : selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
   const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
@@ -623,18 +648,18 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const openTimerAdjustDialog = async () => {
-    if (!selectedTurn || !selectedRound) {
-      return;
-    }
-
-    if (isTimerRunning) {
+    if (selectedTurn && isTimerRunning) {
       await pauseActiveTimer(game.id, {
         roundNumber: selectedTurn.roundNumber,
         turnNumber: selectedTurn.turnNumber
       });
     }
 
-    setTimerAdjustTurnSeconds(String(Math.round(getTurnDurationMs(selectedTurn, game) / 1000)));
+    setTimerAdjustSecondsByKey(
+      Object.fromEntries(
+        timerAdjustmentRows.map((row) => [row.key, String(Math.round(row.currentMs / 1000))])
+      )
+    );
     setTimerAdjustOpen(true);
   };
 
@@ -643,20 +668,15 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleSaveTimerAdjustments = async () => {
-    if (!selectedTurn || !selectedRound) {
-      return;
-    }
-
-    const targetTurnMs = Math.max(0, Math.round(Number(timerAdjustTurnSeconds) || 0) * 1000);
-    const turnBaseMs = getTurnBaseDurationMs(selectedTurn);
-
     await setTimerCorrections({
       gameId: game.id,
-      turnRef: {
-        roundNumber: selectedTurn.roundNumber,
-        turnNumber: selectedTurn.turnNumber
-      },
-      turnMs: targetTurnMs - turnBaseMs
+      corrections: timerAdjustmentRows.map((row) => {
+        const targetMs = Math.max(0, Math.round(Number(timerAdjustSecondsByKey[row.key]) || 0) * 1000);
+        return {
+          turnRef: row.turnRef,
+          turnMs: targetMs - row.baseMs
+        };
+      })
     });
 
     closeTimerAdjustDialog();
@@ -665,7 +685,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const handleResetTimerAdjustments = async () => {
     await resetAllGameTimers(game.id);
 
-    setTimerAdjustTurnSeconds("0");
+    setTimerAdjustSecondsByKey({});
     closeTimerAdjustDialog();
   };
 
@@ -943,17 +963,17 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     disabled: isMutating || !redoActionLabel || isClosed
                   },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
+                  {
+                    label: "Timer korrigieren",
+                    onClick: () => void openTimerAdjustDialog(),
+                    disabled: isMutating
+                  },
                   ...(!showOverview
                     ? [
                         {
                           label: "Time-out starten",
                           onClick: () => void handleStartTimeout(),
                           disabled: isMutating || !isTimerRunning || timeoutActive
-                        },
-                        {
-                          label: "Timer korrigieren",
-                          onClick: () => void openTimerAdjustDialog(),
-                          disabled: !selectedTurn
                         }
                       ]
                     : []),
@@ -1089,7 +1109,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <div>
                   <h2>Timer korrigieren</h2>
                   <p className="muted-copy">
-                    Runde {selectedTurn?.roundNumber ?? "-"} / Zug {selectedTurn?.turnNumber ?? "-"}
+                    Aufstellung und alle Zuege
                   </p>
                 </div>
                 <button
@@ -1100,18 +1120,42 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   Schliessen
                 </button>
               </div>
-              <label className="field">
-                <span>Zug in Sekunden</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={timerAdjustTurnSeconds}
-                  disabled={isMutating}
-                  onChange={(event) => setTimerAdjustTurnSeconds(event.target.value)}
-                />
-              </label>
+              <div className="timer-adjust-list">
+                {timerAdjustmentRows.map((row) => {
+                  const correctionMs =
+                    row.turnRef.roundNumber === 0
+                      ? getSetupCorrectionMs(game)
+                      : getTurnCorrectionMs(game, row.turnRef.roundNumber, row.turnRef.turnNumber);
+
+                  return (
+                    <label key={row.key} className="timer-adjust-row">
+                      <span>
+                        <strong>{row.label}</strong>
+                        <small>
+                          Basis {formatDuration(row.baseMs)}
+                          {correctionMs
+                            ? ` | Korrektur ${correctionMs < 0 ? "-" : "+"}${formatDuration(Math.abs(correctionMs))}`
+                            : ""}
+                        </small>
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={timerAdjustSecondsByKey[row.key] ?? String(Math.round(row.currentMs / 1000))}
+                        disabled={isMutating}
+                        onChange={(event) =>
+                          setTimerAdjustSecondsByKey((current) => ({
+                            ...current,
+                            [row.key]: event.target.value
+                          }))
+                        }
+                      />
+                    </label>
+                  );
+                })}
+              </div>
               <p className="muted-copy">
-                Korrekturen werden nur auf den ausgewaehlten Zug geschrieben.
+                Werte sind Zielzeiten in Sekunden. Aufstellung wird als R0 / Z1 gespeichert.
               </p>
               <div className="button-row button-row--compact">
                 <button
