@@ -901,7 +901,7 @@ textarea {
 .overview-player-card {
   border-radius: 16px;
   background: var(--bg-soft);
-  padding: 0.62rem;
+  padding: 0.46rem 0.52rem;
 }
 
 .overview-summary-grid--compact div {
@@ -946,19 +946,36 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.3rem;
+}
+
+.overview-stat-line {
+  min-height: 0.95rem;
+}
+
+.overview-stat-line span,
+.overview-stat-line strong {
+  line-height: 1;
+}
+
+.overview-stat-line strong {
+  font-size: 0.72rem;
+}
+
+.overview-stat-line span {
+  font-size: 0.56rem;
 }
 
 .overview-player-card__head {
   align-items: flex-start;
-  min-height: 2.5rem;
+  min-height: 1.9rem;
 }
 
 .overview-player-card__identity {
   min-width: 0;
   flex: 1;
   display: grid;
-  grid-template-rows: auto minmax(1.55rem, auto);
+  grid-template-rows: auto minmax(1.1rem, auto);
 }
 
 .overview-player-card__identity strong,
@@ -974,9 +991,9 @@ textarea {
 }
 
 .overview-player-card__identity p {
-  margin: 0.1rem 0 0;
+  margin: 0.06rem 0 0;
   line-height: 1.05;
-  min-height: 1.55rem;
+  min-height: 1.1rem;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -987,7 +1004,7 @@ textarea {
 
 .overview-player-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  row-gap: 0.45rem;
+  row-gap: 0.3rem;
   column-gap: 0.225rem;
 }
 
