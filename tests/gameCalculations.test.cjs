@@ -163,7 +163,7 @@ const runGameCalculationsTests = () => {
         playerId: playerOne.id,
         roundNumber: 2,
         turnNumber: 1,
-        createdAt: "2026-04-20T19:01:30.000Z"
+        createdAt: "2026-04-20T19:01:05.000Z"
       },
       {
         action: "turn-start",
@@ -187,7 +187,7 @@ const runGameCalculationsTests = () => {
       value: 1,
       roundNumber: 2,
       turnNumber: 1,
-      createdAt: "2026-04-20T19:01:10.000Z"
+      createdAt: "2026-04-20T19:01:03.000Z"
     });
     game = appendLocalScoreEvent(game, {
       playerId: playerOne.id,
@@ -195,7 +195,7 @@ const runGameCalculationsTests = () => {
       value: 20,
       roundNumber: 2,
       turnNumber: 1,
-      createdAt: "2026-04-20T19:01:20.000Z"
+      createdAt: "2026-04-20T19:01:04.000Z"
     });
     game = appendLocalScoreEvent(game, {
       playerId: playerTwo.id,

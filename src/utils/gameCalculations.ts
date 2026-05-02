@@ -20,7 +20,7 @@ const getTurnCorrectionKey = (roundNumber: number, turnNumber: number): string =
   `${roundNumber}:${turnNumber}`;
 const averageOrNull = (values: number[]): number | null =>
   values.length ? sumValues(values.map((value) => ({ value }))) / values.length : null;
-const MIN_STATS_TURN_DURATION_MS = 60 * 1000;
+const MIN_STATS_TURN_DURATION_MS = 10 * 1000;
 const getTurnKey = (roundNumber?: number, turnNumber?: number): string | null =>
   roundNumber && turnNumber ? `${roundNumber}:${turnNumber}` : null;
 
