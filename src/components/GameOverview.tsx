@@ -9,6 +9,7 @@ import {
   getGameDurationMs,
   getCountedRounds,
   getPlayerTurnDurationTotalMs,
+  getSetupDurationMs,
   hasComparableCommandPointData,
   hasDetailedScoreData,
   hasLegacyRoundTotalScoreData,
@@ -146,11 +147,23 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     });
   }, [game.id]);
 
-  const roundRows = countedRounds.map((round) => ({
-    id: round.id,
-    label: `Runde ${round.roundNumber}`,
-    durationMs: getRoundDurationMs(round, game)
-  }));
+  const setupDurationMs = getSetupDurationMs(game);
+  const roundRows = [
+    ...(setupDurationMs > 0
+      ? [
+          {
+            id: "setup",
+            label: "Runde 0 / Aufstellung",
+            durationMs: setupDurationMs
+          }
+        ]
+      : []),
+    ...countedRounds.map((round) => ({
+      id: round.id,
+      label: `Runde ${round.roundNumber}`,
+      durationMs: getRoundDurationMs(round, game)
+    }))
+  ];
   const maxRoundDuration = Math.max(...roundRows.map((round) => round.durationMs), 1);
   const roundScoreRows: RoundScoreRow[] = countedRounds.map((round) => {
     const values = Object.fromEntries(
