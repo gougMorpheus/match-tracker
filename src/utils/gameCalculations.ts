@@ -418,41 +418,6 @@ export const getOfficialStatsGameDurationMs = (game: Game): number | null => {
   );
 };
 
-export const getSessionDurationMs = (game: Game): number => {
-  const sessionEvents = [...game.timeEvents]
-    .filter((event) => event.action === "session-start" || event.action === "session-end")
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-
-  let openStartedAt: string | null = null;
-  let total = 0;
-
-  sessionEvents.forEach((event) => {
-    if (event.action === "session-start") {
-      openStartedAt = event.createdAt;
-      return;
-    }
-
-    if (event.action === "session-end" && openStartedAt) {
-      total += getDurationMs(openStartedAt, event.createdAt);
-      openStartedAt = null;
-    }
-  });
-
-  if (openStartedAt) {
-    total += getDurationMs(openStartedAt, game.endedAt ?? new Date().toISOString());
-  }
-
-  return total;
-};
-
-export const isSessionRunning = (game: Game): boolean => {
-  const sessionEvents = [...game.timeEvents]
-    .filter((event) => event.action === "session-start" || event.action === "session-end")
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  const latestSessionEvent = sessionEvents[sessionEvents.length - 1];
-  return latestSessionEvent?.action === "session-start";
-};
-
 export const isTimeoutActive = (game: Game): boolean => {
   const timeoutEvents = [...game.timeEvents]
     .filter((event) => event.action === "timeout-start" || event.action === "timeout-end")

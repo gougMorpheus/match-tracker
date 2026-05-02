@@ -37,8 +37,6 @@ const cpTypeByEventType = {
 } as const;
 
 const timeActions = new Set<TimeEventAction>([
-  "session-start",
-  "session-end",
   "game-start",
   "game-end",
   "setup-start",

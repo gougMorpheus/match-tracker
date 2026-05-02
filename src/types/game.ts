@@ -11,8 +11,6 @@ export type ScoreType = "primary" | "secondary" | "legacy-total";
 export type CommandPointType = "gained" | "spent";
 export type ScoreDetailLevel = "full" | "total-only" | "none";
 export type TimeEventAction =
-  | "session-start"
-  | "session-end"
   | "game-start"
   | "game-end"
   | "setup-start"

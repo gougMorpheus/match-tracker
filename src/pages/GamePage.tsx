@@ -19,7 +19,6 @@ import {
   getPlayerSecondaryTotal,
   getSetupBaseDurationMs,
   getSetupDurationMs,
-  getSessionDurationMs,
   getSetupCorrectionMs,
   getTurnBaseDurationMs,
   getTurnCorrectionMs,
@@ -1531,10 +1530,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     <strong>{game.scheduledTime || "-"}</strong>
                   </div>
                   <div>
-                    <span>Ende</span>
-                    <strong>{formatClockTime(game.endedAt)}</strong>
-                  </div>
-                  <div>
                     <span>Aufstellung</span>
                     <strong>{game.deployment || "-"}</strong>
                   </div>
@@ -1577,10 +1572,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   <div>
                     <span>Match-Zeit</span>
                     <strong>{formatDuration(getGameDurationMs(game))}</strong>
-                  </div>
-                  <div>
-                    <span>Gesamt offen</span>
-                    <strong>{formatDuration(getSessionDurationMs(game))}</strong>
                   </div>
                 </div>
               )}

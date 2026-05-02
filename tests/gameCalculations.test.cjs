@@ -17,7 +17,6 @@ const {
   getPlayerTurnDurationTotalMs,
   getRoundDurationMs,
   getSetupDurationMs,
-  getSessionDurationMs,
   getTurnDurationMs,
   getTurnRecords,
   isTurnPaused,
@@ -56,7 +55,6 @@ const runGameCalculationsTests = () => {
     assert.equal(getTurnDurationMs(secondTurn, game), 15 * 60 * 1000);
     assert.equal(getRoundDurationMs(firstRound, game), 27 * 60 * 1000);
     assert.equal(getPlayerTurnDurationTotalMs(game, playerOne.id), 12 * 60 * 1000);
-    assert.equal(getSessionDurationMs(game), 45 * 60 * 1000);
   }
 
   {
@@ -299,7 +297,6 @@ const runGameCalculationsTests = () => {
   {
     let game = createBaseGame({ id: "game-setup" });
     game = appendLocalTimeEvents(game, [
-      { action: "session-start", createdAt: "2026-04-20T18:00:00.000Z" },
       { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
       { action: "setup-start", createdAt: "2026-04-20T18:00:00.000Z" },
       { action: "setup-pause", createdAt: "2026-04-20T18:05:00.000Z" },
@@ -316,7 +313,6 @@ const runGameCalculationsTests = () => {
     const [playerOne] = game.players;
 
     game = appendLocalTimeEvents(game, [
-      { action: "session-start", createdAt: "2026-04-20T18:00:00.000Z" },
       { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
       { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
       {
@@ -333,7 +329,6 @@ const runGameCalculationsTests = () => {
     assert.ok(turn);
     assert.equal(getTurnDurationMs(turn, game), 12 * 60 * 1000);
     assert.equal(getPlayerTurnDurationTotalMs(game, playerOne.id), 12 * 60 * 1000);
-    assert.equal(getSessionDurationMs(game), 12 * 60 * 1000);
   }
 
   {

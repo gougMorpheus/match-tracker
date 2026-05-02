@@ -49,7 +49,6 @@ import {
   isSetupActive,
   isSetupPaused,
   isSetupRunning,
-  isSessionRunning,
   isTimeoutActive,
   isTurnActive,
   isTurnPaused
@@ -1542,13 +1541,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
 
-          if (isSessionRunning(game)) {
-            eventsToAdd.push({
-              action: "session-end",
-              createdAt: now
-            });
-          }
-
           eventsToAdd.push({
             playerId: currentTurn?.playerId ?? game.currentPlayerId,
             action: "game-end",
@@ -2026,14 +2018,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        const restartSession = window.confirm(
-          "Gesamtspielzeit beim Wiedereroeffnen wieder starten?"
-        );
-
-        let nextGame = removeLocalEvent(game, latestGameEndEvent.id);
-        if (restartSession && !isSessionRunning(nextGame)) {
-          nextGame = appendLocalTimeEvents(nextGame, [{ action: "session-start" }]);
-        }
+        const nextGame = removeLocalEvent(game, latestGameEndEvent.id);
 
         commitGameSnapshot("Spiel wieder eroeffnet", game, nextGame);
         void flushSyncQueue();
@@ -2116,12 +2101,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             playerId: game.currentPlayerId,
             roundNumber: latestRound.roundNumber,
             action: "round-end"
-          });
-        }
-
-        if (isSessionRunning(game)) {
-          eventsToAdd.push({
-            action: "session-end"
           });
         }
 

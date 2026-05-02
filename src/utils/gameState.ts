@@ -295,12 +295,6 @@ export const createLocalGame = (input: CreateGameInput): Game => {
       {
         id: createUuid(),
         type: "time",
-        action: "session-start",
-        createdAt
-      },
-      {
-        id: createUuid(),
-        type: "time",
         action: "game-start",
         createdAt
       },

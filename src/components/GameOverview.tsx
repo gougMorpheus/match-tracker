@@ -16,7 +16,7 @@ import {
   getRoundDurationMs,
   getTurnDurationMs
 } from "../utils/gameCalculations";
-import { formatClockTime, formatDuration } from "../utils/time";
+import { formatDuration } from "../utils/time";
 
 interface GameOverviewProps {
   game: Game;
@@ -1494,10 +1494,6 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
           <div className="overview-summary-item">
             <span>Uhrzeit</span>
             <strong>{game.scheduledTime || "-"}</strong>
-          </div>
-          <div className="overview-summary-item">
-            <span>Ende</span>
-            <strong>{formatClockTime(game.endedAt)}</strong>
           </div>
           <div className="overview-summary-item">
             <span>Gesamtzeit</span>

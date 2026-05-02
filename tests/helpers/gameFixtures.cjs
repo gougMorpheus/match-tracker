@@ -88,7 +88,6 @@ const createCompletedGameFixture = (gameId = "game-1") => {
   const [playerOne, playerTwo] = game.players;
 
   game = appendLocalTimeEvents(game, [
-    { action: "session-start", createdAt: "2026-04-20T18:30:00.000Z" },
     { action: "game-start", createdAt: "2026-04-20T18:30:00.000Z" },
     { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:30:00.000Z" },
     {
@@ -134,7 +133,6 @@ const createCompletedGameFixture = (gameId = "game-1") => {
       createdAt: "2026-04-20T19:00:00.000Z"
     },
     { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T19:00:00.000Z" },
-    { action: "session-end", createdAt: "2026-04-20T19:15:00.000Z" },
     { action: "game-end", createdAt: "2026-04-20T19:15:00.000Z" }
   ]);
 
@@ -216,7 +214,6 @@ const createPausedActiveGameFixture = () => {
   const [playerOne] = game.players;
 
   game = appendLocalTimeEvents(game, [
-    { action: "session-start", createdAt: "2026-04-21T19:00:00.000Z" },
     { action: "game-start", createdAt: "2026-04-21T19:00:00.000Z" },
     { action: "round-start", roundNumber: 1, createdAt: "2026-04-21T19:00:00.000Z" },
     {
