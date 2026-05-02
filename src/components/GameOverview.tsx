@@ -148,6 +148,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   }, [game.id]);
 
   const setupDurationMs = getSetupDurationMs(game);
+  const totalDurationMs = getGameDurationMs(game);
   const roundRows = [
     ...(setupDurationMs > 0
       ? [
@@ -165,6 +166,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     }))
   ];
   const maxRoundDuration = Math.max(...roundRows.map((round) => round.durationMs), 1);
+  const roundDurationTotalMs = roundRows.reduce((total, round) => total + round.durationMs, 0);
   const roundScoreRows: RoundScoreRow[] = countedRounds.map((round) => {
     const values = Object.fromEntries(
       orderedPlayers.map((player) => [
@@ -1075,6 +1077,16 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
                       </div>
                     );
                   })}
+                  <div className="overview-chart-total">
+                    <span className="overview-chart-total__marker is-warning" />
+                    <span>Aufstellung</span>
+                    <strong>{formatDuration(setupDurationMs)}</strong>
+                  </div>
+                  <div className="overview-chart-total">
+                    <span className="overview-chart-total__marker is-score" />
+                    <span>Gesamtzeit</span>
+                    <strong>{formatDuration(totalDurationMs)}</strong>
+                  </div>
                 </div>
               </>
             );
@@ -1289,7 +1301,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
 
     return renderChartSection(
       "rounds",
-      "Rundenzeiten",
+      `Rundenzeiten (Gesamt: ${formatDuration(roundDurationTotalMs)})`,
       selectedRound ? `${selectedRound.label} - ${formatDuration(selectedRound.durationMs)}` : `${roundRows.length} Runden`,
       <>
         <div hidden>
