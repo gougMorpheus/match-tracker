@@ -213,11 +213,7 @@ const RankedBarChart = ({
         <div className="overview-chart-card__totals">
           <div className="overview-chart-total">
             <span className={`overview-chart-total__marker is-${activeItem.tone}`} />
-            <span>{activeItem.label}</span>
-            <strong>{activeItem.display}</strong>
-          </div>
-          <div className="overview-chart-total">
-            <span>Details</span>
+            <span>{activeItem.display}</span>
             <strong>{activeItem.detail ?? subtitle}</strong>
           </div>
         </div>
@@ -225,6 +221,33 @@ const RankedBarChart = ({
     </article>
   );
 };
+
+const AverageMetricCard = ({
+  label,
+  value,
+  details,
+  tone
+}: {
+  label: string;
+  value: string;
+  details: Array<{ label: string; value: string }>;
+  tone: "score" | "time";
+}) => (
+  <article className={`stats-average-card stats-average-card--${tone}`}>
+    <div>
+      <span className="stats-average-card__label">{label}</span>
+      <strong className="stats-average-card__value">{value}</strong>
+    </div>
+    <div className="stats-average-card__details">
+      {details.map((detail) => (
+        <div key={detail.label} className="stats-average-card__detail">
+          <span>{detail.label}</span>
+          <strong>{detail.value}</strong>
+        </div>
+      ))}
+    </div>
+  </article>
+);
 
 const TrendLineChart = ({
   title,
@@ -570,8 +593,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [openSections, setOpenSections] = useState(defaultOpenSections);
   const [gamePickerOpen, setGamePickerOpen] = useState(false);
   const [playerChartMode, setPlayerChartMode] = useState<"winRate" | "score" | "duration">("winRate");
-  const [armyChartMode, setArmyChartMode] = useState<"usage" | "winRate" | "score">("usage");
-  const [topCount, setTopCount] = useState(6);
+  const [armyChartMode, setArmyChartMode] = useState<"usage" | "winRate" | "score">("winRate");
+  const [topCount, setTopCount] = useState(5);
   const [activePlayerChartLabel, setActivePlayerChartLabel] = useState<string | null>(null);
   const [activeArmyChartLabel, setActiveArmyChartLabel] = useState<string | null>(null);
   const [activeDurationRoundLabel, setActiveDurationRoundLabel] = useState<string | null>(null);
@@ -616,12 +639,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
 
   const overviewGamesMax = getMetricMax([overview.games, overview.players, overview.armies]);
-  const durationGamesLabel = `${overview.averageDurationGameCount} ${
-    overview.averageDurationGameCount === 1 ? "Spiel" : "Spiele"
-  }`;
-  const scoreGamesLabel = `${overview.averageScoreGameCount} ${
-    overview.averageScoreGameCount === 1 ? "Spiel" : "Spiele"
-  }`;
   const playerPrimaryMax = getMetricMax(playerAggregates.map((player) => player.averagePrimary));
   const playerSecondaryMax = getMetricMax(playerAggregates.map((player) => player.averageSecondary));
   const playerTotalMax = getMetricMax(playerAggregates.map((player) => player.averageTotal));
@@ -660,6 +677,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
 
   const formatDurationMetric = (value: number | null) =>
     value === null ? "-" : formatDuration(value);
+  const formatRecord = (wins: number, losses: number, ties: number) =>
+    `W/L/D ${wins}/${losses}/${ties}`;
 
   const playerChartItems = useMemo(() => {
     if (playerChartMode === "duration") {
@@ -701,7 +720,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
         value: player.winRate ?? 0,
         display: formatPercent(player.winRate),
         tone: "success" as const,
-        detail: `${player.wins}/${player.losses}/${player.ties}`
+        detail: formatRecord(player.wins, player.losses, player.ties)
       }));
   }, [formatDurationMetric, playerAggregates, playerChartMode, topCount]);
 
@@ -730,7 +749,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           value: army.winRate ?? 0,
           display: formatPercent(army.winRate),
           tone: "success" as const,
-          detail: `${army.games} Spiele`
+          detail: formatRecord(army.wins, army.losses, army.ties)
         }));
     }
 
@@ -975,24 +994,25 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   ]}
                 />
               </article>
-              <article className="stats-hero__feature stats-hero__feature--half">
-                <span>Avg Dauer</span>
-                <strong>{formatDurationMetric(overview.averageDurationMs)}</strong>
-                <div className="stats-hero__metrics">
-                  <span>Dauer {formatDurationMetric(overview.averageDurationMs)}</span>
-                  <span>Runden {formatMetric(overview.averageRounds)}</span>
-                  <span>CP spent {formatMetric(overview.averageSpentCp)}</span>
-                  <span>{durationGamesLabel}</span>
-                </div>
-              </article>
-              <article className="stats-hero__feature stats-hero__feature--half">
-                <span>Avg Score gesamt</span>
-                <strong>{formatMetric(overview.averagePlayerScore)}</strong>
-                <div className="stats-hero__metrics">
-                  <span>Avg Spieler {formatMetric(overview.averagePlayerScore)}</span>
-                  <span>{scoreGamesLabel}</span>
-                </div>
-              </article>
+              <AverageMetricCard
+                label="Avg Dauer"
+                value={formatDurationMetric(overview.averageDurationMs)}
+                tone="time"
+                details={[
+                  { label: "Runden", value: formatMetric(overview.averageRounds) },
+                  { label: "CP spent", value: formatMetric(overview.averageSpentCp) },
+                  { label: "Spiele", value: String(overview.averageDurationGameCount) }
+                ]}
+              />
+              <AverageMetricCard
+                label="Avg Score"
+                value={formatMetric(overview.averagePlayerScore)}
+                tone="score"
+                details={[
+                  { label: "Avg Spieler", value: formatMetric(overview.averagePlayerScore) },
+                  { label: "Spiele", value: String(overview.averageScoreGameCount) }
+                ]}
+              />
             </section>
 
             <CollapsibleSection
@@ -1016,7 +1036,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   ))}
                 </div>
                 <div className="stats-toolbar__group">
-                  {(["usage", "winRate", "score"] as const).map((mode) => (
+                  {(["winRate", "score", "usage"] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
@@ -1028,7 +1048,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   ))}
                 </div>
                 <div className="stats-toolbar__group">
-                  {[5, 6, 10].map((count) => (
+                  {[3, 5, 10].map((count) => (
                     <button
                       key={count}
                       type="button"
@@ -1109,19 +1129,26 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   tone="warning"
                   chart={defaultMetricCardChart(overview.armies, String(overview.armies), overviewGamesMax, "warning")}
                 />
-                <StatCard
+              </div>
+              <div className="stats-average-grid">
+                <AverageMetricCard
                   label="Avg Dauer"
                   value={formatDurationMetric(overview.averageDurationMs)}
                   tone="time"
-                  helper={`${formatMetric(overview.averageRounds)} Runden | ${formatMetric(
-                    overview.averageSpentCp
-                  )} CP spent | ${durationGamesLabel}`}
+                  details={[
+                    { label: "Runden", value: formatMetric(overview.averageRounds) },
+                    { label: "CP spent", value: formatMetric(overview.averageSpentCp) },
+                    { label: "Spiele", value: String(overview.averageDurationGameCount) }
+                  ]}
                 />
-                <StatCard
-                  label="Avg Score gesamt"
+                <AverageMetricCard
+                  label="Avg Score"
                   value={formatMetric(overview.averagePlayerScore)}
                   tone="score"
-                  helper={`Avg Spieler | ${scoreGamesLabel}`}
+                  details={[
+                    { label: "Avg Spieler", value: formatMetric(overview.averagePlayerScore) },
+                    { label: "Spiele", value: String(overview.averageScoreGameCount) }
+                  ]}
                 />
               </div>
             </CollapsibleSection>

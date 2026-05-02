@@ -1960,7 +1960,12 @@ textarea {
 
 .stats-hero {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.stats-hero__feature--clickable {
+  grid-column: 1 / -1;
 }
 
 .stats-hero__feature,
@@ -1996,19 +2001,6 @@ textarea {
   margin: 0.18rem 0 0;
   font-size: 0.72rem;
   line-height: 1.15;
-}
-
-.stats-hero__metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.34rem 0.6rem;
-  margin-top: 0.5rem;
-}
-
-.stats-hero__metrics span {
-  font-size: 0.68rem;
-  line-height: 1.15;
-  color: var(--muted);
 }
 
 .record-card__scoreline {
@@ -2139,6 +2131,71 @@ textarea {
 .stats-grid--stats-page {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.42rem;
+}
+
+.stats-average-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.stats-average-card {
+  display: grid;
+  gap: 0.62rem;
+  align-content: start;
+  padding: 0.78rem 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.68);
+}
+
+.stats-average-card--time {
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.stats-average-card--score {
+  border-color: rgba(56, 189, 248, 0.2);
+}
+
+.stats-average-card__label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.05;
+}
+
+.stats-average-card__value {
+  display: block;
+  margin-top: 0.16rem;
+  color: var(--text);
+  font-size: 1.08rem;
+  line-height: 1.05;
+}
+
+.stats-average-card__details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.stats-average-card__detail {
+  display: grid;
+  gap: 0.08rem;
+  min-height: 2.35rem;
+  padding: 0.38rem 0.42rem;
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.62);
+}
+
+.stats-average-card__detail span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.stats-average-card__detail strong {
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.05;
 }
 
 .event-editor {
