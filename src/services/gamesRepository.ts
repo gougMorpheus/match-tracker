@@ -284,22 +284,28 @@ const parseFinishMeta = (value: string | null): { finishReason: GameFinishReason
   }
 };
 
-const parseOptionsMeta = (value: string | null): { autoCommandPointOn: boolean } => {
+const parseOptionsMeta = (
+  value: string | null
+): { autoCommandPointOn: boolean; autoCommandPointAwards: Record<string, boolean> } => {
   if (!value) {
-    return { autoCommandPointOn: true };
+    return { autoCommandPointOn: true, autoCommandPointAwards: {} };
   }
 
   try {
     const parsed = JSON.parse(value) as {
       optionsMeta?: {
         autoCommandPointOn?: boolean;
+        autoCommandPointAwards?: Record<string, boolean>;
       };
     };
-    return {
-      autoCommandPointOn: parsed?.optionsMeta?.autoCommandPointOn ?? true
+  return {
+    autoCommandPointOn: parsed?.optionsMeta?.autoCommandPointOn ?? true,
+    autoCommandPointAwards: Object.fromEntries(
+      Object.entries(parsed?.optionsMeta?.autoCommandPointAwards ?? {}).filter(([, value]) => value === true)
+    )
     };
   } catch {
-    return { autoCommandPointOn: true };
+    return { autoCommandPointOn: true, autoCommandPointAwards: {} };
   }
 };
 
@@ -349,7 +355,7 @@ const serializeGameNotes = (
   timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
   legacyScoreTotals: Record<string, number>,
-  optionsMeta: { autoCommandPointOn: boolean },
+  optionsMeta: { autoCommandPointOn: boolean; autoCommandPointAwards: Record<string, boolean> },
   playerDetachments: Record<string, string>,
   scenarioMeta?: { deployment: string; primaryMission: string },
   finishReason?: GameFinishReason
@@ -359,7 +365,9 @@ const serializeGameNotes = (
     Object.keys(timerCorrections.rounds).length > 0 ||
     Object.keys(timerCorrections.turns).length > 0;
   const hasScoreMeta = scoreDetailLevel !== "full" || Object.keys(legacyScoreTotals).length > 0;
-  const hasOptionsMeta = optionsMeta.autoCommandPointOn !== true;
+  const hasOptionsMeta =
+    optionsMeta.autoCommandPointOn !== true ||
+    Object.keys(optionsMeta.autoCommandPointAwards).length > 0;
   const hasPlayerMeta = Object.values(playerDetachments).some((value) => value.trim().length > 0);
   const hasScenarioMeta = Boolean(
     scenarioMeta?.deployment.trim() || scenarioMeta?.primaryMission.trim()
@@ -384,7 +392,8 @@ const serializeGameNotes = (
       legacyScoreTotals
     },
     optionsMeta: {
-      autoCommandPointOn: optionsMeta.autoCommandPointOn
+      autoCommandPointOn: optionsMeta.autoCommandPointOn,
+      autoCommandPointAwards: optionsMeta.autoCommandPointAwards
     },
     playerMeta: {
       detachments: playerDetachments
@@ -776,6 +785,7 @@ export const mapSupabaseGameToAppGame = (
     timeEvents: mappedEvents.timeEvents,
     timerCorrections: parseTimerCorrections(row.notes),
     autoCommandPointOn: optionsMeta.autoCommandPointOn,
+    autoCommandPointAwards: optionsMeta.autoCommandPointAwards,
     legacyScoreTotals: scoreMeta.legacyScoreTotals
   };
 };
@@ -799,7 +809,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
     createEmptyTimerCorrections(),
     "full",
     {},
-    { autoCommandPointOn: true },
+    { autoCommandPointOn: true, autoCommandPointAwards: {} },
     createPlayerDetachmentsFromInput(payload),
     {
       deployment: payload.deployment,
@@ -857,6 +867,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   winner_player: getWinnerPlayerSlot(game),
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
+    autoCommandPointAwards: game.autoCommandPointAwards
   }, {
     "player-1": game.players[0].army.detachment,
     "player-2": game.players[1].army.detachment
@@ -962,6 +973,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
+    autoCommandPointAwards: game.autoCommandPointAwards
   }, {
     "player-1": game.players[0].army.detachment,
     "player-2": game.players[1].army.detachment

@@ -1237,20 +1237,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   </div>
                   <span className="scoreboard-stat__meta">Zaehlt zur Gesamtzeit</span>
                 </div>
-                <div className="scoreboard-stat scoreboard-stat--accent">
-                  <div className="scoreboard-stat__top">
-                    <span>Mission</span>
-                    <strong>{game.primaryMission || "-"}</strong>
-                  </div>
-                  <span className="scoreboard-stat__meta">Primaermission</span>
-                </div>
-                <div className="scoreboard-stat">
-                  <div className="scoreboard-stat__top">
-                    <span>Aufstellung</span>
-                    <strong>{game.deployment || "-"}</strong>
-                  </div>
-                  <span className="scoreboard-stat__meta">Deployment</span>
-                </div>
               </div>
             </article>
           </div>

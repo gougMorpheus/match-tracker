@@ -289,6 +289,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     noteEvents: [],
     timerCorrections: createEmptyTimerCorrections(),
     autoCommandPointOn: true,
+    autoCommandPointAwards: {},
     legacyScoreTotals: {},
     timeEvents: [
       {
@@ -596,6 +597,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
     ...rawGame,
     id: gameId,
     autoCommandPointOn: rawGame.autoCommandPointOn ?? true,
+    autoCommandPointAwards: rawGame.autoCommandPointAwards ?? {},
     defenderPlayerId: mapPlayerId(rawGame.defenderPlayerId) ?? playerOneId,
     startingPlayerId: mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
     currentPlayerId: mapPlayerId(rawGame.currentPlayerId) ?? playerOneId,

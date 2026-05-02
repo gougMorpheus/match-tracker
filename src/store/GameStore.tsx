@@ -1199,12 +1199,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             return nextGame;
           }
 
-          const turn = getTurnByRef(nextGame, targetTurn);
-          if (!turn) {
+          const turnKey = `${targetTurn.roundNumber}:${targetTurn.turnNumber}`;
+          if (nextGame.autoCommandPointAwards[turnKey]) {
             return nextGame;
           }
 
-          return nextGame.players.reduce(
+          const nextState = nextGame.players.reduce(
             (accumulator, player) =>
               appendLocalCommandPointEvent(accumulator, {
                 playerId: player.id,
@@ -1216,6 +1216,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
               }),
             nextGame
           );
+
+          return {
+            ...nextState,
+            autoCommandPointAwards: {
+              ...nextState.autoCommandPointAwards,
+              [turnKey]: true
+            }
+          };
         };
         const pushPauseForRunningTurns = (excludeKey?: string | null) => {
           runningTurns.forEach((turn) => {
@@ -1355,7 +1363,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
               "Weiter",
               setupTurn ?? currentTurn ?? null,
               recordHistory ? "advance-turn" : "snapshot",
-              recordHistory
+              recordHistory,
+              (nextGame) =>
+                applyAutoCommandPoints(nextGame, {
+                  roundNumber: 1,
+                  turnNumber: 1
+                })
             );
             void flushSyncQueue();
           }
@@ -1422,7 +1435,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
                 turnNumber: 1
               },
               recordHistory ? "advance-turn" : "snapshot",
-              recordHistory
+              recordHistory,
+              (nextGame) =>
+                applyAutoCommandPoints(nextGame, {
+                  roundNumber: 1,
+                  turnNumber: 1
+                })
             );
             void flushSyncQueue();
             return;
@@ -1599,19 +1617,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         }
 
-        enqueueTimeEvents(
-          game,
-          eventsToAdd,
-          "Weiter",
-          currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 },
-          recordHistory ? "advance-turn" : "snapshot",
-          recordHistory,
-          (nextGame) =>
-            applyAutoCommandPoints(nextGame, {
-              roundNumber: currentRound.roundNumber,
-              turnNumber: 2
-            })
-        );
+          enqueueTimeEvents(
+            game,
+            eventsToAdd,
+            "Weiter",
+            currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 },
+            recordHistory ? "advance-turn" : "snapshot",
+            recordHistory,
+            (nextGame) =>
+              applyAutoCommandPoints(nextGame, {
+                roundNumber: currentRound.roundNumber,
+                turnNumber: 2
+              })
+          );
         void flushSyncQueue();
       }),
     [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation]

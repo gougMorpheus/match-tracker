@@ -139,6 +139,7 @@ export interface Game {
   timeEvents: TimeEvent[];
   timerCorrections: TimerCorrections;
   autoCommandPointOn: boolean;
+  autoCommandPointAwards: Record<string, boolean>;
   legacyScoreTotals: Record<string, number>;
 }
 
