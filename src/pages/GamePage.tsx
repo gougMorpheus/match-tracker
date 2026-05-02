@@ -385,7 +385,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     selectedTurnKey === SETUP_TURN_KEY
       ? undefined
       : allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
-  const timerFocusTurn = getTimerFocusTurn(selectedTurn, latestTurn);
   const selectedTurnIndex = selectedTurn
     ? allTurns.findIndex((turn) => turn.key === `${selectedTurn.roundNumber}:${selectedTurn.turnNumber}`)
     : -1;
@@ -393,6 +392,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     game.rounds.find((round) => round.roundNumber === selectedTurn?.roundNumber) ?? latestRound;
   const hasSetupPhase = game.timeEvents.some((event) => event.action === "setup-start");
   const isSetupSelected = selectedTurnKey === SETUP_TURN_KEY;
+  const timerFocusTurn = isSetupSelected ? undefined : getTimerFocusTurn(selectedTurn, latestTurn);
   const canGoBack = selectedTurnIndex > 0 || (selectedTurnIndex === 0 && hasSetupPhase);
   const canGoForwardToExistingTurn =
     (isSetupSelected && allTurns.length > 0) ||

@@ -1674,7 +1674,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           );
 
         runningTurns.forEach((turn) => {
-          if (getTurnKey(turn) === getTurnKey(targetTurn)) {
+          if (!shouldRewindToSetup && getTurnKey(turn) === getTurnKey(targetTurn)) {
             return;
           }
 

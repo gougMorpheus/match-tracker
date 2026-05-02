@@ -29,7 +29,7 @@ const createDefaultFormState = (): CreateGameInput => ({
 });
 
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
-  const { createGame, games, isMutating, errorMessage, clearError } = useGameStore();
+  const { createGame, games, isMutating, errorMessage, clearError, startGameTimer } = useGameStore();
   const [formState, setFormState] = useState<CreateGameInput>(() => createDefaultFormState());
   const {
     playerOptions,
@@ -88,6 +88,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
     event.preventDefault();
     try {
       const game = await createGame(formState);
+      await startGameTimer(game.id);
       onCreated(game.id);
     } catch {
       return;
