@@ -19,6 +19,7 @@ import { formatDuration } from "../utils/time";
 interface PlayerScoreboardProps {
   game: Game;
   player: Player;
+  roundNumber: number;
   emphasized?: boolean;
   defender?: boolean;
   controls?: ReactNode;
@@ -28,6 +29,7 @@ interface PlayerScoreboardProps {
 export const PlayerScoreboard = ({
   game,
   player,
+  roundNumber,
   emphasized = false,
   defender = false,
   controls,
@@ -36,11 +38,11 @@ export const PlayerScoreboard = ({
   const primary = getPlayerPrimaryTotal(game, player.id);
   const secondary = getPlayerSecondaryTotal(game, player.id);
   const total = getPlayerTotalScore(game, player.id);
-  const currentRoundPrimary = getPlayerCurrentRoundPrimaryTotal(game, player.id);
-  const currentRoundSecondary = getPlayerCurrentRoundSecondaryTotal(game, player.id);
-  const currentRoundTotal = getPlayerCurrentRoundTotalScore(game, player.id);
-  const currentRoundCpGained = getPlayerCurrentRoundCommandPointsGained(game, player.id);
-  const currentRoundCpSpent = getPlayerCurrentRoundCommandPointsSpent(game, player.id);
+  const currentRoundPrimary = getPlayerCurrentRoundPrimaryTotal(game, player.id, roundNumber);
+  const currentRoundSecondary = getPlayerCurrentRoundSecondaryTotal(game, player.id, roundNumber);
+  const currentRoundTotal = getPlayerCurrentRoundTotalScore(game, player.id, roundNumber);
+  const currentRoundCpGained = getPlayerCurrentRoundCommandPointsGained(game, player.id, roundNumber);
+  const currentRoundCpSpent = getPlayerCurrentRoundCommandPointsSpent(game, player.id, roundNumber);
   const cp = getPlayerCommandPoints(game, player.id);
   const cpGained = getPlayerCommandPointsGained(game, player.id);
   const cpSpent = getPlayerCommandPointsSpent(game, player.id);

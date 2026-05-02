@@ -1247,6 +1247,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 key={player.id}
                 game={game}
                 player={player}
+                roundNumber={currentRoundNumber}
                 emphasized={activePlayerId === player.id}
                 defender={game.defenderPlayerId === player.id}
                 noteAction={

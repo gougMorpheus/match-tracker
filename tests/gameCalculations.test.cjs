@@ -26,6 +26,7 @@ const {
   appendLocalScoreEvent,
   appendLocalTimeEvents
 } = require("../.test-dist/utils/gameState.js");
+const { overlayLocalGameMetadata } = require("../.test-dist/utils/gameState.js");
 const {
   createBaseGame,
   createCompletedGameFixture,
@@ -299,6 +300,23 @@ const runGameCalculationsTests = () => {
     assert.equal(getTurnDurationMs(turn, game), 12 * 60 * 1000);
     assert.equal(getPlayerTurnDurationTotalMs(game, playerOne.id), 12 * 60 * 1000);
     assert.equal(getSessionDurationMs(game), 12 * 60 * 1000);
+  }
+
+  {
+    const baseGame = createCompletedGameFixture("game-overlay-base");
+    const localGame = {
+      ...baseGame,
+      autoCommandPointOn: false,
+      autoCommandPointAwards: { "1:1": true, "2:1": true }
+    };
+
+    const mergedGame = overlayLocalGameMetadata(baseGame, localGame);
+
+    assert.equal(mergedGame.autoCommandPointOn, false);
+    assert.deepEqual(mergedGame.autoCommandPointAwards, {
+      "1:1": true,
+      "2:1": true
+    });
   }
 };
 

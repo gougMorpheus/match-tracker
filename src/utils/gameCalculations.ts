@@ -188,16 +188,26 @@ export const getPlayerRoundScoreTotal = (
     )
   );
 
-export const getPlayerCurrentRoundPrimaryTotal = (game: Game, playerId: PlayerId): number =>
-  getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "primary");
+export const getPlayerCurrentRoundPrimaryTotal = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber = getCurrentRoundNumber(game)
+): number => getPlayerRoundScoreTotal(game, playerId, roundNumber, "primary");
 
-export const getPlayerCurrentRoundSecondaryTotal = (game: Game, playerId: PlayerId): number =>
-  getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "secondary");
+export const getPlayerCurrentRoundSecondaryTotal = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber = getCurrentRoundNumber(game)
+): number => getPlayerRoundScoreTotal(game, playerId, roundNumber, "secondary");
 
-export const getPlayerCurrentRoundTotalScore = (game: Game, playerId: PlayerId): number =>
+export const getPlayerCurrentRoundTotalScore = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber = getCurrentRoundNumber(game)
+): number =>
   game.scoreDetailLevel === "total-only"
-    ? getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game), "legacy-total")
-    : getPlayerRoundScoreTotal(game, playerId, getCurrentRoundNumber(game));
+    ? getPlayerRoundScoreTotal(game, playerId, roundNumber, "legacy-total")
+    : getPlayerRoundScoreTotal(game, playerId, roundNumber);
 
 export const getPlayerCommandPointEvents = (
   game: Game,
@@ -220,15 +230,23 @@ export const getPlayerCommandPointsGained = (game: Game, playerId: PlayerId): nu
 export const getPlayerCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
   sumValues(getPlayerCommandPointEvents(game, playerId, "spent"));
 
-export const getPlayerCurrentRoundCommandPointsGained = (game: Game, playerId: PlayerId): number =>
-  getPlayerCommandPointEvents(game, playerId, "gained").filter(
-    (event) => event.roundNumber === getCurrentRoundNumber(game)
-  ).reduce((total, event) => total + event.value, 0);
+export const getPlayerCurrentRoundCommandPointsGained = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber = getCurrentRoundNumber(game)
+): number =>
+  getPlayerCommandPointEvents(game, playerId, "gained")
+    .filter((event) => event.roundNumber === roundNumber)
+    .reduce((total, event) => total + event.value, 0);
 
-export const getPlayerCurrentRoundCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
-  getPlayerCommandPointEvents(game, playerId, "spent").filter(
-    (event) => event.roundNumber === getCurrentRoundNumber(game)
-  ).reduce((total, event) => total + event.value, 0);
+export const getPlayerCurrentRoundCommandPointsSpent = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber = getCurrentRoundNumber(game)
+): number =>
+  getPlayerCommandPointEvents(game, playerId, "spent")
+    .filter((event) => event.roundNumber === roundNumber)
+    .reduce((total, event) => total + event.value, 0);
 
 export const getTurnBaseDurationMs = (turn: Turn, fallbackEndedAt?: string): number => {
   const effectiveEndedAt = turn.timing.endedAt ?? fallbackEndedAt ?? new Date().toISOString();

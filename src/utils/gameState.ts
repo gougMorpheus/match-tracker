@@ -515,6 +515,8 @@ export const updateLocalEvent = (
 export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game =>
   syncDerivedGameState({
     ...baseGame,
+    autoCommandPointOn: localGame.autoCommandPointOn,
+    autoCommandPointAwards: localGame.autoCommandPointAwards,
     gamePoints: localGame.gamePoints,
     scheduledDate: localGame.scheduledDate,
     scheduledTime: localGame.scheduledTime,
