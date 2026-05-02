@@ -50,6 +50,7 @@ import {
   isSetupRunning,
   isSessionRunning,
   isTimeoutActive,
+  isTurnActive,
   isTurnPaused
 } from "../utils/gameCalculations";
 import {
@@ -558,7 +559,23 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
     try {
       const remoteGames = await gamesRepository.listGames();
-      setGames(mergeRemoteWithPending(remoteGames, gamesRef.current, queueRef.current));
+      const mergedGames = mergeRemoteWithPending(remoteGames, gamesRef.current, queueRef.current);
+      const localGamesById = new Map(gamesRef.current.map((game) => [game.id, game]));
+
+      setGames(
+        mergedGames.map((remoteGame) => {
+          const localGame = localGamesById.get(remoteGame.id);
+          if (!localGame) {
+            return remoteGame;
+          }
+
+          if (isSetupRunning(localGame) || isTurnActive(localGame)) {
+            return localGame;
+          }
+
+          return remoteGame;
+        })
+      );
       if (!queueRef.current.length) {
         setErrorMessage(null);
       }
