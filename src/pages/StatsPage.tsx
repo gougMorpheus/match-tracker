@@ -616,16 +616,12 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
 
   const overviewGamesMax = getMetricMax([overview.games, overview.players, overview.armies]);
-  const overviewDurationMax = getMetricMax([
-    overview.averageDurationMs,
-    overview.averageRounds,
-    overview.averageSpentCp
-  ]);
-  const overviewScoreMax = getMetricMax([
-    overview.averageCombinedScore,
-    overview.averagePlayerOneScore,
-    overview.averagePlayerTwoScore
-  ]);
+  const durationGamesLabel = `${overview.averageDurationGameCount} ${
+    overview.averageDurationGameCount === 1 ? "Spiel" : "Spiele"
+  }`;
+  const scoreGamesLabel = `${overview.averageScoreGameCount} ${
+    overview.averageScoreGameCount === 1 ? "Spiel" : "Spiele"
+  }`;
   const playerPrimaryMax = getMetricMax(playerAggregates.map((player) => player.averagePrimary));
   const playerSecondaryMax = getMetricMax(playerAggregates.map((player) => player.averageSecondary));
   const playerTotalMax = getMetricMax(playerAggregates.map((player) => player.averageTotal));
@@ -979,69 +975,23 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   ]}
                 />
               </article>
-              <article className="stats-hero__feature">
+              <article className="stats-hero__feature stats-hero__feature--half">
                 <span>Avg Dauer</span>
                 <strong>{formatDurationMetric(overview.averageDurationMs)}</strong>
-                <p>
-                  {formatMetric(overview.averageRounds)} Runden | {formatMetric(overview.averageSpentCp)} CP spent
-                </p>
-                <MiniBarChart
-                  items={[
-                    {
-                      label: "Dauer",
-                      value: overview.averageDurationMs,
-                      display: formatDurationMetric(overview.averageDurationMs),
-                      max: overviewDurationMax,
-                      tone: "time"
-                    },
-                    {
-                      label: "Runden",
-                      value: overview.averageRounds,
-                      display: formatMetric(overview.averageRounds),
-                      max: overviewDurationMax,
-                      tone: "warning"
-                    },
-                    {
-                      label: "CP",
-                      value: overview.averageSpentCp,
-                      display: formatMetric(overview.averageSpentCp),
-                      max: overviewDurationMax,
-                      tone: "success"
-                    }
-                  ]}
-                />
+                <div className="stats-hero__metrics">
+                  <span>Dauer {formatDurationMetric(overview.averageDurationMs)}</span>
+                  <span>Runden {formatMetric(overview.averageRounds)}</span>
+                  <span>CP spent {formatMetric(overview.averageSpentCp)}</span>
+                  <span>{durationGamesLabel}</span>
+                </div>
               </article>
-              <article className="stats-hero__feature">
+              <article className="stats-hero__feature stats-hero__feature--half">
                 <span>Avg Score gesamt</span>
-                <strong>{formatMetric(overview.averageCombinedScore)}</strong>
-                <p>
-                  P1 {formatMetric(overview.averagePlayerOneScore)} | P2 {formatMetric(overview.averagePlayerTwoScore)}
-                </p>
-                <MiniBarChart
-                  items={[
-                    {
-                      label: "Gesamt",
-                      value: overview.averageCombinedScore,
-                      display: formatMetric(overview.averageCombinedScore),
-                      max: overviewScoreMax,
-                      tone: "score"
-                    },
-                    {
-                      label: "P1",
-                      value: overview.averagePlayerOneScore,
-                      display: formatMetric(overview.averagePlayerOneScore),
-                      max: overviewScoreMax,
-                      tone: "success"
-                    },
-                    {
-                      label: "P2",
-                      value: overview.averagePlayerTwoScore,
-                      display: formatMetric(overview.averagePlayerTwoScore),
-                      max: overviewScoreMax,
-                      tone: "warning"
-                    }
-                  ]}
-                />
+                <strong>{formatMetric(overview.averagePlayerScore)}</strong>
+                <div className="stats-hero__metrics">
+                  <span>Avg Spieler {formatMetric(overview.averagePlayerScore)}</span>
+                  <span>{scoreGamesLabel}</span>
+                </div>
               </article>
             </section>
 
@@ -1163,67 +1113,15 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   label="Avg Dauer"
                   value={formatDurationMetric(overview.averageDurationMs)}
                   tone="time"
-                  chart={defaultMetricCardChart(
-                    overview.averageDurationMs,
-                    formatDurationMetric(overview.averageDurationMs),
-                    overviewDurationMax,
-                    "time"
-                  )}
+                  helper={`${formatMetric(overview.averageRounds)} Runden | ${formatMetric(
+                    overview.averageSpentCp
+                  )} CP spent | ${durationGamesLabel}`}
                 />
                 <StatCard
-                  label="Avg Runden"
-                  value={formatMetric(overview.averageRounds)}
-                  tone="warning"
-                  chart={defaultMetricCardChart(
-                    overview.averageRounds,
-                    formatMetric(overview.averageRounds),
-                    overviewDurationMax,
-                    "warning"
-                  )}
-                />
-                <StatCard
-                  label="Avg CP spent"
-                  value={formatMetric(overview.averageSpentCp)}
-                  tone="success"
-                  chart={defaultMetricCardChart(
-                    overview.averageSpentCp,
-                    formatMetric(overview.averageSpentCp),
-                    overviewDurationMax,
-                    "success"
-                  )}
-                />
-                <StatCard
-                  label="Avg Score ges"
-                  value={formatMetric(overview.averageCombinedScore)}
+                  label="Avg Score gesamt"
+                  value={formatMetric(overview.averagePlayerScore)}
                   tone="score"
-                  chart={defaultMetricCardChart(
-                    overview.averageCombinedScore,
-                    formatMetric(overview.averageCombinedScore),
-                    overviewScoreMax,
-                    "score"
-                  )}
-                />
-                <StatCard
-                  label="Avg Score P1"
-                  value={formatMetric(overview.averagePlayerOneScore)}
-                  tone="success"
-                  chart={defaultMetricCardChart(
-                    overview.averagePlayerOneScore,
-                    formatMetric(overview.averagePlayerOneScore),
-                    overviewScoreMax,
-                    "success"
-                  )}
-                />
-                <StatCard
-                  label="Avg Score P2"
-                  value={formatMetric(overview.averagePlayerTwoScore)}
-                  tone="warning"
-                  chart={defaultMetricCardChart(
-                    overview.averagePlayerTwoScore,
-                    formatMetric(overview.averagePlayerTwoScore),
-                    overviewScoreMax,
-                    "warning"
-                  )}
+                  helper={`Avg Spieler | ${scoreGamesLabel}`}
                 />
               </div>
             </CollapsibleSection>

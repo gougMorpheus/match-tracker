@@ -677,10 +677,13 @@ export interface StatsOverview {
   players: number;
   armies: number;
   averageDurationMs: number | null;
+  averageDurationGameCount: number;
   averageRounds: number | null;
   averageCombinedScore: number | null;
+  averagePlayerScore: number | null;
   averagePlayerOneScore: number | null;
   averagePlayerTwoScore: number | null;
+  averageScoreGameCount: number;
   averageSpentCp: number | null;
 }
 
@@ -963,6 +966,9 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
   );
   const playerOneScoreValues = comparableScoreGames.map((game) => getPlayerTotalScore(game, game.players[0].id));
   const playerTwoScoreValues = comparableScoreGames.map((game) => getPlayerTotalScore(game, game.players[1].id));
+  const playerScoreValues = comparableScoreGames.flatMap((game) =>
+    game.players.map((player) => getPlayerTotalScore(game, player.id))
+  );
   const spentCpValues = games.flatMap((game) =>
     game.scoreDetailLevel === "full"
       ? game.players
@@ -976,10 +982,13 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
     players: playerCount,
     armies: armyCount,
     averageDurationMs: averageOrNull(completedDurations),
+    averageDurationGameCount: completedDurations.length,
     averageRounds: averageOrNull(roundsValues),
     averageCombinedScore: averageOrNull(combinedScoreValues),
+    averagePlayerScore: averageOrNull(playerScoreValues),
     averagePlayerOneScore: averageOrNull(playerOneScoreValues),
     averagePlayerTwoScore: averageOrNull(playerTwoScoreValues),
+    averageScoreGameCount: comparableScoreGames.length,
     averageSpentCp: averageOrNull(spentCpValues)
   };
 };

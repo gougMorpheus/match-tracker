@@ -1998,6 +1998,19 @@ textarea {
   line-height: 1.15;
 }
 
+.stats-hero__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.34rem 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.stats-hero__metrics span {
+  font-size: 0.68rem;
+  line-height: 1.15;
+  color: var(--muted);
+}
+
 .record-card__scoreline {
   color: var(--text);
   font-size: 0.72rem;
@@ -2670,6 +2683,14 @@ textarea {
   .stats-hero,
   .record-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stats-hero {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-hero__feature--clickable {
+    grid-column: 1 / -1;
   }
 
   .quick-controls__row {

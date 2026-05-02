@@ -103,9 +103,12 @@ const runGameCalculationsTests = () => {
     assert.equal(overview.players, 2);
     assert.equal(overview.armies, 2);
     assert.equal(overview.averageDurationMs, 27 * 60 * 1000);
+    assert.equal(overview.averageDurationGameCount, 1);
     assert.equal(overview.averageCombinedScore, 25);
+    assert.equal(overview.averagePlayerScore, 12.5);
     assert.equal(overview.averagePlayerOneScore, 9);
     assert.equal(overview.averagePlayerTwoScore, 16);
+    assert.equal(overview.averageScoreGameCount, 1);
     assert.equal(overview.averageSpentCp, 1.5);
   }
 
@@ -258,8 +261,11 @@ const runGameCalculationsTests = () => {
 
     assert.equal(overview.games, 2);
     assert.equal(overview.averageDurationMs, 27 * 60 * 1000);
+    assert.equal(overview.averageDurationGameCount, 1);
     assert.equal(overview.averageRounds, 1);
     assert.equal(overview.averageCombinedScore, 83.5);
+    assert.equal(overview.averagePlayerScore, 41.75);
+    assert.equal(overview.averageScoreGameCount, 2);
   }
 
   {
