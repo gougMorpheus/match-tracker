@@ -288,6 +288,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     commandPointEvents: [],
     noteEvents: [],
     timerCorrections: createEmptyTimerCorrections(),
+    autoCommandPointOn: true,
     legacyScoreTotals: {},
     timeEvents: [
       {
@@ -594,6 +595,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
   return syncDerivedGameState({
     ...rawGame,
     id: gameId,
+    autoCommandPointOn: rawGame.autoCommandPointOn ?? true,
     defenderPlayerId: mapPlayerId(rawGame.defenderPlayerId) ?? playerOneId,
     startingPlayerId: mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
     currentPlayerId: mapPlayerId(rawGame.currentPlayerId) ?? playerOneId,

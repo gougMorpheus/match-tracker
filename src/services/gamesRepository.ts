@@ -284,6 +284,25 @@ const parseFinishMeta = (value: string | null): { finishReason: GameFinishReason
   }
 };
 
+const parseOptionsMeta = (value: string | null): { autoCommandPointOn: boolean } => {
+  if (!value) {
+    return { autoCommandPointOn: true };
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      optionsMeta?: {
+        autoCommandPointOn?: boolean;
+      };
+    };
+    return {
+      autoCommandPointOn: parsed?.optionsMeta?.autoCommandPointOn ?? true
+    };
+  } catch {
+    return { autoCommandPointOn: true };
+  }
+};
+
 const parseDeletedMeta = (value: string | null): { deletedAt: string | undefined } => {
   const parsed = parseJsonObject(value);
   const deletedMeta = parsed.deletedMeta;
@@ -330,6 +349,7 @@ const serializeGameNotes = (
   timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
   legacyScoreTotals: Record<string, number>,
+  optionsMeta: { autoCommandPointOn: boolean },
   playerDetachments: Record<string, string>,
   scenarioMeta?: { deployment: string; primaryMission: string },
   finishReason?: GameFinishReason
@@ -339,13 +359,21 @@ const serializeGameNotes = (
     Object.keys(timerCorrections.rounds).length > 0 ||
     Object.keys(timerCorrections.turns).length > 0;
   const hasScoreMeta = scoreDetailLevel !== "full" || Object.keys(legacyScoreTotals).length > 0;
+  const hasOptionsMeta = optionsMeta.autoCommandPointOn !== true;
   const hasPlayerMeta = Object.values(playerDetachments).some((value) => value.trim().length > 0);
   const hasScenarioMeta = Boolean(
     scenarioMeta?.deployment.trim() || scenarioMeta?.primaryMission.trim()
   );
   const hasFinishMeta = Boolean(finishReason && finishReason !== "completed");
 
-  if (!hasCorrections && !hasScoreMeta && !hasPlayerMeta && !hasScenarioMeta && !hasFinishMeta) {
+  if (
+    !hasCorrections &&
+    !hasScoreMeta &&
+    !hasOptionsMeta &&
+    !hasPlayerMeta &&
+    !hasScenarioMeta &&
+    !hasFinishMeta
+  ) {
     return null;
   }
 
@@ -354,6 +382,9 @@ const serializeGameNotes = (
     scoreMeta: {
       scoreDetailLevel,
       legacyScoreTotals
+    },
+    optionsMeta: {
+      autoCommandPointOn: optionsMeta.autoCommandPointOn
     },
     playerMeta: {
       detachments: playerDetachments
@@ -696,6 +727,7 @@ export const mapSupabaseGameToAppGame = (
   const startedAt = getDerivedStartedAt(row, mappedEvents.timeEvents);
   const endedAt = getDerivedEndedAt(row, mappedEvents.timeEvents);
   const scoreMeta = parseScoreMeta(row.notes);
+  const optionsMeta = parseOptionsMeta(row.notes);
   const playerDetachments = parsePlayerMeta(row.notes);
   const scenarioMeta = parseScenarioMeta(row.notes);
   const finishMeta = parseFinishMeta(row.notes);
@@ -743,6 +775,7 @@ export const mapSupabaseGameToAppGame = (
     noteEvents: mappedEvents.noteEvents,
     timeEvents: mappedEvents.timeEvents,
     timerCorrections: parseTimerCorrections(row.notes),
+    autoCommandPointOn: optionsMeta.autoCommandPointOn,
     legacyScoreTotals: scoreMeta.legacyScoreTotals
   };
 };
@@ -766,6 +799,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
     createEmptyTimerCorrections(),
     "full",
     {},
+    { autoCommandPointOn: true },
     createPlayerDetachmentsFromInput(payload),
     {
       deployment: payload.deployment,
@@ -822,6 +856,8 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: getWinnerPlayerSlot(game),
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
+    autoCommandPointOn: game.autoCommandPointOn,
+  }, {
     "player-1": game.players[0].army.detachment,
     "player-2": game.players[1].army.detachment
   }, {
@@ -925,6 +961,8 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
+    autoCommandPointOn: game.autoCommandPointOn,
+  }, {
     "player-1": game.players[0].army.detachment,
     "player-2": game.players[1].army.detachment
   }, {

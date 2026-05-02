@@ -115,6 +115,7 @@ interface GameStoreValue {
   addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
+  setAutoCommandPointEnabled: (gameId: string, enabled: boolean) => Promise<void>;
   advanceGame: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
   rewindLastTurn: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
   pauseActiveTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
@@ -932,6 +933,27 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
   );
 
+  const setAutoCommandPointEnabled = useCallback(
+    async (gameId: string, enabled: boolean) =>
+      runMutation(async () => {
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        if (game.autoCommandPointOn === enabled) {
+          return;
+        }
+
+        commitGameSnapshot("Optionen", game, {
+          ...game,
+          autoCommandPointOn: enabled
+        });
+        void flushSyncQueue();
+      }),
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+  );
+
   const setTimerCorrections = useCallback(
     async ({ gameId, turnRef, turnMs }: TimerCorrectionInput) =>
       runMutation(async () => {
@@ -1122,13 +1144,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       label = "Zeit geaendert",
       historyTurnRef?: TurnRef | null,
       kind: GameHistoryEntry["kind"] = "snapshot",
-      recordHistory = true
+      recordHistory = true,
+      transformNextGame?: (nextGame: Game) => Game
     ) => {
       if (!timeEvents.length) {
         return game;
       }
 
-      const nextGame = appendLocalTimeEvents(game, timeEvents);
+      const nextGame = transformNextGame ? transformNextGame(appendLocalTimeEvents(game, timeEvents)) : appendLocalTimeEvents(game, timeEvents);
       return commitGameSnapshot(getTimeHistoryLabel(label, historyTurnRef), game, nextGame, kind, recordHistory);
     },
     [commitGameSnapshot]
@@ -1171,6 +1194,29 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           !currentTurn.timing.endedAt &&
           !isTurnPaused(currentTurn)
         );
+        const applyAutoCommandPoints = (nextGame: Game, targetTurn?: TurnRef | null): Game => {
+          if (!game.autoCommandPointOn || !targetTurn || targetTurn.roundNumber <= 0) {
+            return nextGame;
+          }
+
+          const turn = getTurnByRef(nextGame, targetTurn);
+          if (!turn) {
+            return nextGame;
+          }
+
+          return nextGame.players.reduce(
+            (accumulator, player) =>
+              appendLocalCommandPointEvent(accumulator, {
+                playerId: player.id,
+                cpType: "gained",
+                value: 1,
+                roundNumber: targetTurn.roundNumber,
+                turnNumber: targetTurn.turnNumber,
+                createdAt: now
+              }),
+            nextGame
+          );
+        };
         const pushPauseForRunningTurns = (excludeKey?: string | null) => {
           runningTurns.forEach((turn) => {
             if (getTurnKey(turn) === excludeKey) {
@@ -1326,7 +1372,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
               "Weiter",
               currentTurn ?? nextExistingTurn,
               recordHistory ? "advance-turn" : "snapshot",
-              recordHistory
+              recordHistory,
+              (nextGame) => applyAutoCommandPoints(nextGame, nextExistingTurn)
             );
             void flushSyncQueue();
           }
@@ -1558,7 +1605,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           "Weiter",
           currentTurn ?? { roundNumber: currentRound.roundNumber, turnNumber: 2 },
           recordHistory ? "advance-turn" : "snapshot",
-          recordHistory
+          recordHistory,
+          (nextGame) =>
+            applyAutoCommandPoints(nextGame, {
+              roundNumber: currentRound.roundNumber,
+              turnNumber: 2
+            })
         );
         void flushSyncQueue();
       }),
@@ -2090,6 +2142,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       getGame,
       refreshGames,
       updateGameDetails,
+      setAutoCommandPointEnabled,
       setTimerCorrections,
       resetAllGameTimers,
       addScoreEvent,
@@ -2135,6 +2188,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       pauseActiveTimer,
       endTimeout,
       refreshGames,
+      setAutoCommandPointEnabled,
       setTimerCorrections,
       resetAllGameTimers,
       reopenGame,

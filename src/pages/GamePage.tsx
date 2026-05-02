@@ -133,6 +133,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     updateGameEvent,
     deleteGameEvent,
     updateGameDetails,
+    setAutoCommandPointEnabled,
     pauseActiveTimer,
     startGameTimer,
     startTimeout,
@@ -922,6 +923,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 label: "Optionen",
                 items: [
                   { label: "Spieldetails", onClick: openGameDetails },
+                  {
+                    label: game.autoCommandPointOn ? "Auto CP: An" : "Auto CP: Aus",
+                    onClick: () => void setAutoCommandPointEnabled(game.id, !game.autoCommandPointOn),
+                    disabled: isMutating
+                  },
                   ...(!showOverview
                     ? [
                         {

@@ -20,6 +20,7 @@ export const seedGames: Game[] = [
     currentPlayerId: "player-1",
     startedAt: "2026-04-20T17:05:00.000Z",
     endedAt: "2026-04-20T20:10:00.000Z",
+    autoCommandPointOn: true,
     players: [
       {
         id: "player-1",

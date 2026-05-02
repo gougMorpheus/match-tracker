@@ -138,6 +138,7 @@ export interface Game {
   noteEvents: NoteEvent[];
   timeEvents: TimeEvent[];
   timerCorrections: TimerCorrections;
+  autoCommandPointOn: boolean;
   legacyScoreTotals: Record<string, number>;
 }
 
