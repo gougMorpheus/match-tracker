@@ -272,6 +272,7 @@ const parseFinishMeta = (value: string | null): { finishReason: GameFinishReason
     return {
       finishReason:
         reason === "completed" ||
+        reason === "draw" ||
         reason === "interrupted" ||
         reason === "abandoned" ||
         reason === "player-1-conceded" ||
@@ -834,6 +835,10 @@ export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabas
 });
 
 const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
+  if (game.finishReason === "draw") {
+    return null;
+  }
+
   const playerOneScore = getPlayerTotalScore(game, game.players[0].id);
   const playerTwoScore = getPlayerTotalScore(game, game.players[1].id);
 

@@ -511,9 +511,14 @@ export const getCurrentRoundNumber = (game: Game): number => getLatestRound(game
 export const getCurrentTurnNumber = (game: Game): number => getLatestTurn(game)?.turnNumber ?? 0;
 
 const getPlayerResult = (
+  game: Game,
   playerScore: number,
   opponentScore: number
 ): GameResult => {
+  if (game.finishReason === "draw") {
+    return "tie";
+  }
+
   if (playerScore > opponentScore) {
     return "win";
   }
@@ -523,6 +528,15 @@ const getPlayerResult = (
   }
 
   return "tie";
+};
+
+const getPlayerGameResult = (game: Game, playerId: PlayerId): GameResult => {
+  if (game.finishReason === "draw") {
+    return "tie";
+  }
+
+  const opponent = game.players.find((entry) => entry.id !== playerId)!;
+  return getPlayerResult(game, getPlayerTotalScore(game, playerId), getPlayerTotalScore(game, opponent.id));
 };
 
 const createSummaryPlayer = (game: Game, playerId: PlayerId): GameSummaryPlayer => {
@@ -547,7 +561,11 @@ const createSummaryPlayer = (game: Game, playerId: PlayerId): GameSummaryPlayer 
     commandPointsSpent,
     commandPointBalance: hasCpData ? getPlayerCommandPoints(game, playerId) : null,
     result:
-      totalScore !== null && opponentTotal !== null ? getPlayerResult(totalScore, opponentTotal) : null
+      game.finishReason === "draw"
+        ? "tie"
+        : totalScore !== null && opponentTotal !== null
+          ? getPlayerResult(game, totalScore, opponentTotal)
+          : null
   };
 };
 
@@ -737,14 +755,8 @@ export const createPlayerAggregates = (games: Game[], durationSourceGames: Game[
       const scoredGames = playerGames.filter(({ game }) => hasComparableScoreData(game));
       const goFirstGames = scoredGames.filter(({ game, player }) => game.rounds[0]?.turns[0]?.playerId === player.id);
       const startFirstGames = scoredGames.filter(({ game, player }) => game.startingPlayerId === player.id);
-      const wins = scoredGames.filter(({ game, player }) => {
-        const opponent = game.players.find((entry) => entry.id !== player.id)!;
-        return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
-      }).length;
-      const losses = scoredGames.filter(({ game, player }) => {
-        const opponent = game.players.find((entry) => entry.id !== player.id)!;
-        return getPlayerTotalScore(game, player.id) < getPlayerTotalScore(game, opponent.id);
-      }).length;
+      const wins = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length;
+      const losses = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "loss").length;
       const ties = scoredGames.length - wins - losses;
       const primaryValues = playerGames
         .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "primary"))
@@ -771,18 +783,12 @@ export const createPlayerAggregates = (games: Game[], durationSourceGames: Game[
         ties,
         winRate: scoredGames.length ? (wins / scoredGames.length) * 100 : null,
         winRateWhenGoFirst: goFirstGames.length
-          ? (goFirstGames.filter(({ game, player }) => {
-              const opponent = game.players.find((entry) => entry.id !== player.id)!;
-              return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
-            }).length /
+          ? (goFirstGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length /
               goFirstGames.length) *
             100
           : null,
         winRateWhenStartFirst: startFirstGames.length
-          ? (startFirstGames.filter(({ game, player }) => {
-              const opponent = game.players.find((entry) => entry.id !== player.id)!;
-              return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
-            }).length /
+          ? (startFirstGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length /
               startFirstGames.length) *
             100
           : null,
@@ -810,12 +816,11 @@ const createScenarioLeaders = (
 
     const scenarioPlayers = grouped.get(label) ?? new Map<string, { wins: number; games: number }>();
     game.players.forEach((player) => {
-      const opponent = game.players.find((entry) => entry.id !== player.id)!;
       const existing = scenarioPlayers.get(player.name) ?? { wins: 0, games: 0 };
       scenarioPlayers.set(player.name, {
         wins:
           existing.wins +
-          (getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id) ? 1 : 0),
+          (getPlayerGameResult(game, player.id) === "win" ? 1 : 0),
         games: existing.games + 1
       });
     });
@@ -1006,14 +1011,8 @@ export const createArmyAggregates = (games: Game[]): ArmyAggregate[] => {
         .filter((entry): entry is { game: Game; player: Game["players"][number] } => Boolean(entry.player));
       const gamesCount = armyGames.length;
       const scoredGames = armyGames.filter(({ game }) => hasComparableScoreData(game));
-      const wins = scoredGames.filter(({ game, player }) => {
-        const opponent = game.players.find((entry) => entry.id !== player.id)!;
-        return getPlayerTotalScore(game, player.id) > getPlayerTotalScore(game, opponent.id);
-      }).length;
-      const losses = scoredGames.filter(({ game, player }) => {
-        const opponent = game.players.find((entry) => entry.id !== player.id)!;
-        return getPlayerTotalScore(game, player.id) < getPlayerTotalScore(game, opponent.id);
-      }).length;
+      const wins = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length;
+      const losses = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "loss").length;
       const ties = scoredGames.length - wins - losses;
       const primaryValues = armyGames
         .filter(({ game, player }) => hasPlayerScoreData(game, player.id, "primary"))

@@ -1,7 +1,9 @@
 const assert = require("node:assert/strict");
 const {
   createCpScoreCorrelationPoints,
+  createArmyAggregates,
   createGameSummary,
+  createPlayerAggregates,
   createPlayerTurnDurationAggregates,
   createRoundScoreAggregates,
   createStatsOverview,
@@ -225,6 +227,32 @@ const runGameCalculationsTests = () => {
     };
 
     assert.equal(prepareGamesForStats([interruptedGame]).length, 0);
+  }
+
+  {
+    const drawGame = {
+      ...createCompletedGameFixture("game-draw"),
+      finishReason: "draw"
+    };
+    const summary = createGameSummary(drawGame);
+    const playerAggregates = createPlayerAggregates([drawGame]);
+    const armyAggregates = createArmyAggregates([drawGame]);
+
+    assert.deepEqual(summary.players.map((player) => player.result), ["tie", "tie"]);
+    assert.deepEqual(
+      playerAggregates.map((player) => [player.name, player.wins, player.losses, player.ties, player.winRate]),
+      [
+        ["Alice", 0, 0, 1, 0],
+        ["Bob", 0, 0, 1, 0]
+      ]
+    );
+    assert.deepEqual(
+      armyAggregates.map((army) => [army.armyName, army.wins, army.losses, army.ties, army.winRate]),
+      [
+        ["Adepta Sororitas", 0, 0, 1, 0],
+        ["Aeldari", 0, 0, 1, 0]
+      ]
+    );
   }
 
   {

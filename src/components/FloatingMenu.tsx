@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 export interface FloatingMenuItem {
   label: string;
+  detail?: string;
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
@@ -74,7 +75,8 @@ export const FloatingMenu = ({
                       item.onClick();
                     }}
                   >
-                    {item.label}
+                    <span className="floating-menu__item-label">{item.label}</span>
+                    {item.detail ? <span className="floating-menu__item-detail">{item.detail}</span> : null}
                   </button>
                 ))}
               </div>

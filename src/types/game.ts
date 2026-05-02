@@ -2,6 +2,7 @@ export type PlayerId = string;
 export type GameStatus = "active" | "completed";
 export type GameFinishReason =
   | "completed"
+  | "draw"
   | "interrupted"
   | "abandoned"
   | "player-1-conceded"

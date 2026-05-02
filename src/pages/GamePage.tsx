@@ -271,7 +271,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const undoActionLabel = getUndoActionLabel(gameId);
   const redoActionLabel = getRedoActionLabel(gameId);
   const undoLabel = undoActionLabel ? `Undo: ${undoActionLabel}` : "Undo";
-  const redoLabel = redoActionLabel ? `Redo: ${redoActionLabel}` : "Redo";
 
   useEffect(() => {
     if (!game) {
@@ -938,7 +937,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     : []),
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   {
-                    label: redoLabel,
+                    label: "Redo",
+                    detail: redoActionLabel ?? undefined,
                     onClick: () => void handleRedoEvent(),
                     disabled: isMutating || !redoActionLabel || isClosed
                   },
@@ -1184,6 +1184,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   onClick={() => void handleFinishGame("player-2-conceded")}
                 >
                   {game.players[1].name} hat aufgegeben
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  disabled={isMutating}
+                  onClick={() => void handleFinishGame("draw")}
+                >
+                  Unentschieden
                 </button>
                 <button
                   type="button"
