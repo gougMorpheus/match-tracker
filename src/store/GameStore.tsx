@@ -1143,6 +1143,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         const now = getNowIso();
+        const isSetupTurnRef = turnRef?.roundNumber === 0 && turnRef?.turnNumber === 0;
+        const setupRound = game.rounds.find((round) => round.roundNumber === 1);
+        const setupTurn = setupRound?.turns[0];
         const currentTurn = getTurnByRef(game, turnRef);
         const currentRound = currentTurn
           ? game.rounds.find((round) => round.roundNumber === currentTurn.roundNumber)
@@ -1235,6 +1238,83 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
         };
+
+        if (isSetupTurnRef) {
+          if (isSetupActive(game)) {
+            eventsToAdd.push({
+              action: "setup-end",
+              createdAt: now
+            });
+          }
+
+          if (!game.timeEvents.some((event) => event.action === "game-start")) {
+            eventsToAdd.push({
+              playerId: game.startingPlayerId,
+              action: "game-start",
+              createdAt: now
+            });
+          }
+
+          if (setupRound && !setupRound.startedAt) {
+            eventsToAdd.push({
+              playerId: setupTurn?.playerId ?? game.startingPlayerId,
+              roundNumber: setupRound.roundNumber,
+              action: "round-start",
+              createdAt: now
+            });
+          }
+
+          if (setupTurn) {
+            if (!setupTurn.timing.startedAt) {
+              eventsToAdd.push({
+                playerId: setupTurn.playerId,
+                roundNumber: setupTurn.roundNumber,
+                turnNumber: setupTurn.turnNumber,
+                action: "turn-start",
+                createdAt: now
+              });
+            } else if (setupTurn.timing.endedAt || isTurnPaused(setupTurn)) {
+              eventsToAdd.push({
+                playerId: setupTurn.playerId,
+                roundNumber: setupTurn.roundNumber,
+                turnNumber: setupTurn.turnNumber,
+                action: "turn-resume",
+                createdAt: now
+              });
+            }
+          } else {
+            eventsToAdd.push({
+              playerId: game.startingPlayerId,
+              roundNumber: 1,
+              turnNumber: 1,
+              action: "turn-start",
+              createdAt: now
+            });
+          }
+
+          if (!keepTimerRunning && setupTurn) {
+            eventsToAdd.push({
+              playerId: setupTurn.playerId,
+              roundNumber: setupTurn.roundNumber,
+              turnNumber: setupTurn.turnNumber,
+              action: "turn-pause",
+              createdAt: now
+            });
+          }
+
+          if (eventsToAdd.length) {
+            enqueueTimeEvents(
+              game,
+              eventsToAdd,
+              "Weiter",
+              setupTurn ?? currentTurn ?? null,
+              recordHistory ? "advance-turn" : "snapshot",
+              recordHistory
+            );
+            void flushSyncQueue();
+          }
+          return;
+        }
 
         if (nextExistingTurn) {
           if (keepTimerRunning) {

@@ -79,6 +79,10 @@ const SCORE_LIMITS: Record<ScoreType, number[]> = {
   "legacy-total": []
 };
 const SETUP_TURN_KEY = "setup";
+const SETUP_TURN_REF = {
+  roundNumber: 0,
+  turnNumber: 0
+};
 
 const createGameFormState = (game: Game): CreateGameInput => ({
   playerOneName: game.players[0].name,
@@ -782,7 +786,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       const firstTurn = allTurns[0];
       if (firstTurn) {
         if (isTimerRunning) {
-          await advanceGame(game.id, undefined, true);
+          await advanceGame(game.id, SETUP_TURN_REF, true);
         }
         setSelectedTurnKey(firstTurn.key);
       }
