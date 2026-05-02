@@ -968,7 +968,7 @@ textarea {
 
 .overview-player-card__head {
   align-items: flex-start;
-  min-height: 1.9rem;
+  min-height: 0;
 }
 
 .overview-player-card__identity {
@@ -1004,8 +1004,55 @@ textarea {
 
 .overview-player-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  row-gap: 0.3rem;
-  column-gap: 0.225rem;
+  row-gap: 0.35rem;
+  column-gap: 0.28rem;
+}
+
+.overview-player-card {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.overview-player-card__stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.overview-player-stat {
+  display: grid;
+  align-content: center;
+  gap: 0.12rem;
+  min-height: 2.15rem;
+  padding: 0.34rem 0.4rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.overview-player-stat--score {
+  grid-column: span 2;
+}
+
+.overview-player-stat:not(.overview-player-stat--score) {
+  grid-column: span 3;
+}
+
+.overview-player-stat--total {
+  background: rgba(245, 158, 11, 0.11);
+  border-color: rgba(245, 158, 11, 0.14);
+}
+
+.overview-player-stat span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.overview-player-stat strong {
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.05;
 }
 
 .overview-bar-list {
@@ -1029,6 +1076,41 @@ textarea {
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid var(--border);
+}
+
+.overview-collapsible-chart {
+  gap: 0.55rem;
+}
+
+.overview-collapsible-chart__toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.overview-collapsible-chart__toggle > span:first-child {
+  font-weight: 700;
+}
+
+.overview-collapsible-chart__toggle strong {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.overview-collapsible-chart__toggle > span:last-child {
+  padding: 0.2rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.72);
+  color: var(--muted);
+  font-size: 0.68rem;
 }
 
 .overview-chart-card__head,
@@ -1064,6 +1146,31 @@ textarea {
 
 .overview-chart-legend--score {
   gap: 0.3rem;
+}
+
+.overview-event-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.overview-event-chart {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.overview-event-chart__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.overview-event-chart__title strong {
+  color: var(--text);
 }
 
 .overview-chart-legend__item,
@@ -1394,6 +1501,62 @@ textarea {
 
 .overview-chart__point--scatter.is-warning {
   fill: #f59e0b;
+}
+
+.overview-chart__point--event.is-event-primary,
+.overview-chart-legend__item.is-event-primary,
+.overview-chart-total__marker.is-event-primary {
+  fill: #38bdf8;
+  background: rgba(56, 189, 248, 0.16);
+  color: #d8f3ff;
+}
+
+.overview-chart__point--event.is-event-secondary,
+.overview-chart-legend__item.is-event-secondary,
+.overview-chart-total__marker.is-event-secondary {
+  fill: #34d399;
+  background: rgba(52, 211, 153, 0.16);
+  color: #d1fae5;
+}
+
+.overview-chart__point--event.is-event-total,
+.overview-chart-legend__item.is-event-total,
+.overview-chart-total__marker.is-event-total {
+  fill: #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fde68a;
+}
+
+.overview-chart__point--event.is-event-cp-gained,
+.overview-chart-legend__item.is-event-cp-gained,
+.overview-chart-total__marker.is-event-cp-gained {
+  fill: #a78bfa;
+  background: rgba(167, 139, 250, 0.16);
+  color: #ede9fe;
+}
+
+.overview-chart__point--event.is-event-cp-spent,
+.overview-chart-legend__item.is-event-cp-spent,
+.overview-chart-total__marker.is-event-cp-spent {
+  fill: #fb7185;
+  background: rgba(251, 113, 133, 0.16);
+  color: #ffe4e6;
+}
+
+.overview-chart__point--event.is-event-turn,
+.overview-chart-legend__item.is-event-turn,
+.overview-chart-total__marker.is-event-turn {
+  fill: #5eead4;
+  background: rgba(94, 234, 212, 0.14);
+  color: #ccfbf1;
+}
+
+.overview-chart__point--event.is-event-round,
+.overview-chart-legend__item.is-event-round,
+.overview-chart-total__marker.is-event-round {
+  fill: #facc15;
+  background: rgba(250, 204, 21, 0.15);
+  color: #fef9c3;
 }
 
 .overview-chart__point-group.is-active .overview-chart__label {
@@ -2147,6 +2310,20 @@ textarea {
 
   .floating-menu--fixed {
     right: 0.85rem;
+  }
+
+  .overview-event-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-player-card__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .overview-player-stat,
+  .overview-player-stat--score,
+  .overview-player-stat:not(.overview-player-stat--score) {
+    grid-column: span 1;
   }
 }
 

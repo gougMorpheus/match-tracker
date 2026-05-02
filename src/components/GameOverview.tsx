@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Game, PlayerId } from "../types/game";
 import {
   getPlayerComparablePrimaryScore,
@@ -42,21 +42,18 @@ interface RoundTimeRow {
   values: Record<string, number>;
 }
 
-interface EventTimelineBucket {
-  index: number;
-  startMs: number;
-  endMs: number;
-  counts: {
-    time: number;
-    score: number;
-    cp: number;
-    note: number;
-  };
-  count: number;
-  timestamps: string[];
-}
+type EventMetric = "primary" | "secondary" | "total" | "cp-gained" | "cp-spent" | "turn" | "round";
 
-type EventCategory = "all" | "time" | "score" | "cp" | "note";
+interface EventPlotPoint {
+  id: string;
+  playerId: PlayerId;
+  metric: EventMetric;
+  label: string;
+  createdAt: string;
+  elapsedMs: number;
+  value: number;
+  count: number;
+}
 
 type ScoreSelection =
   | {
@@ -92,7 +89,20 @@ const CHART_PADDING = 20;
 const SCORE_CHART_WIDTH = 360;
 const SCORE_CHART_HEIGHT = 190;
 const SCORE_CHART_PADDING = 24;
-const EVENT_BUCKET_MS = 5 * 60 * 1000;
+const EVENT_CHART_WIDTH = 360;
+const EVENT_CHART_HEIGHT = 220;
+const EVENT_CHART_PADDING = 28;
+const EVENT_GROUP_MS = 10 * 1000;
+
+const EVENT_METRICS: Array<{ key: EventMetric; label: string }> = [
+  { key: "primary", label: "Prim" },
+  { key: "secondary", label: "Sek" },
+  { key: "total", label: "Ges" },
+  { key: "cp-gained", label: "CP+" },
+  { key: "cp-spent", label: "CP-" },
+  { key: "turn", label: "Zug weiter" },
+  { key: "round", label: "Runde weiter" }
+];
 
 const buildLinePath = (points: Array<{ x: number; y: number }>): string =>
   points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
@@ -107,8 +117,14 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   const [selectedScore, setSelectedScore] = useState<ScoreSelection | null>(null);
   const [selectedTime, setSelectedTime] = useState<TimeSelection | null>(null);
   const [selectedRoundDuration, setSelectedRoundDuration] = useState<string | null>(null);
-  const [selectedEventCategory, setSelectedEventCategory] = useState<EventCategory>("all");
-  const [selectedEventBucket, setSelectedEventBucket] = useState<number | null>(null);
+  const [selectedEventMetric, setSelectedEventMetric] = useState<EventMetric | "all">("all");
+  const [selectedEventPointId, setSelectedEventPointId] = useState<string | null>(null);
+  const [openCharts, setOpenCharts] = useState<Record<string, boolean>>({
+    score: true,
+    time: true,
+    events: true,
+    rounds: true
+  });
   const formatScoreValue = (value: number | null) => (value === null ? "-" : value);
   const orderedPlayers =
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
@@ -118,8 +134,14 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     setSelectedScore(null);
     setSelectedTime(null);
     setSelectedRoundDuration(null);
-    setSelectedEventCategory("all");
-    setSelectedEventBucket(null);
+    setSelectedEventMetric("all");
+    setSelectedEventPointId(null);
+    setOpenCharts({
+      score: true,
+      time: true,
+      events: true,
+      rounds: true
+    });
   }, [game.id]);
 
   const roundRows = countedRounds.map((round) => ({
@@ -205,68 +227,92 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     });
   });
 
-  const eventTimelineBuckets = useMemo<EventTimelineBucket[]>(() => {
-    const eventTimestamps = [
+  const eventPlotPoints = useMemo<EventPlotPoint[]>(() => {
+    const allTimestamps = [
       ...game.timeEvents.map((event) => event.createdAt),
       ...game.scoreEvents.map((event) => event.createdAt),
-      ...game.commandPointEvents.map((event) => event.createdAt),
-      ...game.noteEvents.map((event) => event.createdAt)
-    ]
-      .filter(Boolean)
-      .sort((left, right) => left.localeCompare(right));
-
-    if (!eventTimestamps.length) {
-      return [];
-    }
-
-    const startTime = new Date(game.startedAt ?? eventTimestamps[0] ?? game.createdAt).getTime();
-    const eventTimes = eventTimestamps.map((timestamp) => ({
-      timestamp,
-      elapsedMs: Math.max(new Date(timestamp).getTime() - startTime, 0)
-    }));
-    const maxElapsedMs = Math.max(...eventTimes.map((entry) => entry.elapsedMs), 0);
-    const bucketCount = Math.max(1, Math.ceil((maxElapsedMs + 1) / EVENT_BUCKET_MS));
-    const buckets = Array.from({ length: bucketCount }, (_, index) => ({
-      index,
-      startMs: index * EVENT_BUCKET_MS,
-      endMs: Math.min((index + 1) * EVENT_BUCKET_MS, Math.max(maxElapsedMs, EVENT_BUCKET_MS)),
-      counts: {
-        time: 0,
-        score: 0,
-        cp: 0,
-        note: 0
-      },
-      count: 0,
-      timestamps: [] as string[]
-    }));
-
-    const pushEvent = (timestamp: string, kind: EventCategory) => {
-      const elapsedMs = Math.max(new Date(timestamp).getTime() - startTime, 0);
-      const bucketIndex = Math.min(Math.floor(elapsedMs / EVENT_BUCKET_MS), buckets.length - 1);
-      const bucket = buckets[bucketIndex];
-      if (!bucket) {
+      ...game.commandPointEvents.map((event) => event.createdAt)
+    ].sort((left, right) => left.localeCompare(right));
+    const startTime = new Date(game.startedAt ?? allTimestamps[0] ?? game.createdAt).getTime();
+    const points: EventPlotPoint[] = [];
+    const pushPoint = (
+      playerId: PlayerId | undefined,
+      metric: EventMetric,
+      createdAt: string,
+      value: number,
+      label: string
+    ) => {
+      if (!playerId || !orderedPlayers.some((player) => player.id === playerId)) {
         return;
       }
-      bucket.count += 1;
-      if (kind === "time") {
-        bucket.counts.time += 1;
-      } else if (kind === "score") {
-        bucket.counts.score += 1;
-      } else if (kind === "cp") {
-        bucket.counts.cp += 1;
-      } else {
-        bucket.counts.note += 1;
-      }
-      bucket.timestamps.push(timestamp);
+
+      points.push({
+        id: `${metric}-${playerId}-${createdAt}-${points.length}`,
+        playerId,
+        metric,
+        label,
+        createdAt,
+        elapsedMs: Math.max(new Date(createdAt).getTime() - startTime, 0),
+        value: Math.abs(value) || 1,
+        count: 1
+      });
     };
 
-    eventTimes.forEach(({ timestamp }) => pushEvent(timestamp, "time"));
-    game.scoreEvents.forEach((event) => pushEvent(event.createdAt, "score"));
-    game.commandPointEvents.forEach((event) => pushEvent(event.createdAt, "cp"));
-    game.noteEvents.forEach((event) => pushEvent(event.createdAt, "note"));
+    game.scoreEvents.forEach((event) => {
+      const metric =
+        event.scoreType === "primary"
+          ? "primary"
+          : event.scoreType === "secondary"
+            ? "secondary"
+            : "total";
+      pushPoint(event.playerId, metric, event.createdAt, event.value, `${event.value > 0 ? "+" : ""}${event.value}`);
+    });
 
-    return buckets;
-  }, [game]);
+    game.commandPointEvents.forEach((event) => {
+      pushPoint(
+        event.playerId,
+        event.cpType === "gained" ? "cp-gained" : "cp-spent",
+        event.createdAt,
+        event.value,
+        `${event.cpType === "gained" ? "+" : "-"}${event.value}`
+      );
+    });
+
+    game.timeEvents.forEach((event) => {
+      if (event.action === "turn-start") {
+        pushPoint(event.playerId, "turn", event.createdAt, 1, "Zug");
+      } else if (event.action === "round-start") {
+        pushPoint(event.playerId ?? game.startingPlayerId, "round", event.createdAt, 1, "Runde");
+      }
+    });
+
+    return points
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      .reduce<EventPlotPoint[]>((groups, point) => {
+        const previous = [...groups]
+          .reverse()
+          .find(
+            (group) =>
+              group.playerId === point.playerId &&
+              group.metric === point.metric &&
+              point.elapsedMs - group.elapsedMs <= EVENT_GROUP_MS
+          );
+        if (
+          previous
+        ) {
+          previous.value += point.value;
+          previous.count += point.count;
+          previous.label =
+            previous.metric === "turn" || previous.metric === "round"
+              ? `${EVENT_METRICS.find((metric) => metric.key === previous.metric)?.label ?? "Event"} ${previous.count}x`
+              : `${previous.metric === "cp-spent" ? "-" : "+"}${previous.value} (${previous.count})`;
+          return groups;
+        }
+
+        groups.push({ ...point });
+        return groups;
+      }, []);
+  }, [game, orderedPlayers]);
 
   const getPlayerName = (playerId: string): string =>
     orderedPlayers.find((player) => player.id === playerId)?.name ?? "Spieler";
@@ -292,13 +338,12 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     return null;
   })();
 
-  const eventSelectionLabel =
-    selectedEventBucket !== null
-      ? `${formatBucketLabel(
-          eventTimelineBuckets[selectedEventBucket]?.startMs ?? 0,
-          eventTimelineBuckets[selectedEventBucket]?.endMs ?? 0
-        )} Ereignisse`
-      : null;
+  const selectedEventPoint = selectedEventPointId
+    ? eventPlotPoints.find((point) => point.id === selectedEventPointId)
+    : undefined;
+  const eventSelectionLabel = selectedEventPoint
+    ? `${getPlayerName(selectedEventPoint.playerId)} ${selectedEventPoint.label}`
+    : null;
 
   const isSameScoreSelection = (left: ScoreSelection | null, right: ScoreSelection) => {
     if (!left || left.kind !== right.kind || left.playerId !== right.playerId) {
@@ -344,32 +389,58 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     setSelectedTime((current) => (isSameTimeSelection(current, next) ? null : next));
   };
 
-  const toggleEventCategory = (category: EventCategory) => {
-    setSelectedEventCategory((current) => {
-      if (current === category) {
-        setSelectedEventBucket(null);
-        return "all";
-      }
-
-      setSelectedEventBucket(null);
-      return category;
+  const toggleEventMetric = (metric: EventMetric | "all") => {
+    setSelectedEventMetric((current) => {
+      setSelectedEventPointId(null);
+      return current === metric ? "all" : metric;
     });
   };
 
-  const toggleEventBucket = (bucketIndex: number) => {
-    setSelectedEventBucket((current) => (current === bucketIndex ? null : bucketIndex));
+  const toggleEventPoint = (pointId: string) => {
+    setSelectedEventPointId((current) => (current === pointId ? null : pointId));
+  };
+
+  const toggleChartOpen = (chartKey: string) => {
+    setOpenCharts((current) => ({
+      ...current,
+      [chartKey]: current[chartKey] === false
+    }));
+  };
+
+  const renderChartSection = (
+    chartKey: string,
+    title: string,
+    summary: string,
+    content: ReactNode
+  ) => {
+    const isOpen = openCharts[chartKey] !== false;
+
+    return (
+      <article className="card stack overview-collapsible-chart">
+        <button
+          type="button"
+          className="overview-collapsible-chart__toggle"
+          onClick={() => toggleChartOpen(chartKey)}
+          aria-expanded={isOpen}
+        >
+          <span>{title}</span>
+          <strong>{summary}</strong>
+          <span aria-hidden="true">{isOpen ? "Zu" : "Auf"}</span>
+        </button>
+        {isOpen ? content : null}
+      </article>
+    );
   };
 
   const renderRoundScoreChart = () => {
     if (!roundScoreRows.length || (!hasDetailedScoreData(game) && !hasLegacyRoundTotalScoreData(game))) {
-      return (
-        <article className="card stack">
-          <div className="list-row">
-            <h2>Score-Verlauf</h2>
-            <span>0 Runden</span>
-          </div>
+      return renderChartSection(
+        "score",
+        "Score-Verlauf",
+        "0 Runden",
+        <>
           <p className="muted-copy">Noch keine abgeschlossenen Runden vorhanden.</p>
-        </article>
+        </>
       );
     }
 
@@ -455,12 +526,11 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
       };
     });
 
-    return (
-      <article className="card stack">
-        <div className="list-row">
-          <h2>Score-Verlauf</h2>
-          <span>{scoreSelectionLabel ?? `${roundScoreRows.length} Runden`}</span>
-        </div>
+    return renderChartSection(
+      "score",
+      "Score-Verlauf",
+      scoreSelectionLabel ?? `${roundScoreRows.length} Runden`,
+      <>
         <section className="overview-chart-card">
           <div className="overview-chart-card__head">
             <strong>{showDetailedBars ? "Runden-Score + Gesamt" : "Runden-Gesamt + Gesamt"}</strong>
@@ -788,29 +858,27 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             })}
           </div>
         </section>
-      </article>
+      </>
     );
   };
 
   const renderRoundTimeChart = () => {
     if (!roundTimeRows.length) {
-      return (
-        <article className="card stack">
-          <div className="list-row">
-            <h2>Zeit-Verlauf</h2>
-            <span>0 Runden</span>
-          </div>
+      return renderChartSection(
+        "time",
+        "Zeit-Verlauf",
+        "0 Runden",
+        <>
           <p className="muted-copy">Noch keine abgeschlossenen Runden vorhanden.</p>
-        </article>
+        </>
       );
     }
 
-    return (
-      <article className="card stack">
-        <div className="list-row">
-          <h2>Zeit-Verlauf</h2>
-          <span>{timeSelectionLabel ?? `${roundTimeRows.length} Runden`}</span>
-        </div>
+    return renderChartSection(
+      "time",
+      "Zeit-Verlauf",
+      timeSelectionLabel ?? `${roundTimeRows.length} Runden`,
+      <>
         <section className="overview-chart-card">
           <div className="overview-chart-card__head">
             <strong>Runden-Zeit kumuliert</strong>
@@ -991,7 +1059,174 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             );
           })()}
         </section>
-      </article>
+      </>
+    );
+  };
+
+  const eventTimelineBuckets: Array<{
+    index: number;
+    startMs: number;
+    endMs: number;
+    counts: Record<string, number>;
+    count: number;
+  }> = [];
+  const selectedEventCategory: any = "all";
+  const selectedEventBucket: number | null = null;
+  const toggleEventCategory = (_category: any) => undefined;
+  const toggleEventBucket = (_bucketIndex: number) => undefined;
+
+  const renderEventScatterChart = () => {
+    if (!eventPlotPoints.length) {
+      return renderChartSection(
+        "events",
+        "Event-Verlauf",
+        "0 Events",
+        <p className="muted-copy">Noch keine Zeit- oder Punkteereignisse vorhanden.</p>
+      );
+    }
+
+    const visiblePoints = eventPlotPoints.filter(
+      (point) => selectedEventMetric === "all" || point.metric === selectedEventMetric
+    );
+    const maxElapsedMs = Math.max(...eventPlotPoints.map((point) => point.elapsedMs), 1);
+    const maxValue = Math.max(...eventPlotPoints.map((point) => point.value), 1);
+    const plotWidth = EVENT_CHART_WIDTH - EVENT_CHART_PADDING * 2;
+    const plotHeight = EVENT_CHART_HEIGHT - EVENT_CHART_PADDING * 2;
+    const yStep = plotHeight / Math.max(EVENT_METRICS.length - 1, 1);
+    const getY = (metric: EventMetric) =>
+      EVENT_CHART_PADDING + EVENT_METRICS.findIndex((entry) => entry.key === metric) * yStep;
+    const getX = (elapsedMs: number) => EVENT_CHART_PADDING + (elapsedMs / maxElapsedMs) * plotWidth;
+    const pointRadius = (value: number) => 4 + (value / maxValue) * 8;
+    const metricSummary =
+      selectedEventMetric === "all"
+        ? `${visiblePoints.length} Events`
+        : `${EVENT_METRICS.find((metric) => metric.key === selectedEventMetric)?.label ?? "Events"} ${visiblePoints.length}`;
+
+    return renderChartSection(
+      "events",
+      "Event-Verlauf",
+      eventSelectionLabel ?? metricSummary,
+      <section className="overview-chart-card">
+        <div className="overview-chart-card__head">
+          <strong>x: time, y: events</strong>
+          <div className="overview-chart-legend overview-chart-legend--events">
+            <button
+              type="button"
+              className={`overview-chart-legend__item${selectedEventMetric === "all" ? " is-active" : ""}`}
+              onClick={() => toggleEventMetric("all")}
+            >
+              Alle {eventPlotPoints.length}
+            </button>
+            {EVENT_METRICS.map((metric) => (
+              <button
+                key={metric.key}
+                type="button"
+                className={`overview-chart-legend__item is-event-${metric.key}${selectedEventMetric === metric.key ? " is-active" : ""}`}
+                onClick={() => toggleEventMetric(metric.key)}
+              >
+                {metric.label} {eventPlotPoints.filter((point) => point.metric === metric.key).length}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="overview-event-chart-grid">
+          {orderedPlayers.map((player, playerIndex) => {
+            const playerPoints = visiblePoints.filter((point) => point.playerId === player.id);
+
+            return (
+              <div key={player.id} className="overview-event-chart">
+                <div className="overview-event-chart__title">
+                  <strong>{player.name}</strong>
+                  <span>{playerPoints.length} Events</span>
+                </div>
+                <svg
+                  viewBox={`0 0 ${EVENT_CHART_WIDTH} ${EVENT_CHART_HEIGHT}`}
+                  className="overview-chart overview-chart--interactive overview-chart--events"
+                  role="img"
+                  aria-label={`Event-Verlauf ${player.name}`}
+                >
+                  {EVENT_METRICS.map((metric) => {
+                    const y = getY(metric.key);
+                    return (
+                      <g key={metric.key}>
+                        <line
+                          x1={EVENT_CHART_PADDING}
+                          y1={y}
+                          x2={EVENT_CHART_WIDTH - EVENT_CHART_PADDING}
+                          y2={y}
+                          className="overview-chart__guide"
+                        />
+                        <text x={EVENT_CHART_PADDING - 6} y={y + 3} textAnchor="end" className="overview-chart__label">
+                          {metric.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  <line
+                    x1={EVENT_CHART_PADDING}
+                    y1={EVENT_CHART_HEIGHT - EVENT_CHART_PADDING}
+                    x2={EVENT_CHART_WIDTH - EVENT_CHART_PADDING}
+                    y2={EVENT_CHART_HEIGHT - EVENT_CHART_PADDING}
+                    className="overview-chart__axis"
+                  />
+                  <line
+                    x1={EVENT_CHART_PADDING}
+                    y1={EVENT_CHART_PADDING}
+                    x2={EVENT_CHART_PADDING}
+                    y2={EVENT_CHART_HEIGHT - EVENT_CHART_PADDING}
+                    className="overview-chart__axis"
+                  />
+                  {[0, 0.5, 1].map((marker) => (
+                    <text
+                      key={marker}
+                      x={EVENT_CHART_PADDING + marker * plotWidth}
+                      y={EVENT_CHART_HEIGHT - 7}
+                      textAnchor="middle"
+                      className="overview-chart__scale"
+                    >
+                      {Math.round((marker * maxElapsedMs) / 60000)}
+                    </text>
+                  ))}
+                  {playerPoints.map((point) => {
+                    const isActive = selectedEventPointId === point.id;
+                    const isDimmed = Boolean(selectedEventPointId && !isActive);
+
+                    return (
+                      <g key={point.id} className={`overview-chart__point-group${isActive ? " is-active" : ""}`}>
+                        <circle
+                          cx={getX(point.elapsedMs)}
+                          cy={getY(point.metric)}
+                          r={pointRadius(point.value)}
+                          className={`overview-chart__point overview-chart__point--event is-event-${point.metric} is-player-${playerIndex + 1}${
+                            isActive ? " is-active" : ""
+                          }${isDimmed ? " is-dimmed" : ""}`}
+                          onClick={() => toggleEventPoint(point.id)}
+                        />
+                        {isActive ? (
+                          <text
+                            x={Math.min(getX(point.elapsedMs) + 10, EVENT_CHART_WIDTH - EVENT_CHART_PADDING)}
+                            y={getY(point.metric) - 8}
+                            className="overview-chart__label"
+                          >
+                            {point.label}
+                          </text>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            );
+          })}
+        </div>
+        <div className="overview-chart-card__totals">
+          <div className="overview-chart-total overview-chart-total--selection">
+            <span className={`overview-chart-total__marker ${selectedEventPoint ? `is-event-${selectedEventPoint.metric}` : "is-warning"}`} />
+            <span>{selectedEventPoint ? getPlayerName(selectedEventPoint.playerId) : "Auswahl"}</span>
+            <strong>{selectedEventPoint ? selectedEventPoint.label : metricSummary}</strong>
+          </div>
+        </div>
+      </section>
     );
   };
 
@@ -1034,9 +1269,17 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
               ? "CP"
               : "Notizen";
     const barWidth = Math.max(8, Math.min(18, (CHART_WIDTH - CHART_PADDING * 2) / Math.max(visibleBuckets.length, 1) - 2));
+    const selectedRound = undefined as { label: string; durationMs: number } | undefined;
 
-    return (
-      <article className="card stack">
+    return renderChartSection(
+      "rounds",
+      "Rundenzeiten",
+      selectedRound ? `${selectedRound.label} - ${formatDuration(selectedRound.durationMs)}` : `${roundRows.length} Runden`,
+      <>
+        <div hidden>
+        </div>
+        <div hidden>
+        </div>
         <div className="list-row">
           <h2>Event-Verlauf</h2>
           <span>{eventSelectionLabel ?? `${totalCount} Events`}</span>
@@ -1185,17 +1428,19 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             ) : null}
           </div>
         </section>
-      </article>
+      </>
     );
   };
 
   const renderRoundDurationChart = () => {
     const selectedRound = selectedRoundDuration !== null ? roundRows.find((round) => round.id === selectedRoundDuration) : undefined;
 
-    return (
-      <article className="card stack">
-        <div className="list-row">
-          <h2>Rundenzeiten</h2>
+    return renderChartSection(
+      "rounds",
+      "Rundenzeiten",
+      selectedRound ? `${selectedRound.label} - ${formatDuration(selectedRound.durationMs)}` : `${roundRows.length} Runden`,
+      <>
+        <div hidden>
           <span>{selectedRound ? `${selectedRound.label} · ${formatDuration(selectedRound.durationMs)}` : `${roundRows.length} Runden`}</span>
         </div>
         <div className="overview-bar-list">
@@ -1219,7 +1464,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             </button>
           ))}
         </div>
-      </article>
+      </>
     );
   };
 
@@ -1274,29 +1519,31 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
                 {player.id === game.startingPlayerId ? "Start" : "Second"}
               </span>
             </div>
-            <div className="overview-stat-line">
-              <span>Prim</span>
-              <strong>{formatScoreValue(getPlayerComparablePrimaryScore(game, player.id))}</strong>
-            </div>
-            <div className="overview-stat-line">
-              <span>Sek</span>
-              <strong>{formatScoreValue(getPlayerComparableSecondaryScore(game, player.id))}</strong>
-            </div>
-            <div className="overview-stat-line">
-              <span>Ges</span>
-              <strong>{formatScoreValue(getPlayerComparableTotalScore(game, player.id))}</strong>
-            </div>
-            <div className="overview-stat-line">
-              <span>Zeit</span>
-              <strong>{formatDuration(getPlayerTurnDurationTotalMs(game, player.id))}</strong>
-            </div>
-            <div className="overview-stat-line">
-              <span>CP + / -</span>
-              <strong>
-                {hasComparableCommandPointData(game, player.id)
-                  ? `${getPlayerCommandPointsGained(game, player.id)} / ${getPlayerCommandPointsSpent(game, player.id)}`
-                  : "-"}
-              </strong>
+            <div className="overview-player-card__stats">
+              <div className="overview-player-stat overview-player-stat--score">
+                <span>Prim</span>
+                <strong>{formatScoreValue(getPlayerComparablePrimaryScore(game, player.id))}</strong>
+              </div>
+              <div className="overview-player-stat overview-player-stat--score">
+                <span>Sek</span>
+                <strong>{formatScoreValue(getPlayerComparableSecondaryScore(game, player.id))}</strong>
+              </div>
+              <div className="overview-player-stat overview-player-stat--score overview-player-stat--total">
+                <span>Ges</span>
+                <strong>{formatScoreValue(getPlayerComparableTotalScore(game, player.id))}</strong>
+              </div>
+              <div className="overview-player-stat">
+                <span>Zeit</span>
+                <strong>{formatDuration(getPlayerTurnDurationTotalMs(game, player.id))}</strong>
+              </div>
+              <div className="overview-player-stat">
+                <span>CP + / -</span>
+                <strong>
+                  {hasComparableCommandPointData(game, player.id)
+                    ? `${getPlayerCommandPointsGained(game, player.id)} / ${getPlayerCommandPointsSpent(game, player.id)}`
+                    : "-"}
+                </strong>
+              </div>
             </div>
           </article>
         ))}
@@ -1304,7 +1551,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
 
       {renderRoundScoreChart()}
       {renderRoundTimeChart()}
-      {renderEventTimelineChart()}
+      {renderEventScatterChart()}
       {renderRoundDurationChart()}
     </section>
   );
