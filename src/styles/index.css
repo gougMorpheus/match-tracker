@@ -885,8 +885,16 @@ textarea {
 }
 
 .overview-summary-grid--compact {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 0.38rem;
+}
+
+.overview-summary-grid--compact > :nth-child(-n + 4) {
+  grid-column: span 3;
+}
+
+.overview-summary-grid--compact > :nth-child(n + 5) {
+  grid-column: span 4;
 }
 
 .overview-summary-grid div,
