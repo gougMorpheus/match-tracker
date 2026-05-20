@@ -169,6 +169,7 @@ const syncDerivedGameState = (game) => {
         ...sortedTimeEvents.map((event) => event.createdAt)
     ].sort((left, right) => left.localeCompare(right));
     const startedAt = sortedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
+        sortedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
         sortedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
         (hasTimeEvents ? undefined : game.startedAt);
     const endedAt = [...sortedTimeEvents]
@@ -179,6 +180,7 @@ const syncDerivedGameState = (game) => {
         ...game,
         updatedAt: timestamps[timestamps.length - 1] ?? game.createdAt,
         status: endedAt ? "completed" : "active",
+        finishReason: endedAt ? game.finishReason ?? "completed" : undefined,
         scoreDetailLevel: game.scoreDetailLevel ?? "full",
         players: syncPlayers(game.players, game.gamePoints),
         rounds,
@@ -224,6 +226,7 @@ const createLocalGame = (input) => {
         createdAt,
         updatedAt: createdAt,
         status: "active",
+        finishReason: undefined,
         scoreDetailLevel: "full",
         gamePoints: input.gamePoints,
         scheduledDate: input.scheduledDate,
@@ -241,12 +244,20 @@ const createLocalGame = (input) => {
         commandPointEvents: [],
         noteEvents: [],
         timerCorrections: createEmptyTimerCorrections(),
+        autoCommandPointOn: true,
+        autoCommandPointAwards: {},
         legacyScoreTotals: {},
         timeEvents: [
             {
                 id: (0, id_1.createUuid)(),
                 type: "time",
-                action: "session-start",
+                action: "game-start",
+                createdAt
+            },
+            {
+                id: (0, id_1.createUuid)(),
+                type: "time",
+                action: "setup-start",
                 createdAt
             }
         ]
@@ -391,6 +402,8 @@ const updateLocalEvent = (game, eventId, patch) => {
 exports.updateLocalEvent = updateLocalEvent;
 const overlayLocalGameMetadata = (baseGame, localGame) => (0, exports.syncDerivedGameState)({
     ...baseGame,
+    autoCommandPointOn: localGame.autoCommandPointOn,
+    autoCommandPointAwards: localGame.autoCommandPointAwards,
     gamePoints: localGame.gamePoints,
     scheduledDate: localGame.scheduledDate,
     scheduledTime: localGame.scheduledTime,
@@ -471,6 +484,8 @@ const mapPersistedGame = (value) => {
     return (0, exports.syncDerivedGameState)({
         ...rawGame,
         id: gameId,
+        autoCommandPointOn: rawGame.autoCommandPointOn ?? true,
+        autoCommandPointAwards: rawGame.autoCommandPointAwards ?? {},
         defenderPlayerId: mapPlayerId(rawGame.defenderPlayerId) ?? playerOneId,
         startingPlayerId: mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
         currentPlayerId: mapPlayerId(rawGame.currentPlayerId) ?? playerOneId,

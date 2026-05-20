@@ -1,10 +1,12 @@
 const { runGameCalculationsTests } = require("./gameCalculations.test.cjs");
 const { runGameSecurityTests } = require("./gameSecurity.test.cjs");
+const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 
 const suites = [
   ["gameCalculations", runGameCalculationsTests],
   ["gameSecurity", runGameSecurityTests],
+  ["localSync", runLocalSyncTests],
   ["timerFocus", runTimerFocusTests]
 ];
 

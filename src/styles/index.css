@@ -157,6 +157,9 @@ textarea {
 .sync-indicator {
   margin-left: auto;
   margin-right: 3.5rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: var(--muted);
   font-size: 0.62rem;
   line-height: 1;
@@ -169,6 +172,11 @@ textarea {
 
 .sync-indicator--syncing {
   color: var(--accent);
+}
+
+.sync-indicator--pending,
+.sync-indicator--offline {
+  color: #fbbf24;
 }
 
 .sync-indicator--error {

@@ -31,15 +31,22 @@ export const Layout = ({
   headerClassName,
   children
 }: LayoutProps) => {
-  const { syncStatus, lastSyncAt } = useGameStore();
-  const syncLabel =
-    syncStatus === "syncing"
-      ? "Sync laeuft"
-      : lastSyncAt
-        ? `Sync ${formatSyncStamp(lastSyncAt)}`
-        : syncStatus === "error"
-          ? "Sync fehlgeschlagen"
-          : "Noch kein Sync";
+  const { syncStatus, lastSyncAt, pendingSyncCount, retrySync } = useGameStore();
+  const syncLabel = (() => {
+    if (syncStatus === "syncing") {
+      return "Sync laeuft";
+    }
+    if (syncStatus === "offline") {
+      return "Offline";
+    }
+    if (syncStatus === "pending") {
+      return `${pendingSyncCount} ungesynct`;
+    }
+    if (syncStatus === "error") {
+      return "Sync Fehler";
+    }
+    return lastSyncAt ? `Sync ${formatSyncStamp(lastSyncAt)}` : "Noch kein Sync";
+  })();
 
   return (
     <div className={`app-shell ${stickyHeader ? "app-shell--sticky-header" : ""}`}>
@@ -52,7 +59,14 @@ export const Layout = ({
               </button>
             ) : null}
             <p className="eyebrow">40K Match-Tracker</p>
-            <span className={`sync-indicator sync-indicator--${syncStatus}`}>{syncLabel}</span>
+            <button
+              type="button"
+              className={`sync-indicator sync-indicator--${syncStatus}`}
+              onClick={() => void retrySync()}
+              title="Sync erneut versuchen"
+            >
+              {syncLabel}
+            </button>
           </div>
           <div className="header-title-row">
             <h1>{title}</h1>

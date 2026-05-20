@@ -109,6 +109,70 @@ export const saveSyncQueue = (queue: SyncQueueItem[]): void => {
   window.localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
 };
 
+export const enqueueSyncQueueItem = (
+  queue: SyncQueueItem[],
+  item: SyncQueueItem
+): SyncQueueItem[] => {
+  if (item.type === "delete-game") {
+    return [...queue.filter((candidate) => candidate.gameId !== item.gameId), item];
+  }
+
+  if (item.type === "upsert-game") {
+    const filteredQueue = queue.filter(
+      (candidate) => !(candidate.type === "delete-game" && candidate.gameId === item.gameId)
+    );
+
+    return filteredQueue.some(
+      (candidate) => candidate.type === "upsert-game" && candidate.gameId === item.gameId
+    )
+      ? filteredQueue
+      : [...filteredQueue, item];
+  }
+
+  if (item.type === "delete-event") {
+    const filteredQueue = queue.filter(
+      (candidate) =>
+        !(
+          candidate.gameId === item.gameId &&
+          "eventId" in candidate &&
+          candidate.eventId === item.eventId
+        )
+    );
+
+    return filteredQueue.some(
+      (candidate) =>
+        candidate.type === "delete-event" &&
+        candidate.gameId === item.gameId &&
+        candidate.eventId === item.eventId
+    )
+      ? filteredQueue
+      : [...filteredQueue, item];
+  }
+
+  const filteredQueue = queue.filter(
+    (candidate) =>
+      !(
+        candidate.gameId === item.gameId &&
+        candidate.type === "delete-event" &&
+        candidate.eventId === item.eventId
+      )
+  );
+
+  return filteredQueue.some(
+    (candidate) =>
+      candidate.type === "upsert-event" &&
+      candidate.gameId === item.gameId &&
+      candidate.eventId === item.eventId
+  )
+    ? filteredQueue
+    : [...filteredQueue, item];
+};
+
+export const removeSyncQueueItem = (
+  queue: SyncQueueItem[],
+  queueItemId: string
+): SyncQueueItem[] => queue.filter((item) => item.id !== queueItemId);
+
 export const createGameSyncQueueItem = (
   type: "upsert-game" | "delete-game",
   gameId: string,

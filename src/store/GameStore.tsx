@@ -58,10 +58,12 @@ import {
 import {
   createEventSyncQueueItem,
   createGameSyncQueueItem,
+  enqueueSyncQueueItem,
   getSyncErrorMessage,
   isTransientSyncError,
   loadCachedGames,
   loadSyncQueue,
+  removeSyncQueueItem,
   saveCachedGames,
   saveSyncQueue,
   type SyncQueueItem
@@ -89,7 +91,7 @@ interface TimerCorrectionInput {
   }>;
 }
 
-type SyncStatus = "idle" | "syncing" | "success" | "error";
+type SyncStatus = "idle" | "pending" | "syncing" | "success" | "offline" | "error";
 
 interface GameHistoryEntry {
   id: string;
@@ -113,6 +115,8 @@ interface GameStoreValue {
   errorMessage: string | null;
   syncStatus: SyncStatus;
   lastSyncAt: string | null;
+  pendingSyncCount: number;
+  retrySync: () => Promise<void>;
   createGame: (input: CreateGameInput) => Promise<Game>;
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
@@ -163,6 +167,8 @@ const clampNonNegative = (value: number): number => Math.max(value, 0);
 const MAX_ROUNDS = 5;
 const HISTORY_LIMIT = 50;
 const RESUME_SYNC_DELAY_MS = 1200;
+const SYNC_RETRY_BASE_DELAY_MS = 2000;
+const SYNC_RETRY_MAX_DELAY_MS = 60000;
 
 const canAttemptRemoteSync = (): boolean =>
   typeof document === "undefined" ||
@@ -281,6 +287,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
   const resumeSyncTimerRef = useRef<number | null>(null);
+  const retrySyncTimerRef = useRef<number | null>(null);
+  const retryAttemptRef = useRef(0);
   const advanceGameRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
   const rewindLastTurnRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
 
@@ -297,9 +305,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const updateSyncQueue = useCallback((updater: (currentQueue: SyncQueueItem[]) => SyncQueueItem[]) => {
     const nextQueue = updater(queueRef.current);
+    if (nextQueue === queueRef.current) {
+      return;
+    }
     queueRef.current = nextQueue;
     setSyncQueue(nextQueue);
     saveSyncQueue(nextQueue);
+    if (import.meta.env.DEV) {
+      console.debug("[sync-queue]", {
+        length: nextQueue.length
+      });
+    }
   }, []);
 
   const getGame = useCallback(
@@ -368,74 +384,39 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const enqueueGameUpsert = useCallback((gameId: string) => {
     updateSyncQueue((currentQueue) => {
-      const filteredQueue = currentQueue.filter(
-        (item) => !(item.type === "delete-game" && item.gameId === gameId)
-      );
-
-      if (filteredQueue.some((item) => item.type === "upsert-game" && item.gameId === gameId)) {
-        return filteredQueue;
+      const nextQueue = enqueueSyncQueueItem(currentQueue, createGameSyncQueueItem("upsert-game", gameId, getNowIso()));
+      if (import.meta.env.DEV && nextQueue.length === currentQueue.length) {
+        console.debug("[sync-queue] skipped duplicate game upsert", { gameId });
       }
-
-      return [...filteredQueue, createGameSyncQueueItem("upsert-game", gameId, getNowIso())];
+      return nextQueue;
     });
   }, [updateSyncQueue]);
 
   const enqueueGameDelete = useCallback((gameId: string) => {
-    updateSyncQueue((currentQueue) => [
-      ...currentQueue.filter((item) => item.gameId !== gameId),
-      createGameSyncQueueItem("delete-game", gameId, getNowIso())
-    ]);
+    updateSyncQueue((currentQueue) =>
+      enqueueSyncQueueItem(currentQueue, createGameSyncQueueItem("delete-game", gameId, getNowIso()))
+    );
   }, [updateSyncQueue]);
 
   const enqueueEventUpsert = useCallback((gameId: string, eventId: string) => {
     updateSyncQueue((currentQueue) => {
-      const filteredQueue = currentQueue.filter(
-        (item) =>
-          !(
-            item.gameId === gameId &&
-            item.type === "delete-event" &&
-            item.eventId === eventId
-          )
+      const nextQueue = enqueueSyncQueueItem(
+        currentQueue,
+        createEventSyncQueueItem("upsert-event", gameId, eventId, getNowIso())
       );
-
-      if (
-        filteredQueue.some(
-          (item) =>
-            item.gameId === gameId &&
-            item.type === "upsert-event" &&
-            item.eventId === eventId
-        )
-      ) {
-        return filteredQueue;
+      if (import.meta.env.DEV && nextQueue.length === currentQueue.length) {
+        console.debug("[sync-queue] skipped duplicate event upsert", { gameId, eventId });
       }
-
-      return [...filteredQueue, createEventSyncQueueItem("upsert-event", gameId, eventId, getNowIso())];
+      return nextQueue;
     });
   }, [updateSyncQueue]);
 
   const enqueueEventDelete = useCallback((gameId: string, eventId: string) => {
     updateSyncQueue((currentQueue) => {
-      const filteredQueue = currentQueue.filter(
-        (item) =>
-          !(
-            item.gameId === gameId &&
-            item.type === "upsert-event" &&
-            item.eventId === eventId
-          )
+      return enqueueSyncQueueItem(
+        currentQueue,
+        createEventSyncQueueItem("delete-event", gameId, eventId, getNowIso())
       );
-
-      if (
-        filteredQueue.some(
-          (item) =>
-            item.gameId === gameId &&
-            item.type === "delete-event" &&
-            item.eventId === eventId
-        )
-      ) {
-        return filteredQueue;
-      }
-
-      return [...filteredQueue, createEventSyncQueueItem("delete-event", gameId, eventId, getNowIso())];
     });
   }, [updateSyncQueue]);
 
@@ -537,7 +518,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const removeQueueItem = useCallback((queueItemId: string) => {
-    updateSyncQueue((currentQueue) => currentQueue.filter((item) => item.id !== queueItemId));
+    updateSyncQueue((currentQueue) => removeSyncQueueItem(currentQueue, queueItemId));
   }, [updateSyncQueue]);
 
   const normalizeEventPatch = useCallback(
@@ -593,8 +574,42 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     []
   );
 
+  const clearRetryTimer = useCallback(() => {
+    if (retrySyncTimerRef.current) {
+      window.clearTimeout(retrySyncTimerRef.current);
+      retrySyncTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleSyncRetry = useCallback(() => {
+    if (!queueRef.current.length || !canAttemptRemoteSync()) {
+      return;
+    }
+
+    clearRetryTimer();
+    const delay = Math.min(
+      SYNC_RETRY_BASE_DELAY_MS * 2 ** retryAttemptRef.current,
+      SYNC_RETRY_MAX_DELAY_MS
+    );
+    retryAttemptRef.current += 1;
+
+    if (import.meta.env.DEV) {
+      console.debug("[sync-retry] scheduled", {
+        delayMs: delay,
+        attempt: retryAttemptRef.current,
+        queueLength: queueRef.current.length
+      });
+    }
+
+    retrySyncTimerRef.current = window.setTimeout(() => {
+      retrySyncTimerRef.current = null;
+      void flushSyncQueue();
+    }, delay);
+  }, [clearRetryTimer]);
+
   const pullRemoteGames = useCallback(async () => {
     if (!canAttemptRemoteSync()) {
+      setSyncStatus(queueRef.current.length ? "offline" : "idle");
       return false;
     }
 
@@ -642,6 +657,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const flushSyncQueue = useCallback(async (): Promise<boolean> => {
     if (!canAttemptRemoteSync()) {
+      setSyncStatus("offline");
       return false;
     }
 
@@ -658,6 +674,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
 
       setSyncStatus("syncing");
+      if (import.meta.env.DEV) {
+        console.debug("[sync-queue] flush start", {
+          queueLength: queueRef.current.length
+        });
+      }
 
       while (queueRef.current.length) {
         const nextItem = queueRef.current[0];
@@ -666,6 +687,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         try {
+          if (import.meta.env.DEV) {
+            console.debug("[sync-queue] attempt", {
+              type: nextItem.type,
+              gameId: nextItem.gameId,
+              eventId: "eventId" in nextItem ? nextItem.eventId : undefined,
+              queueLength: queueRef.current.length
+            });
+          }
+
           if (nextItem.type === "delete-game") {
             await gamesRepository.deleteGame(nextItem.gameId);
             removeQueueItem(nextItem.id);
@@ -699,16 +729,25 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           await gamesRepository.upsertEvent(eventPayload);
           removeQueueItem(nextItem.id);
         } catch (error) {
+          if (import.meta.env.DEV) {
+            console.debug("[sync-queue] failure", {
+              message: getErrorMessage(error),
+              queueLength: queueRef.current.length
+            });
+          }
           if (!isTransientSyncError(error)) {
             setErrorMessage(getErrorMessage(error));
           }
           setSyncStatus("error");
+          scheduleSyncRetry();
           return false;
         }
       }
 
       const pulled = await pullRemoteGames();
       if (pulled) {
+        retryAttemptRef.current = 0;
+        clearRetryTimer();
         setLastSyncAt(getNowIso());
         setSyncStatus("success");
       }
@@ -718,7 +757,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     });
 
     return flushPromiseRef.current;
-  }, [pullRemoteGames, removeQueueItem]);
+  }, [clearRetryTimer, pullRemoteGames, removeQueueItem, scheduleSyncRetry]);
 
   const refreshGames = useCallback(async () => {
     if (!canAttemptRemoteSync()) {
@@ -765,14 +804,24 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     if (!syncQueue.length) {
+      clearRetryTimer();
       return;
     }
 
+    if (!canAttemptRemoteSync()) {
+      setSyncStatus("offline");
+      return;
+    }
+
+    setSyncStatus((currentStatus) =>
+      currentStatus === "syncing" || currentStatus === "error" ? currentStatus : "pending"
+    );
     void flushSyncQueue();
-  }, [flushSyncQueue, syncQueue.length]);
+  }, [clearRetryTimer, flushSyncQueue, syncQueue.length]);
 
   useEffect(() => {
     const handleOnline = () => {
+      retryAttemptRef.current = 0;
       void refreshGames();
     };
     const handleOffline = () => {
@@ -852,9 +901,23 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       if (resumeSyncTimerRef.current) {
         window.clearTimeout(resumeSyncTimerRef.current);
       }
+      if (retrySyncTimerRef.current) {
+        window.clearTimeout(retrySyncTimerRef.current);
+      }
     },
     []
   );
+
+  const retrySync = useCallback(async () => {
+    retryAttemptRef.current = 0;
+    clearRetryTimer();
+    if (!queueRef.current.length) {
+      await refreshGames();
+      return;
+    }
+
+    await flushSyncQueue();
+  }, [clearRetryTimer, flushSyncQueue, refreshGames]);
 
   const runMutation = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
     setIsMutating(true);
@@ -2207,6 +2270,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       errorMessage,
       syncStatus,
       lastSyncAt,
+      pendingSyncCount: syncQueue.length,
+      retrySync,
       createGame,
       getGame,
       refreshGames,
@@ -2256,6 +2321,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       lastSyncAt,
       pauseActiveTimer,
       endTimeout,
+      retrySync,
       refreshGames,
       setAutoCommandPointEnabled,
       setTimerCorrections,
