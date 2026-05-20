@@ -432,6 +432,137 @@ const stripOptionalScenarioFields = <
   return rest;
 };
 
+const normalizeJsonString = (value: string | null | undefined): unknown => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+};
+
+const normalizeComparableValue = (value: unknown): unknown => {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(normalizeComparableValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, normalizeComparableValue(entryValue)])
+    );
+  }
+
+  return value ?? null;
+};
+
+const getComparableSignature = (value: Record<string, unknown>): string =>
+  JSON.stringify(normalizeComparableValue(value));
+
+const getComparableGamePayload = (
+  payload: CreateSupabaseGamePayload | SupabaseGameRecord
+): Record<string, unknown> => ({
+  started_at: payload.started_at ?? null,
+  ended_at: payload.ended_at ?? null,
+  deleted_at: "deleted_at" in payload ? payload.deleted_at ?? null : null,
+  game_date: payload.game_date ?? null,
+  player1_name: payload.player1_name,
+  player1_army: payload.player1_army,
+  player1_max_points: payload.player1_max_points,
+  player2_name: payload.player2_name,
+  player2_army: payload.player2_army,
+  player2_max_points: payload.player2_max_points,
+  deployment: payload.deployment ?? null,
+  primary_mission: payload.primary_mission ?? null,
+  defender_player: payload.defender_player ?? null,
+  starting_player: payload.starting_player ?? null,
+  winner_player: payload.winner_player ?? null,
+  notes: normalizeJsonString(payload.notes)
+});
+
+const getComparableEventPayload = (
+  payload: CreateSupabaseEventPayload | SupabaseEventRecord
+): Record<string, unknown> => ({
+  game_id: payload.game_id,
+  round_number: payload.round_number ?? null,
+  turn_number: payload.turn_number ?? null,
+  player_slot: payload.player_slot,
+  event_type: payload.event_type,
+  value_number: payload.value_number ?? null,
+  note: payload.note ?? null,
+  occurred_at: payload.occurred_at ?? null
+});
+
+export const getGameSnapshotFingerprint = (game: Game): string =>
+  getComparableSignature(getComparableGamePayload(createSyncedGamePayload(game)));
+
+export const getEventPayloadFingerprint = (payload: CreateSupabaseEventPayload): string =>
+  getComparableSignature(getComparableEventPayload(payload));
+
+const fetchGameRecordById = async (gameId: string): Promise<SupabaseGameRecord | null> => {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("games")
+    .select("*")
+    .eq("id", gameId);
+
+  if (error) {
+    throw new Error(`Spiel konnte nicht fuer Vergleich geladen werden: ${error.message}`);
+  }
+
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  return (rows[0] as SupabaseGameRecord | undefined) ?? null;
+};
+
+const fetchEventRecordById = async (eventId: string): Promise<SupabaseEventRecord | null> => {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", eventId);
+
+  if (error) {
+    throw new Error(`Event konnte nicht fuer Vergleich geladen werden: ${error.message}`);
+  }
+
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  return (rows[0] as SupabaseEventRecord | undefined) ?? null;
+};
+
+const hasRemoteGameSnapshotChanged = async (game: Game): Promise<boolean> => {
+  const existingRecord = await fetchGameRecordById(game.id);
+  if (!existingRecord) {
+    return true;
+  }
+
+  return getComparableSignature(getComparableGamePayload(existingRecord)) !== getGameSnapshotFingerprint(game);
+};
+
+const hasRemoteEventChanged = async (payload: CreateSupabaseEventPayload): Promise<boolean> => {
+  if (!payload.id) {
+    return true;
+  }
+
+  const existingRecord = await fetchEventRecordById(payload.id);
+  if (!existingRecord) {
+    return true;
+  }
+
+  return getComparableSignature(getComparableEventPayload(existingRecord)) !== getEventPayloadFingerprint(payload);
+};
+
 const sortEventRecords = (events: SupabaseEventRecord[]): SupabaseEventRecord[] =>
   [...events].sort((left, right) => {
     const leftRound = left.round_number ?? 0;
@@ -1178,6 +1309,10 @@ export const gamesRepository = {
   },
 
   async upsertGameSnapshot(game: Game): Promise<Game> {
+    if (!(await hasRemoteGameSnapshotChanged(game))) {
+      return game;
+    }
+
     const supabase = getSupabaseClient();
     const upsertPayload = createSyncedGamePayload(game);
     let { data, error } = await supabase
@@ -1207,6 +1342,10 @@ export const gamesRepository = {
   },
 
   async syncGame(game: Game): Promise<Game> {
+    if (!(await hasRemoteGameSnapshotChanged(game))) {
+      return game;
+    }
+
     const supabase = getSupabaseClient();
     const upsertPayload = createSyncedGamePayload(game);
     let { error } = await supabase.from("games").upsert(upsertPayload, {
@@ -1302,6 +1441,14 @@ export const gamesRepository = {
       ...payload,
       occurred_at: payload.occurred_at ?? getNowIso()
     };
+
+    if (!(await hasRemoteEventChanged(upsertPayload))) {
+      const existingRecord = await fetchEventRecordById(upsertPayload.id ?? "");
+      if (existingRecord) {
+        return existingRecord;
+      }
+    }
+
     const { data, error } = await supabase
       .from("events")
       .upsert(upsertPayload, {

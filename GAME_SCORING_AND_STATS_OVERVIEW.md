@@ -81,4 +81,3 @@ Kurzfassung: Ein Zug oder eine Runde wird für die statistische Auswertung nur d
   - Vollspiel ohne `CP gained`
   - Legacy-`total-only`-Spiel
   - `interrupted` / `abandoned` Spiel
-

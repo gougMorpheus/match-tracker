@@ -40,6 +40,21 @@ export interface SupabaseClient<Database = unknown> {
 const encodeFilterValue = (value: string | number): string =>
   typeof value === "number" ? String(value) : `"${String(value).replace(/"/g, '\\"')}"`;
 
+const isDevelopment = (): boolean =>
+  typeof import.meta !== "undefined" && import.meta.env?.DEV === true;
+
+const getRequestSource = (): string => {
+  const stack = new Error().stack;
+  if (!stack) {
+    return "unknown";
+  }
+
+  return stack
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line && !line.includes("supabaseRestClient")) ?? "unknown";
+};
+
 class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | Row>> {
   private method: QueryMethod = "GET";
   private filters: QueryFilter[] = [];
@@ -166,6 +181,15 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
     }
 
     try {
+      if (isDevelopment()) {
+        console.debug("[supabase-request]", {
+          method: this.method,
+          table: this.table,
+          source: getRequestSource(),
+          url: url.toString()
+        });
+      }
+
       const response = await fetch(url.toString(), {
         method: this.method,
         headers,

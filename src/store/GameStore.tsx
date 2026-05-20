@@ -11,6 +11,8 @@ import {
 import { getSupabaseClient, getSupabaseConfigError } from "../lib/supabase";
 import {
   gamesRepository,
+  getEventPayloadFingerprint,
+  getGameSnapshotFingerprint,
   getSyncedEventPayload,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
@@ -293,6 +295,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     saveSyncQueue(syncQueue);
   }, [syncQueue]);
 
+  const updateSyncQueue = useCallback((updater: (currentQueue: SyncQueueItem[]) => SyncQueueItem[]) => {
+    const nextQueue = updater(queueRef.current);
+    queueRef.current = nextQueue;
+    setSyncQueue(nextQueue);
+    saveSyncQueue(nextQueue);
+  }, []);
+
   const getGame = useCallback(
     (gameId: string) => gamesRef.current.find((game) => game.id === gameId),
     []
@@ -341,18 +350,24 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const replaceGame = useCallback((nextGame: Game) => {
     const syncedGame = syncDerivedGameState(nextGame);
-    setGames((currentGames) =>
-      sortGames([syncedGame, ...currentGames.filter((game) => game.id !== syncedGame.id)])
-    );
+    const nextGames = sortGames([syncedGame, ...gamesRef.current.filter((game) => game.id !== syncedGame.id)]);
+    gamesRef.current = nextGames;
+    setGames(nextGames);
+    saveCachedGames(nextGames);
+    syncRememberedPlayerNames(nextGames);
     return syncedGame;
   }, []);
 
   const removeGameLocally = useCallback((gameId: string) => {
-    setGames((currentGames) => currentGames.filter((game) => game.id !== gameId));
+    const nextGames = gamesRef.current.filter((game) => game.id !== gameId);
+    gamesRef.current = nextGames;
+    setGames(nextGames);
+    saveCachedGames(nextGames);
+    syncRememberedPlayerNames(nextGames);
   }, []);
 
   const enqueueGameUpsert = useCallback((gameId: string) => {
-    setSyncQueue((currentQueue) => {
+    updateSyncQueue((currentQueue) => {
       const filteredQueue = currentQueue.filter(
         (item) => !(item.type === "delete-game" && item.gameId === gameId)
       );
@@ -363,17 +378,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
       return [...filteredQueue, createGameSyncQueueItem("upsert-game", gameId, getNowIso())];
     });
-  }, []);
+  }, [updateSyncQueue]);
 
   const enqueueGameDelete = useCallback((gameId: string) => {
-    setSyncQueue((currentQueue) => [
+    updateSyncQueue((currentQueue) => [
       ...currentQueue.filter((item) => item.gameId !== gameId),
       createGameSyncQueueItem("delete-game", gameId, getNowIso())
     ]);
-  }, []);
+  }, [updateSyncQueue]);
 
   const enqueueEventUpsert = useCallback((gameId: string, eventId: string) => {
-    setSyncQueue((currentQueue) => {
+    updateSyncQueue((currentQueue) => {
       const filteredQueue = currentQueue.filter(
         (item) =>
           !(
@@ -396,10 +411,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
       return [...filteredQueue, createEventSyncQueueItem("upsert-event", gameId, eventId, getNowIso())];
     });
-  }, []);
+  }, [updateSyncQueue]);
 
   const enqueueEventDelete = useCallback((gameId: string, eventId: string) => {
-    setSyncQueue((currentQueue) => {
+    updateSyncQueue((currentQueue) => {
       const filteredQueue = currentQueue.filter(
         (item) =>
           !(
@@ -422,11 +437,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
       return [...filteredQueue, createEventSyncQueueItem("delete-event", gameId, eventId, getNowIso())];
     });
-  }, []);
+  }, [updateSyncQueue]);
 
   const enqueueSnapshotSync = useCallback(
     (beforeGame: Game | null, afterGame: Game) => {
-      enqueueGameUpsert(afterGame.id);
+      if (!beforeGame || getGameSnapshotFingerprint(beforeGame) !== getGameSnapshotFingerprint(afterGame)) {
+        enqueueGameUpsert(afterGame.id);
+      }
 
       const beforeEventIds = beforeGame ? getAllEventIds(beforeGame) : new Set<string>();
       const afterEventIds = getAllEventIds(afterGame);
@@ -437,12 +454,38 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
       });
 
+      const beforeEventFingerprints = new Map<string, string>();
+      if (beforeGame) {
+        [
+          ...beforeGame.timeEvents,
+          ...beforeGame.commandPointEvents,
+          ...beforeGame.scoreEvents,
+          ...beforeGame.noteEvents
+        ].forEach((event) => {
+          const payload = getSyncedEventPayload(beforeGame, event.id);
+          if (payload) {
+            beforeEventFingerprints.set(event.id, getEventPayloadFingerprint(payload));
+          }
+        });
+      }
+
       [
         ...afterGame.timeEvents,
         ...afterGame.commandPointEvents,
         ...afterGame.scoreEvents,
         ...afterGame.noteEvents
-      ].forEach((event) => enqueueEventUpsert(afterGame.id, event.id));
+      ].forEach((event) => {
+        const payload = getSyncedEventPayload(afterGame, event.id);
+        if (!payload) {
+          return;
+        }
+
+        if (beforeEventFingerprints.get(event.id) === getEventPayloadFingerprint(payload)) {
+          return;
+        }
+
+        enqueueEventUpsert(afterGame.id, event.id);
+      });
     },
     [enqueueEventDelete, enqueueEventUpsert, enqueueGameUpsert]
   );
@@ -494,8 +537,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const removeQueueItem = useCallback((queueItemId: string) => {
-    setSyncQueue((currentQueue) => currentQueue.filter((item) => item.id !== queueItemId));
-  }, []);
+    updateSyncQueue((currentQueue) => currentQueue.filter((item) => item.id !== queueItemId));
+  }, [updateSyncQueue]);
 
   const normalizeEventPatch = useCallback(
     (game: Game, eventId: string, patch: UpdateSupabaseEventPayload): UpdateSupabaseEventPayload => {
@@ -566,20 +609,22 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       const mergedGames = mergeRemoteWithPending(remoteGames, gamesRef.current, queueRef.current);
       const localGamesById = new Map(gamesRef.current.map((game) => [game.id, game]));
 
-      setGames(
-        mergedGames.map((remoteGame) => {
-          const localGame = localGamesById.get(remoteGame.id);
-          if (!localGame) {
-            return remoteGame;
-          }
-
-          if (isSetupRunning(localGame) || isTurnActive(localGame)) {
-            return localGame;
-          }
-
+      const nextGames = mergedGames.map((remoteGame) => {
+        const localGame = localGamesById.get(remoteGame.id);
+        if (!localGame) {
           return remoteGame;
-        })
-      );
+        }
+
+        if (isSetupRunning(localGame) || isTurnActive(localGame)) {
+          return localGame;
+        }
+
+        return remoteGame;
+      });
+      gamesRef.current = nextGames;
+      setGames(nextGames);
+      saveCachedGames(nextGames);
+      syncRememberedPlayerNames(nextGames);
       if (!queueRef.current.length) {
         setErrorMessage(null);
       }
