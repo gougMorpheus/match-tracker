@@ -35,7 +35,7 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
-import { shouldAskGameAccessMode, shouldOpenGameViewOnly } from "../utils/gameAccessMode";
+import { shouldAskGameAccessMode } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -182,7 +182,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
   const accessMode = getGameAccessMode(gameId);
-  const viewOnlyActive = game ? shouldOpenGameViewOnly(game, accessMode) || isGameViewOnly(game.id) : false;
+  const viewOnlyActive = game ? isGameViewOnly(game.id) : false;
   const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
@@ -369,12 +369,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     },
     [gameId, setGameAccessMode]
   );
-
-  useEffect(() => {
-    if (game?.status === "completed" && accessMode !== "view") {
-      setGameAccessMode(game.id, "view");
-    }
-  }, [accessMode, game, setGameAccessMode]);
 
   useEffect(() => {
     if (roundChangePulse === null) {
