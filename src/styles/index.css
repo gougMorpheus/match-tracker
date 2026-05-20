@@ -638,6 +638,12 @@ textarea {
   color: #fecdd3;
 }
 
+.status-pill--view-only {
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.34);
+  color: #fde68a;
+}
+
 .tracker-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

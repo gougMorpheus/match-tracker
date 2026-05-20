@@ -35,6 +35,7 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
+import { shouldAskGameAccessMode, shouldOpenGameViewOnly } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -146,7 +147,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     undoGameAction,
     redoGameAction,
     getUndoActionLabel,
-    getRedoActionLabel
+    getRedoActionLabel,
+    getGameAccessMode,
+    isGameViewOnly,
+    setGameAccessMode
   } = useGameStore();
   const [, setTick] = useState(0);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -177,6 +181,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
+  const accessMode = getGameAccessMode(gameId);
+  const viewOnlyActive = game ? shouldOpenGameViewOnly(game, accessMode) || isGameViewOnly(game.id) : false;
+  const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode);
   const [gameForm, setGameForm] = useState<CreateGameInput | null>(
     game ? createGameFormState(game) : null
   );
@@ -356,6 +363,19 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
   }, [game]);
 
+  useEffect(
+    () => () => {
+      setGameAccessMode(gameId, null);
+    },
+    [gameId, setGameAccessMode]
+  );
+
+  useEffect(() => {
+    if (game?.status === "completed" && accessMode !== "view") {
+      setGameAccessMode(game.id, "view");
+    }
+  }, [accessMode, game, setGameAccessMode]);
+
   useEffect(() => {
     if (roundChangePulse === null) {
       return;
@@ -402,6 +422,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
   const isClosed = game.status === "completed";
+  const isReadOnly = viewOnlyActive;
+  const writeDisabled = isMutating || isReadOnly;
   const showOverview = isClosed || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
@@ -530,7 +552,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const openGameEditor = async () => {
-    if (isClosed) {
+    if (isClosed || isReadOnly) {
       return;
     }
 
@@ -563,6 +585,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const openEditor = async (event: EditableEventItem) => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (isTimerRunning) {
       await pauseActiveTimer(
         game.id,
@@ -586,6 +612,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const saveEditedEvent = async (event: EditableEventItem) => {
+    if (isReadOnly) {
+      closeEditor();
+      return;
+    }
+
     const parsedValue = event.kind === "note" ? undefined : Math.abs(Number(editingValue));
     const nextValue =
       event.kind === "note"
@@ -605,12 +636,20 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
   const handleGameSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isReadOnly) {
+      return;
+    }
+
     await updateGameDetails(game.id, gameForm);
     setDetailsOpen(false);
     setIsEditingGame(false);
   };
 
   const handleRequestDeleteGame = () => {
+    if (isReadOnly) {
+      return;
+    }
+
     setDeletePasswordOpen(true);
     setDeletePassword("");
     setDeletePasswordError("");
@@ -647,6 +686,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const openTimerAdjustDialog = async () => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (selectedTurn && isTimerRunning) {
       await pauseActiveTimer(game.id, {
         roundNumber: selectedTurn.roundNumber,
@@ -689,6 +732,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const openFinishDialog = () => {
+    if (isReadOnly) {
+      return;
+    }
+
     setFinishDialogOpen(true);
   };
 
@@ -702,6 +749,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleDeleteEvent = async (event: EditableEventItem) => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (!window.confirm("Eintrag wirklich loeschen?")) {
       return;
     }
@@ -713,6 +764,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleAddNote = async () => {
+    if (isReadOnly) {
+      closeNoteDialog();
+      return;
+    }
+
     if (!noteDialogPlayerId || !noteDraft.trim()) {
       return;
     }
@@ -728,6 +784,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleRequestReopenGame = () => {
+    if (isReadOnly) {
+      return;
+    }
+
     setReopenPasswordOpen(true);
     setReopenPassword("");
     setReopenPasswordError("");
@@ -747,7 +807,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleUndoLastEvent = async () => {
-    if (!undoActionLabel) {
+    if (isReadOnly || !undoActionLabel) {
       return;
     }
 
@@ -759,7 +819,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleRedoEvent = async () => {
-    if (!redoActionLabel) {
+    if (isReadOnly || !redoActionLabel) {
       return;
     }
 
@@ -779,7 +839,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleStartTimeout = async () => {
-    if (!selectedTurn || !isTimerRunning) {
+    if (isReadOnly || !selectedTurn || !isTimerRunning) {
       return;
     }
 
@@ -790,7 +850,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleEndTimeout = async () => {
-    if (!selectedTurn || !timeoutActive) {
+    if (isReadOnly || !selectedTurn || !timeoutActive) {
       return;
     }
 
@@ -801,6 +861,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleAdvance = async () => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (isSetupSelected) {
       const firstTurn = allTurns[0];
       if (firstTurn) {
@@ -846,7 +910,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleGoBack = async () => {
-    if (!canGoBack) {
+    if (isReadOnly || !canGoBack) {
       return;
     }
 
@@ -923,6 +987,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   Timer: {timerStatusLabel}
                 </span>
               ) : null}
+              {isReadOnly ? <span className="status-pill status-pill--view-only">View only</span> : null}
             </div>
           </div>
           <FloatingMenu
@@ -944,7 +1009,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   {
                     label: game.autoCommandPointOn ? "Auto CP: An" : "Auto CP: Aus",
                     onClick: () => void setAutoCommandPointEnabled(game.id, !game.autoCommandPointOn),
-                    disabled: isMutating
+                    disabled: writeDisabled
                   },
                   ...(!showOverview
                     ? [
@@ -959,38 +1024,39 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     label: "Redo",
                     detail: redoActionLabel ?? undefined,
                     onClick: () => void handleRedoEvent(),
-                    disabled: isMutating || !redoActionLabel || isClosed
+                    disabled: writeDisabled || !redoActionLabel || isClosed
                   },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
                   {
                     label: "Timer korrigieren",
                     onClick: () => void openTimerAdjustDialog(),
-                    disabled: isMutating
+                    disabled: writeDisabled
                   },
                   ...(!showOverview
                     ? [
                         {
                           label: "Time-out starten",
                           onClick: () => void handleStartTimeout(),
-                          disabled: isMutating || !isTimerRunning || timeoutActive
+                          disabled: writeDisabled || !isTimerRunning || timeoutActive
                         }
                       ]
                     : []),
                   isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
-                        onClick: handleRequestReopenGame
+                        onClick: handleRequestReopenGame,
+                        disabled: writeDisabled
                       }
                     : {
                         label: "Spiel beenden",
                         onClick: openFinishDialog,
-                        disabled: isMutating,
+                        disabled: writeDisabled,
                         danger: true
                       },
                   {
                     label: "Spiel loeschen",
                     onClick: handleRequestDeleteGame,
-                    disabled: isMutating,
+                    disabled: writeDisabled,
                     danger: true
                   }
                 ]
@@ -1000,6 +1066,34 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         </>
       }
     >
+      {shouldShowAccessModeDialog ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div>
+                <h2>Match oeffnen</h2>
+                <p className="muted-copy">Dieses Match laeuft noch.</p>
+              </div>
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  onClick={() => setGameAccessMode(game.id, "edit")}
+                >
+                  Edit mode
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  onClick={() => setGameAccessMode(game.id, "view")}
+                >
+                  View-only mode
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {roundChangePulse !== null ? (
         <>
           <div className="action-feedback-flash action-feedback-flash--round" aria-hidden="true" />
@@ -1070,7 +1164,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           confirmLabel="Wieder eroeffnen"
           value={reopenPassword}
           error={reopenPasswordError}
-          disabled={isMutating}
+          disabled={writeDisabled}
           onChange={(value) => {
             setReopenPassword(value);
             if (reopenPasswordError) {
@@ -1089,7 +1183,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           error={deletePasswordError}
           hint="Alle Events dieses Spiels werden dabei entfernt."
           confirmTone="danger"
-          disabled={isMutating}
+          disabled={writeDisabled}
           onChange={(value) => {
             setDeletePassword(value);
             if (deletePasswordError) {
@@ -1141,7 +1235,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         type="number"
                         inputMode="numeric"
                         value={timerAdjustSecondsByKey[row.key] ?? String(Math.round(row.currentMs / 1000))}
-                        disabled={isMutating}
+                        disabled={writeDisabled}
                         onChange={(event) =>
                           setTimerAdjustSecondsByKey((current) => ({
                             ...current,
@@ -1160,7 +1254,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="primary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleSaveTimerAdjustments()}
                 >
                   Speichern
@@ -1168,7 +1262,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="danger-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleResetTimerAdjustments()}
                 >
                   Zuruecksetzen
@@ -1199,7 +1293,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleFinishGame("interrupted")}
                 >
                   Spiel unterbrochen
@@ -1207,7 +1301,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleFinishGame("abandoned")}
                 >
                   Spiel abgebrochen
@@ -1215,7 +1309,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleFinishGame("player-1-conceded")}
                 >
                   {game.players[0].name} hat aufgegeben
@@ -1223,7 +1317,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleFinishGame("player-2-conceded")}
                 >
                   {game.players[1].name} hat aufgegeben
@@ -1231,7 +1325,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleFinishGame("draw")}
                 >
                   Unentschieden
@@ -1239,7 +1333,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="primary-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={() => void handleFinishGame("completed")}
                 >
                   Spiel beendet
@@ -1305,7 +1399,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   <button
                     type="button"
                     className="ghost-button compact-button scoreboard__note-button"
-                    disabled={isMutating}
+                    disabled={writeDisabled}
                       onClick={() => {
                         void (async () => {
                           if (isTimerRunning) {
@@ -1330,7 +1424,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   <QuickAdjustControls
                     player={player}
                     currentCommandPoints={getPlayerCommandPoints(game, player.id)}
-                    isSubmitting={isMutating || isClosed}
+                    isSubmitting={writeDisabled || isClosed}
                     canSpendCommandPoints
                     onCommandPointChange={async (playerId, direction, amount) => {
                       const currentCommandPoints = getPlayerCommandPoints(game, playerId);
@@ -1408,14 +1502,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               <textarea
                 rows={4}
                 value={noteDraft}
-                disabled={isMutating}
+                disabled={writeDisabled}
                 onChange={(event) => setNoteDraft(event.target.value)}
               />
               <div className="button-row button-row--compact">
                 <button
                   type="button"
                   className="primary-button compact-button"
-                  disabled={isMutating || !noteDraft.trim()}
+                  disabled={writeDisabled || !noteDraft.trim()}
                   onClick={() => void handleAddNote()}
                 >
                   Speichern
@@ -1423,7 +1517,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 <button
                   type="button"
                   className="ghost-button compact-button"
-                  disabled={isMutating}
+                  disabled={writeDisabled}
                   onClick={closeNoteDialog}
                 >
                   Abbrechen
@@ -1451,7 +1545,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       type="button"
                       className="ghost-button compact-button"
                       onClick={() => void openGameEditor()}
-                      disabled={isMutating}
+                      disabled={writeDisabled}
                     >
                       Bearbeiten
                     </button>
@@ -1475,7 +1569,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     detachmentValue={gameForm.playerOneDetachment}
                     playerOptions={playerOptions}
                     detachmentOptions={detachmentOptionsByArmy.get(gameForm.playerOneArmy) ?? []}
-                    disabled={isMutating}
+                    disabled={writeDisabled}
                     onNameChange={(value) => updateGameField("playerOneName", value)}
                     onSelectRememberedName={(value) => applyRememberedGamePlayerName("player1", value)}
                     onArmyChange={(value) => applyGameFormArmySelection("player1", value)}
@@ -1488,7 +1582,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     detachmentValue={gameForm.playerTwoDetachment}
                     playerOptions={playerOptions}
                     detachmentOptions={detachmentOptionsByArmy.get(gameForm.playerTwoArmy) ?? []}
-                    disabled={isMutating}
+                    disabled={writeDisabled}
                     onNameChange={(value) => updateGameField("playerTwoName", value)}
                     onSelectRememberedName={(value) => applyRememberedGamePlayerName("player2", value)}
                     onArmyChange={(value) => applyGameFormArmySelection("player2", value)}
@@ -1498,18 +1592,18 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     value={gameForm}
                     deploymentOptions={deploymentOptions}
                     primaryMissionOptions={primaryMissionOptions}
-                    disabled={isMutating}
+                    disabled={writeDisabled}
                     onChange={updateGameField}
                   />
 
                   <div className="button-row button-row--compact">
-                    <button type="submit" className="primary-button compact-button" disabled={isMutating}>
+                    <button type="submit" className="primary-button compact-button" disabled={writeDisabled}>
                       Speichern
                     </button>
                     <button
                       type="button"
                       className="ghost-button compact-button"
-                      disabled={isMutating}
+                      disabled={writeDisabled}
                       onClick={() => {
                         setGameForm(createGameFormState(game));
                         setIsEditingGame(false);
@@ -1714,7 +1808,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                           <button
                             type="button"
                             className="ghost-button compact-button"
-                            disabled={isMutating || isClosed}
+                            disabled={writeDisabled || isClosed}
                             onClick={() => void openEditor(event)}
                           >
                             Bearbeiten
@@ -1722,7 +1816,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                           <button
                             type="button"
                             className="danger-button compact-button"
-                            disabled={isMutating || isClosed}
+                            disabled={writeDisabled || isClosed}
                             onClick={() => void handleDeleteEvent(event)}
                           >
                             Loeschen
@@ -1738,21 +1832,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                               min={0}
                               inputMode="numeric"
                               value={editingValue}
-                              disabled={isMutating}
+                              disabled={writeDisabled}
                               onChange={(editEvent) => setEditingValue(editEvent.target.value)}
                             />
                           ) : null}
                           <textarea
                             rows={2}
                             value={editingNote}
-                            disabled={isMutating}
+                            disabled={writeDisabled}
                             onChange={(editEvent) => setEditingNote(editEvent.target.value)}
                           />
                           <div className="button-row button-row--compact">
                             <button
                               type="button"
                               className="primary-button compact-button"
-                              disabled={isMutating}
+                              disabled={writeDisabled}
                               onClick={() => void saveEditedEvent(event)}
                             >
                               Speichern
@@ -1760,7 +1854,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                             <button
                               type="button"
                               className="ghost-button compact-button"
-                              disabled={isMutating}
+                              disabled={writeDisabled}
                               onClick={closeEditor}
                             >
                               Abbrechen
@@ -1798,7 +1892,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 type="button"
                 className="danger-button compact-button"
                 onClick={() => void handleEndTimeout()}
-                disabled={isMutating}
+                disabled={writeDisabled}
               >
                 Time-out beenden
               </button>
@@ -1809,7 +1903,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="primary-button compact-button"
               onClick={() => void handleAdvance()}
-              disabled={isMutating}
+              disabled={writeDisabled}
             >
               Weiter
             </button>
@@ -1817,7 +1911,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="ghost-button compact-button"
               onClick={() => void handleGoBack()}
-              disabled={isMutating || !canGoBack}
+              disabled={writeDisabled || !canGoBack}
             >
               Zurueck
             </button>
@@ -1825,7 +1919,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="ghost-button compact-button game-bottom-dock__undo"
               onClick={() => void handleUndoLastEvent()}
-              disabled={isMutating || !undoActionLabel}
+              disabled={writeDisabled || !undoActionLabel}
               title={undoLabel}
             >
               {undoLabel}
@@ -1856,7 +1950,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         )
                 )
               }
-              disabled={isMutating}
+              disabled={writeDisabled}
             >
               {isTimerRunning ? "Timer aus" : "Timer an"}
             </button>

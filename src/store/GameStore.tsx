@@ -71,6 +71,13 @@ import {
 import { syncRememberedPlayerNames } from "../utils/presets";
 import { createId } from "../utils/id";
 import { getNowIso } from "../utils/time";
+import {
+  getGameAccessMode,
+  isGameViewOnlyInState,
+  setGameAccessModeInState,
+  type GameAccessMode,
+  type GameAccessModeState
+} from "../utils/gameAccessMode";
 
 interface EventPayload {
   gameId: string;
@@ -117,6 +124,9 @@ interface GameStoreValue {
   lastSyncAt: string | null;
   pendingSyncCount: number;
   retrySync: () => Promise<void>;
+  getGameAccessMode: (gameId: string) => GameAccessMode | null;
+  isGameViewOnly: (gameId: string) => boolean;
+  setGameAccessMode: (gameId: string, mode: GameAccessMode | null) => void;
   createGame: (input: CreateGameInput) => Promise<Game>;
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
@@ -282,8 +292,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [gameAccessModes, setGameAccessModes] = useState<GameAccessModeState>({});
   const gamesRef = useRef(games);
   const queueRef = useRef(syncQueue);
+  const gameAccessModesRef = useRef<GameAccessModeState>({});
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
   const resumeSyncTimerRef = useRef<number | null>(null);
@@ -302,6 +314,46 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     queueRef.current = syncQueue;
     saveSyncQueue(syncQueue);
   }, [syncQueue]);
+
+  useEffect(() => {
+    gameAccessModesRef.current = gameAccessModes;
+  }, [gameAccessModes]);
+
+  const getGameAccessModeForId = useCallback(
+    (gameId: string) => getGameAccessMode(gameAccessModesRef.current, gameId),
+    []
+  );
+
+  const isGameViewOnly = useCallback(
+    (gameId: string) => isGameViewOnlyInState(gameAccessModesRef.current, gameId),
+    []
+  );
+
+  const warnBlockedViewOnlyWrite = useCallback((gameId: string, action: string) => {
+    if (import.meta.env.DEV) {
+      console.warn("[view-only] blocked write", { gameId, action });
+    }
+  }, []);
+
+  const shouldBlockGameWrite = useCallback(
+    (gameId: string, action: string): boolean => {
+      if (!isGameViewOnly(gameId)) {
+        return false;
+      }
+
+      warnBlockedViewOnlyWrite(gameId, action);
+      return true;
+    },
+    [isGameViewOnly, warnBlockedViewOnlyWrite]
+  );
+
+  const setGameAccessMode = useCallback((gameId: string, mode: GameAccessMode | null) => {
+    setGameAccessModes((currentModes) => {
+      const nextModes = setGameAccessModeInState(currentModes, gameId, mode);
+      gameAccessModesRef.current = nextModes;
+      return nextModes;
+    });
+  }, []);
 
   const updateSyncQueue = useCallback((updater: (currentQueue: SyncQueueItem[]) => SyncQueueItem[]) => {
     const nextQueue = updater(queueRef.current);
@@ -383,6 +435,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const enqueueGameUpsert = useCallback((gameId: string) => {
+    if (shouldBlockGameWrite(gameId, "enqueue-game-upsert")) {
+      return;
+    }
+
     updateSyncQueue((currentQueue) => {
       const nextQueue = enqueueSyncQueueItem(currentQueue, createGameSyncQueueItem("upsert-game", gameId, getNowIso()));
       if (import.meta.env.DEV && nextQueue.length === currentQueue.length) {
@@ -390,15 +446,23 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
       return nextQueue;
     });
-  }, [updateSyncQueue]);
+  }, [shouldBlockGameWrite, updateSyncQueue]);
 
   const enqueueGameDelete = useCallback((gameId: string) => {
+    if (shouldBlockGameWrite(gameId, "enqueue-game-delete")) {
+      return;
+    }
+
     updateSyncQueue((currentQueue) =>
       enqueueSyncQueueItem(currentQueue, createGameSyncQueueItem("delete-game", gameId, getNowIso()))
     );
-  }, [updateSyncQueue]);
+  }, [shouldBlockGameWrite, updateSyncQueue]);
 
   const enqueueEventUpsert = useCallback((gameId: string, eventId: string) => {
+    if (shouldBlockGameWrite(gameId, "enqueue-event-upsert")) {
+      return;
+    }
+
     updateSyncQueue((currentQueue) => {
       const nextQueue = enqueueSyncQueueItem(
         currentQueue,
@@ -409,16 +473,20 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
       return nextQueue;
     });
-  }, [updateSyncQueue]);
+  }, [shouldBlockGameWrite, updateSyncQueue]);
 
   const enqueueEventDelete = useCallback((gameId: string, eventId: string) => {
+    if (shouldBlockGameWrite(gameId, "enqueue-event-delete")) {
+      return;
+    }
+
     updateSyncQueue((currentQueue) => {
       return enqueueSyncQueueItem(
         currentQueue,
         createEventSyncQueueItem("delete-event", gameId, eventId, getNowIso())
       );
     });
-  }, [updateSyncQueue]);
+  }, [shouldBlockGameWrite, updateSyncQueue]);
 
   const enqueueSnapshotSync = useCallback(
     (beforeGame: Game | null, afterGame: Game) => {
@@ -681,8 +749,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
 
       while (queueRef.current.length) {
-        const nextItem = queueRef.current[0];
+        const nextItem = queueRef.current.find((item) => !isGameViewOnly(item.gameId));
         if (!nextItem) {
+          setSyncStatus("pending");
           break;
         }
 
@@ -757,7 +826,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     });
 
     return flushPromiseRef.current;
-  }, [clearRetryTimer, pullRemoteGames, removeQueueItem, scheduleSyncRetry]);
+  }, [clearRetryTimer, isGameViewOnly, pullRemoteGames, removeQueueItem, scheduleSyncRetry]);
 
   const refreshGames = useCallback(async () => {
     if (!canAttemptRemoteSync()) {
@@ -951,6 +1020,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const undoGameAction = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "undoGameAction")) {
+          return;
+        }
+
         const undoStack = historyStacksByGameId[gameId]?.undo;
         const entry = undoStack?.[undoStack.length - 1];
         if (!entry) {
@@ -989,12 +1062,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
         void flushSyncQueue();
       }),
-    [enqueueSnapshotSync, flushSyncQueue, getLatestTurn, historyStacksByGameId, replaceGame, runMutation]
+    [enqueueSnapshotSync, flushSyncQueue, getLatestTurn, historyStacksByGameId, replaceGame, runMutation, shouldBlockGameWrite]
   );
 
   const redoGameAction = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "redoGameAction")) {
+          return;
+        }
+
         const redoStack = historyStacksByGameId[gameId]?.redo;
         const entry = redoStack?.[redoStack.length - 1];
         if (!entry) {
@@ -1033,24 +1110,29 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
         void flushSyncQueue();
       }),
-    [enqueueSnapshotSync, flushSyncQueue, getLatestTurn, historyStacksByGameId, replaceGame, runMutation]
+    [enqueueSnapshotSync, flushSyncQueue, getLatestTurn, historyStacksByGameId, replaceGame, runMutation, shouldBlockGameWrite]
   );
 
   const createGame = useCallback(
     async (input: CreateGameInput): Promise<Game> =>
       runMutation(async () => {
         const createdGame = createLocalGame(input);
+        setGameAccessMode(createdGame.id, "edit");
         replaceGame(createdGame);
         enqueueGameUpsert(createdGame.id);
         void flushSyncQueue();
         return createdGame;
       }),
-    [enqueueGameUpsert, flushSyncQueue, replaceGame, runMutation]
+    [enqueueGameUpsert, flushSyncQueue, replaceGame, runMutation, setGameAccessMode]
   );
 
   const updateGameDetails = useCallback(
     async (gameId: string, input: CreateGameInput) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "updateGameDetails")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -1059,12 +1141,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Spieldetails", game, updateLocalGameDetails(game, input));
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const setAutoCommandPointEnabled = useCallback(
     async (gameId: string, enabled: boolean) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "setAutoCommandPointEnabled")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -1080,12 +1166,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const setTimerCorrections = useCallback(
     async ({ gameId, turnRef, turnMs, corrections }: TimerCorrectionInput) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "setTimerCorrections")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -1118,12 +1208,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Timer korrigiert", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const resetAllGameTimers = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "resetAllGameTimers")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -1151,7 +1245,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Timer zurueckgesetzt", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const addScoreEvent = useCallback(
@@ -1165,6 +1259,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       scoreType
     }: EventPayload & { scoreType: ScoreType }) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "addScoreEvent")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -1194,7 +1292,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot(newEventId ? getEventActionLabel(nextGame, newEventId) : "Siegpunkte", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const addCommandPointEvent = useCallback(
@@ -1208,6 +1306,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       cpType
     }: EventPayload & { cpType: CommandPointType }) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "addCommandPointEvent")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -1235,12 +1337,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot(newEventId ? getEventActionLabel(nextGame, newEventId) : "Command Points", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const addNoteEvent = useCallback(
     async ({ gameId, playerId, note, roundNumber, turnNumber }: EventPayload) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "addNoteEvent")) {
+          return;
+        }
+
         const trimmedNote = note?.trim();
         if (!trimmedNote) {
           return;
@@ -1263,7 +1369,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot(newEventId ? getEventActionLabel(nextGame, newEventId) : "Notiz", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const enqueueTimeEvents = useCallback(
@@ -1295,6 +1401,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const advanceGame = useCallback(
     async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false, recordHistory = true) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "advanceGame")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
           return;
@@ -1759,12 +1869,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           );
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
   const rewindLastTurn = useCallback(
     async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false, recordHistory = true) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "rewindLastTurn")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
           return;
@@ -1856,7 +1970,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           void flushSyncQueue();
         }
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getPreviousTurnByRef, getTurnByRef, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getPreviousTurnByRef, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
   useEffect(() => {
@@ -1867,6 +1981,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const pauseActiveTimer = useCallback(
     async (gameId: string, turnRef?: TurnRef) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "pauseActiveTimer")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
           return;
@@ -1893,12 +2011,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         ], "Timer aus");
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
   const startGameTimer = useCallback(
     async (gameId: string, turnRef?: TurnRef) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "startGameTimer")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status === "completed") {
           return;
@@ -2030,12 +2152,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           void flushSyncQueue();
         }
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
   const startTimeout = useCallback(
     async (gameId: string, turnRef?: TurnRef) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "startTimeout")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status === "completed" || isTimeoutActive(game)) {
           return;
@@ -2065,12 +2191,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         ], "Time-out starten");
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
   const endTimeout = useCallback(
     async (gameId: string, turnRef?: TurnRef) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "endTimeout")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status === "completed" || !isTimeoutActive(game)) {
           return;
@@ -2107,12 +2237,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         enqueueTimeEvents(game, eventsToAdd, "Time-out beenden");
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
   const reopenGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "reopenGame")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game || game.status !== "completed") {
           return;
@@ -2131,12 +2265,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Spiel wieder eroeffnet", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const updateGameEvent = useCallback(
     async (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "updateGameEvent")) {
+          return;
+        }
+
         const currentGame = getGame(gameId);
         if (!currentGame) {
           throw new Error("Spiel nicht gefunden.");
@@ -2152,13 +2290,18 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       flushSyncQueue,
       getGame,
       normalizeEventPatch,
-      runMutation
+      runMutation,
+      shouldBlockGameWrite
     ]
   );
 
   const deleteGameEvent = useCallback(
     async (gameId: string, eventId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "deleteGameEvent")) {
+          return;
+        }
+
         const currentGame = getGame(gameId);
         if (!currentGame) {
           throw new Error("Spiel nicht gefunden.");
@@ -2169,12 +2312,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot(label, currentGame, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const finishGame = useCallback(
     async (gameId: string, finishReason: GameFinishReason = "completed") =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "finishGame")) {
+          return;
+        }
+
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
@@ -2224,17 +2371,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Spiel beenden", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
   );
 
   const deleteGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "deleteGame")) {
+          return;
+        }
+
         removeGameLocally(gameId);
         enqueueGameDelete(gameId);
         void flushSyncQueue();
       }),
-    [enqueueGameDelete, flushSyncQueue, removeGameLocally, runMutation]
+    [enqueueGameDelete, flushSyncQueue, removeGameLocally, runMutation, shouldBlockGameWrite]
   );
 
   const importGames = useCallback(
@@ -2272,6 +2423,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       lastSyncAt,
       pendingSyncCount: syncQueue.length,
       retrySync,
+      getGameAccessMode: getGameAccessModeForId,
+      isGameViewOnly,
+      setGameAccessMode,
       createGame,
       getGame,
       refreshGames,
@@ -2313,17 +2467,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       errorMessage,
       exportGames,
       finishGame,
+      gameAccessModes,
       games,
+      getGameAccessModeForId,
       getGame,
       importGames,
       isLoading,
       isMutating,
+      isGameViewOnly,
       lastSyncAt,
       pauseActiveTimer,
       endTimeout,
       retrySync,
       refreshGames,
       setAutoCommandPointEnabled,
+      setGameAccessMode,
       setTimerCorrections,
       resetAllGameTimers,
       reopenGame,
