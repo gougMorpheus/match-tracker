@@ -418,6 +418,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const isClosed = game.status === "completed";
   const isReadOnly = viewOnlyActive;
   const writeDisabled = isMutating || isReadOnly;
+  const canNavigateTurns = !isMutating;
   const showOverview = isClosed || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
@@ -855,14 +856,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleAdvance = async () => {
-    if (isReadOnly) {
+    if (isMutating) {
       return;
     }
 
     if (isSetupSelected) {
       const firstTurn = allTurns[0];
       if (firstTurn) {
-        if (isTimerRunning) {
+        if (!isReadOnly && isTimerRunning) {
           await advanceGame(game.id, SETUP_TURN_REF, true);
         }
         setSelectedTurnKey(firstTurn.key);
@@ -873,7 +874,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     if (canGoForwardToExistingTurn) {
       const nextTurn = allTurns[selectedTurnIndex + 1];
       if (nextTurn) {
-        if (isTimerRunning) {
+        if (!isReadOnly && isTimerRunning) {
           await advanceGame(
             game.id,
             selectedTurn
@@ -887,6 +888,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         }
         setSelectedTurnKey(nextTurn.key);
       }
+      return;
+    }
+
+    if (isReadOnly) {
       return;
     }
 
@@ -904,13 +909,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleGoBack = async () => {
-    if (isReadOnly || !canGoBack) {
+    if (isMutating || !canGoBack) {
       return;
     }
 
     const previousTurn = allTurns[selectedTurnIndex - 1];
     if (previousTurn) {
-      if (isTimerRunning) {
+      if (!isReadOnly && isTimerRunning) {
         await rewindLastTurn(
           game.id,
           selectedTurn
@@ -927,7 +932,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     if (selectedTurnIndex === 0 && hasSetupPhase) {
-      if (isTimerRunning) {
+      if (!isReadOnly && isTimerRunning) {
         await rewindLastTurn(
           game.id,
           selectedTurn
@@ -1897,7 +1902,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="primary-button compact-button"
               onClick={() => void handleAdvance()}
-              disabled={writeDisabled}
+              disabled={!canNavigateTurns || (isReadOnly && !canGoForwardToExistingTurn)}
             >
               Weiter
             </button>
@@ -1905,7 +1910,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               type="button"
               className="ghost-button compact-button"
               onClick={() => void handleGoBack()}
-              disabled={writeDisabled || !canGoBack}
+              disabled={!canNavigateTurns || !canGoBack}
             >
               Zurueck
             </button>
