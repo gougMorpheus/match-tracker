@@ -29,19 +29,14 @@ export const CollapsibleSection = ({
     }}
   >
     <div className="collapsible-section__head">
-      <div className="collapsible-section__title-row">
+      <div className="collapsible-section__count">
         {count !== undefined ? <span className="meta-chip">{count}</span> : null}
-        <div>
-          <h2>{title}</h2>
-          {helper ? <p>{helper}</p> : null}
-        </div>
       </div>
-      <div className="collapsible-section__meta">
-        {actions ? (
-          <span className="collapsible-section__actions" data-no-section-toggle="true">
-            {actions}
-          </span>
-        ) : null}
+      <div className="collapsible-section__title">
+        <h2>{title}</h2>
+        {helper ? <p>{helper}</p> : null}
+      </div>
+      <div className="collapsible-section__control">
         <button
           type="button"
           className="meta-chip meta-chip--accent collapsible-section__toggle"
@@ -54,6 +49,11 @@ export const CollapsibleSection = ({
         </button>
       </div>
     </div>
+    {actions ? (
+      <div className="collapsible-section__actions" data-no-section-toggle="true">
+        {actions}
+      </div>
+    ) : null}
     {open ? (
       <div className="stack">
         {children}

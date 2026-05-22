@@ -2280,9 +2280,8 @@ button.stats-table__row.is-active {
   gap: 0.9rem;
 }
 
-.collapsible-section__head,
-.collapsible-section__meta,
-.collapsible-section__title-row,
+.collapsible-section__count,
+.collapsible-section__control,
 .stats-group-card__head,
 .stats-row-card,
 .stats-row-card__metrics {
@@ -2290,7 +2289,6 @@ button.stats-table__row.is-active {
   gap: 0.75rem;
 }
 
-.collapsible-section__head,
 .stats-group-card__head,
 .stats-row-card {
   justify-content: space-between;
@@ -2299,12 +2297,23 @@ button.stats-table__row.is-active {
 }
 
 .collapsible-section__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.6rem;
   align-items: center;
 }
 
-.collapsible-section__title-row {
-  align-items: center;
+.collapsible-section__count {
+  justify-content: flex-end;
+}
+
+.collapsible-section__control {
+  justify-content: flex-start;
+}
+
+.collapsible-section__title {
   min-width: 0;
+  text-align: center;
 }
 
 .collapsible-section__head h2,
@@ -2318,14 +2327,13 @@ button.stats-table__row.is-active {
   margin: 0.2rem 0 0;
 }
 
-.collapsible-section__meta {
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.collapsible-section__head p {
+  text-align: center;
 }
 
 .collapsible-section__actions {
-  display: inline-flex;
+  display: flex;
+  justify-content: center;
   min-width: 0;
 }
 
@@ -2756,13 +2764,11 @@ button.stats-table__row.is-active {
     width: 100%;
   }
 
-  .collapsible-section__head,
   .stats-group-card__head {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  .collapsible-section__meta,
   .stats-group-card__actions {
     justify-content: flex-start;
   }
