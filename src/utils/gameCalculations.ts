@@ -668,6 +668,8 @@ export interface GameFilterState {
   query: string;
   playerName: string;
   armyName: string;
+  pointsFrom: string;
+  pointsTo: string;
   status: "all" | "active" | "completed";
   dateFrom: string;
   dateTo: string;
@@ -886,6 +888,8 @@ export const createInitialGameFilters = (): GameFilterState => ({
   query: "",
   playerName: "all",
   armyName: "all",
+  pointsFrom: "all",
+  pointsTo: "all",
   status: "all",
   dateFrom: "",
   dateTo: ""
@@ -897,7 +901,8 @@ export const getFilterOptions = (games: Game[]) => ({
   ),
   armyNames: Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.army.name)))).sort((left, right) =>
     left.localeCompare(right)
-  )
+  ),
+  gamePoints: Array.from(new Set(games.map((game) => game.gamePoints))).sort((left, right) => left - right)
 });
 
 export const filterGames = (games: Game[], filters: GameFilterState): Game[] => {
@@ -923,6 +928,10 @@ export const filterGames = (games: Game[], filters: GameFilterState): Game[] => 
       filters.armyName === "all" || game.players.some((player) => player.army.name === filters.armyName);
 
     const matchesStatus = filters.status === "all" || game.status === filters.status;
+    const pointsFrom = !filters.pointsFrom || filters.pointsFrom === "all" ? null : Number(filters.pointsFrom);
+    const pointsTo = !filters.pointsTo || filters.pointsTo === "all" ? null : Number(filters.pointsTo);
+    const matchesPointsFrom = pointsFrom === null || game.gamePoints >= pointsFrom;
+    const matchesPointsTo = pointsTo === null || game.gamePoints <= pointsTo;
 
     const matchesDateFrom = !filters.dateFrom || game.scheduledDate >= filters.dateFrom;
     const matchesDateTo = !filters.dateTo || game.scheduledDate <= filters.dateTo;
@@ -932,6 +941,8 @@ export const filterGames = (games: Game[], filters: GameFilterState): Game[] => 
       matchesPlayer &&
       matchesArmy &&
       matchesStatus &&
+      matchesPointsFrom &&
+      matchesPointsTo &&
       matchesDateFrom &&
       matchesDateTo
     );

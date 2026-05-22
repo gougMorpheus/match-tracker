@@ -1982,6 +1982,10 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.stats-hero__feature--table {
+  grid-column: 1 / -1;
+}
+
 .stats-hero__feature,
 .record-card,
 .stats-row-card {
@@ -1993,6 +1997,53 @@ textarea {
 
 .stats-hero__feature {
   padding: 0.82rem 0.88rem;
+}
+
+.stats-table-card__head,
+.stats-group-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.stats-group-card__actions select,
+.stats-table-filter select {
+  width: auto;
+  min-width: 150px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+}
+
+.stats-table {
+  display: grid;
+  gap: 0.35rem;
+  overflow-x: auto;
+}
+
+.stats-table__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) repeat(4, minmax(80px, 1fr));
+  gap: 0.5rem;
+  align-items: center;
+  min-width: 620px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+  text-align: left;
+}
+
+.stats-table__row--head {
+  color: var(--muted);
+  background: transparent;
+}
+
+button.stats-table__row.is-active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
 }
 
 .stats-hero__feature span,
