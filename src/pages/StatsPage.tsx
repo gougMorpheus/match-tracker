@@ -106,11 +106,11 @@ interface ScenarioSummary {
 }
 
 const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
-  overview: true,
-  players: true,
+  overview: false,
+  players: false,
   armies: false,
   rounds: false,
-  records: true,
+  records: false,
   matchups: false,
   missions: false,
   deployments: false

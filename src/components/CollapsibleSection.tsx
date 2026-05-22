@@ -16,8 +16,22 @@ export const CollapsibleSection = ({
   onToggle,
   children
 }: CollapsibleSectionProps) => (
-  <section className={`card stack collapsible-section ${open ? "is-open" : ""}`}>
-    <button type="button" className="collapsible-section__toggle" onClick={onToggle}>
+  <section
+    className={`card stack collapsible-section ${open ? "is-open" : ""}`}
+    onClick={(event) => {
+      if (event.target === event.currentTarget) {
+        onToggle();
+      }
+    }}
+  >
+    <button
+      type="button"
+      className="collapsible-section__toggle"
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+    >
       <div className="collapsible-section__head">
         <div>
           <h2>{title}</h2>
@@ -29,6 +43,10 @@ export const CollapsibleSection = ({
         </div>
       </div>
     </button>
-    {open ? <div className="stack">{children}</div> : null}
+    {open ? (
+      <div className="stack" onClick={(event) => event.stopPropagation()}>
+        {children}
+      </div>
+    ) : null}
   </section>
 );
