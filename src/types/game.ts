@@ -177,8 +177,8 @@ export interface CreateGameInput {
   scheduledTime: string;
   deployment: string;
   primaryMission: string;
-  defenderSlot: "player1" | "player2";
-  startingSlot: "player1" | "player2";
+  defenderSlot: "" | "player1" | "player2";
+  startingSlot: "" | "player1" | "player2";
 }
 
 export interface GameImportPayload {

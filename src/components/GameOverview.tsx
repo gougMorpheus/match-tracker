@@ -130,7 +130,11 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   });
   const formatScoreValue = (value: number | null) => (value === null ? "-" : value);
   const orderedPlayers =
-    game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
+    game.players[0].id === game.startingPlayerId
+      ? game.players
+      : game.players[1].id === game.startingPlayerId
+        ? [game.players[1], game.players[0]]
+        : game.players;
   const countedRounds = getCountedRounds(game);
 
   useEffect(() => {

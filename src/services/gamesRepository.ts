@@ -756,14 +756,15 @@ const getCurrentPlayerId = (
   rounds: Round[],
   endedAt?: string
 ): PlayerId => {
+  const fallbackPlayerId = getPlayerIdFromSlot(gameId, 1);
   if (endedAt) {
-    return startingPlayerId;
+    return startingPlayerId || fallbackPlayerId;
   }
 
   const latestRound = rounds[rounds.length - 1];
   const latestTurn = latestRound?.turns[latestRound.turns.length - 1];
   if (!latestTurn) {
-    return startingPlayerId;
+    return startingPlayerId || fallbackPlayerId;
   }
 
   if (latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
@@ -861,8 +862,8 @@ export const mapSupabaseGameToAppGame = (
   const { date, time } = getScheduledDateParts(row.game_date);
   const mappedEvents = mapEventRows(row.id, events);
   const rounds = buildRoundsFromTimeEvents(row.id, mappedEvents.timeEvents);
-  const startingPlayerId = getPlayerIdFromSlot(row.id, row.starting_player ?? 1);
-  const defenderPlayerId = getPlayerIdFromSlot(row.id, row.defender_player ?? 1);
+  const startingPlayerId = row.starting_player ? getPlayerIdFromSlot(row.id, row.starting_player) : "";
+  const defenderPlayerId = row.defender_player ? getPlayerIdFromSlot(row.id, row.defender_player) : "";
   const startedAt = getDerivedStartedAt(row, mappedEvents.timeEvents);
   const endedAt = getDerivedEndedAt(row, mappedEvents.timeEvents);
   const scoreMeta = parseScoreMeta(row.notes);
@@ -930,8 +931,8 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   player2_max_points: payload.gamePoints,
   deployment: payload.deployment.trim() || null,
   primary_mission: payload.primaryMission.trim() || null,
-  defender_player: payload.defenderSlot === "player1" ? 1 : 2,
-  starting_player: payload.startingSlot === "player1" ? 1 : 2,
+  defender_player: payload.defenderSlot === "player1" ? 1 : payload.defenderSlot === "player2" ? 2 : null,
+  starting_player: payload.startingSlot === "player1" ? 1 : payload.startingSlot === "player2" ? 2 : null,
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
@@ -959,8 +960,8 @@ export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabas
   player2_max_points: payload.gamePoints,
   deployment: payload.deployment.trim() || null,
   primary_mission: payload.primaryMission.trim() || null,
-  defender_player: payload.defenderSlot === "player1" ? 1 : 2,
-  starting_player: payload.startingSlot === "player1" ? 1 : 2
+  defender_player: payload.defenderSlot === "player1" ? 1 : payload.defenderSlot === "player2" ? 2 : null,
+  starting_player: payload.startingSlot === "player1" ? 1 : payload.startingSlot === "player2" ? 2 : null
 });
 
 const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
@@ -996,8 +997,8 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   player2_max_points: game.gamePoints ?? game.players[1].army.maxPoints,
   deployment: game.deployment || null,
   primary_mission: game.primaryMission || null,
-  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
-  starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
+  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
+  starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: getWinnerPlayerSlot(game),
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
@@ -1102,8 +1103,8 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   player2_max_points: game.gamePoints,
   deployment: game.deployment || null,
   primary_mission: game.primaryMission || null,
-  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : 2,
-  starting_player: game.startingPlayerId === game.players[0].id ? 1 : 2,
+  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
+  starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
   notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,

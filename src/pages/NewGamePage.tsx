@@ -24,8 +24,8 @@ const createDefaultFormState = (): CreateGameInput => ({
   scheduledTime: toLocalTimeInput(),
   deployment: "",
   primaryMission: "",
-  defenderSlot: "player1",
-  startingSlot: "player1"
+  defenderSlot: "",
+  startingSlot: ""
 });
 
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {

@@ -99,8 +99,8 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   scheduledTime: game.scheduledTime,
   deployment: game.deployment,
   primaryMission: game.primaryMission,
-  defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : "player2",
-  startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : "player2"
+  defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : game.defenderPlayerId === game.players[1].id ? "player2" : "",
+  startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : game.startingPlayerId === game.players[1].id ? "player2" : ""
 });
 
 const getRoundSurfaceClassName = (roundNumber?: number) =>
@@ -178,6 +178,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [deletePasswordOpen, setDeletePasswordOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePasswordError, setDeletePasswordError] = useState("");
+  const [startingPlayerPromptOpen, setStartingPlayerPromptOpen] = useState(false);
+  const [startingPlayerPromptSlot, setStartingPlayerPromptSlot] = useState<CreateGameInput["startingSlot"]>("");
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const game = getGame(gameId);
@@ -407,13 +409,18 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     game.rounds.find((round) => round.roundNumber === selectedTurn?.roundNumber) ?? latestRound;
   const hasSetupPhase = game.timeEvents.some((event) => event.action === "setup-start");
   const isSetupSelected = selectedTurnKey === SETUP_TURN_KEY;
+  const needsStartingPlayerBeforeFirstTurn = !game.startingPlayerId && (isSetupSelected || !latestRound);
   const timerFocusTurn = isSetupSelected ? undefined : getTimerFocusTurn(selectedTurn, latestTurn);
   const canGoBack = selectedTurnIndex > 0 || (selectedTurnIndex === 0 && hasSetupPhase);
   const canGoForwardToExistingTurn =
     (isSetupSelected && allTurns.length > 0) ||
     (selectedTurnIndex >= 0 && selectedTurnIndex < allTurns.length - 1);
   const orderedPlayers =
-    game.players[0].id === game.startingPlayerId ? game.players : [game.players[1], game.players[0]];
+    game.players[0].id === game.startingPlayerId
+      ? game.players
+      : game.players[1].id === game.startingPlayerId
+        ? [game.players[1], game.players[0]]
+        : game.players;
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
   const isClosed = game.status === "completed";
   const isReadOnly = viewOnlyActive;
@@ -855,8 +862,28 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     });
   };
 
+  const continueFromSetup = async (startingSlot?: CreateGameInput["startingSlot"]) => {
+    if (startingSlot) {
+      await updateGameDetails(game.id, {
+        ...createGameFormState(game),
+        startingSlot
+      });
+    }
+
+    snapToLatestTurnRef.current = true;
+    await advanceGame(game.id, SETUP_TURN_REF, isTimerRunning);
+    setStartingPlayerPromptOpen(false);
+    setStartingPlayerPromptSlot("");
+  };
+
   const handleAdvance = async () => {
     if (isMutating) {
+      return;
+    }
+
+    if (needsStartingPlayerBeforeFirstTurn) {
+      setStartingPlayerPromptSlot("");
+      setStartingPlayerPromptOpen(true);
       return;
     }
 
@@ -1342,6 +1369,52 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           </div>
         </div>
       ) : null}
+      {startingPlayerPromptOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="stack">
+              <div>
+                <h2>Startspieler auswaehlen</h2>
+                <p className="muted-copy">Vor Zug 1 muss feststehen, wer beginnt.</p>
+              </div>
+              <label className="field">
+                <span>Startspieler</span>
+                <select
+                  value={startingPlayerPromptSlot}
+                  disabled={writeDisabled}
+                  autoFocus
+                  onChange={(event) => setStartingPlayerPromptSlot(event.target.value as CreateGameInput["startingSlot"])}
+                >
+                  <option value="">Bitte auswaehlen</option>
+                  <option value="player1">{game.players[0].name || "Spieler 1"}</option>
+                  <option value="player2">{game.players[1].name || "Spieler 2"}</option>
+                </select>
+              </label>
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  disabled={writeDisabled || !startingPlayerPromptSlot}
+                  onClick={() => void continueFromSetup(startingPlayerPromptSlot)}
+                >
+                  Weiter zu Zug 1
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  disabled={writeDisabled}
+                  onClick={() => {
+                    setStartingPlayerPromptOpen(false);
+                    setStartingPlayerPromptSlot("");
+                  }}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <section className={`stack game-page ${roundThemeClassName}`}>
         {errorMessage ? (
           <article className="notice-card notice-card--error">
@@ -1649,13 +1722,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   <div>
                     <span>Defender</span>
                     <strong>
-                      {game.defenderPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}
+                      {game.defenderPlayerId === game.players[0].id
+                        ? game.players[0].name
+                        : game.defenderPlayerId === game.players[1].id
+                          ? game.players[1].name
+                          : "-"}
                     </strong>
                   </div>
                   <div>
                     <span>Startspieler</span>
                     <strong>
-                      {game.startingPlayerId === game.players[0].id ? game.players[0].name : game.players[1].name}
+                      {game.startingPlayerId === game.players[0].id
+                        ? game.players[0].name
+                        : game.startingPlayerId === game.players[1].id
+                          ? game.players[1].name
+                          : "-"}
                     </strong>
                   </div>
                   <div>

@@ -535,6 +535,8 @@ const createInitialGameFilters = () => ({
     query: "",
     playerName: "all",
     armyName: "all",
+    pointsFrom: "all",
+    pointsTo: "all",
     status: "all",
     dateFrom: "",
     dateTo: ""
@@ -542,7 +544,8 @@ const createInitialGameFilters = () => ({
 exports.createInitialGameFilters = createInitialGameFilters;
 const getFilterOptions = (games) => ({
     playerNames: Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.name)))).sort((left, right) => left.localeCompare(right)),
-    armyNames: Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.army.name)))).sort((left, right) => left.localeCompare(right))
+    armyNames: Array.from(new Set(games.flatMap((game) => game.players.map((player) => player.army.name)))).sort((left, right) => left.localeCompare(right)),
+    gamePoints: Array.from(new Set(games.map((game) => game.gamePoints))).sort((left, right) => left - right)
 });
 exports.getFilterOptions = getFilterOptions;
 const filterGames = (games, filters) => {
@@ -561,12 +564,18 @@ const filterGames = (games, filters) => {
         const matchesPlayer = filters.playerName === "all" || game.players.some((player) => player.name === filters.playerName);
         const matchesArmy = filters.armyName === "all" || game.players.some((player) => player.army.name === filters.armyName);
         const matchesStatus = filters.status === "all" || game.status === filters.status;
+        const pointsFrom = !filters.pointsFrom || filters.pointsFrom === "all" ? null : Number(filters.pointsFrom);
+        const pointsTo = !filters.pointsTo || filters.pointsTo === "all" ? null : Number(filters.pointsTo);
+        const matchesPointsFrom = pointsFrom === null || game.gamePoints >= pointsFrom;
+        const matchesPointsTo = pointsTo === null || game.gamePoints <= pointsTo;
         const matchesDateFrom = !filters.dateFrom || game.scheduledDate >= filters.dateFrom;
         const matchesDateTo = !filters.dateTo || game.scheduledDate <= filters.dateTo;
         return (matchesQuery &&
             matchesPlayer &&
             matchesArmy &&
             matchesStatus &&
+            matchesPointsFrom &&
+            matchesPointsTo &&
             matchesDateFrom &&
             matchesDateTo);
     });

@@ -15,7 +15,11 @@ export const GameMetaFields = ({
   primaryMissionOptions,
   disabled = false,
   onChange
-}: GameMetaFieldsProps) => (
+}: GameMetaFieldsProps) => {
+  const playerOneLabel = value.playerOneName.trim() || "Spieler 1";
+  const playerTwoLabel = value.playerTwoName.trim() || "Spieler 2";
+
+  return (
   <section className="card stack">
     <h2>Spiel</h2>
     <label className="field">
@@ -73,46 +77,29 @@ export const GameMetaFields = ({
 
     <div className="field">
       <span>Defender</span>
-      <div className="segmented-control">
-        <button
-          type="button"
-          className={value.defenderSlot === "player1" ? "is-selected" : ""}
-          onClick={() => onChange("defenderSlot", "player1")}
-          disabled={disabled}
-        >
-          Spieler 1
-        </button>
-        <button
-          type="button"
-          className={value.defenderSlot === "player2" ? "is-selected" : ""}
-          onClick={() => onChange("defenderSlot", "player2")}
-          disabled={disabled}
-        >
-          Spieler 2
-        </button>
-      </div>
+      <select
+        value={value.defenderSlot}
+        disabled={disabled}
+        onChange={(event) => onChange("defenderSlot", event.target.value as CreateGameInput["defenderSlot"])}
+      >
+        <option value="">Bitte auswaehlen</option>
+        <option value="player1">{playerOneLabel}</option>
+        <option value="player2">{playerTwoLabel}</option>
+      </select>
     </div>
 
     <div className="field">
       <span>Startspieler</span>
-      <div className="segmented-control">
-        <button
-          type="button"
-          className={value.startingSlot === "player1" ? "is-selected" : ""}
-          onClick={() => onChange("startingSlot", "player1")}
-          disabled={disabled}
-        >
-          Spieler 1
-        </button>
-        <button
-          type="button"
-          className={value.startingSlot === "player2" ? "is-selected" : ""}
-          onClick={() => onChange("startingSlot", "player2")}
-          disabled={disabled}
-        >
-          Spieler 2
-        </button>
-      </div>
+      <select
+        value={value.startingSlot}
+        disabled={disabled}
+        onChange={(event) => onChange("startingSlot", event.target.value as CreateGameInput["startingSlot"])}
+      >
+        <option value="">Bitte auswaehlen</option>
+        <option value="player1">{playerOneLabel}</option>
+        <option value="player2">{playerTwoLabel}</option>
+      </select>
     </div>
   </section>
-);
+  );
+};

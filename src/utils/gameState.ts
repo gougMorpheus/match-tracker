@@ -154,14 +154,15 @@ const getCurrentPlayerId = (
   rounds: Round[],
   endedAt?: string
 ): PlayerId => {
+  const fallbackPlayerId = `${gameId}:player-1`;
   if (endedAt) {
-    return startingPlayerId;
+    return startingPlayerId || fallbackPlayerId;
   }
 
   const latestRound = rounds[rounds.length - 1];
   const latestTurn = latestRound?.turns[latestRound.turns.length - 1];
   if (!latestTurn) {
-    return startingPlayerId;
+    return startingPlayerId || fallbackPlayerId;
   }
 
   if (latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
@@ -277,9 +278,9 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     scheduledTime: input.scheduledTime,
     deployment: input.deployment.trim(),
     primaryMission: input.primaryMission.trim(),
-    defenderPlayerId: input.defenderSlot === "player1" ? playerOneId : playerTwoId,
-    startingPlayerId: input.startingSlot === "player1" ? playerOneId : playerTwoId,
-    currentPlayerId: input.startingSlot === "player1" ? playerOneId : playerTwoId,
+    defenderPlayerId: input.defenderSlot === "player1" ? playerOneId : input.defenderSlot === "player2" ? playerTwoId : "",
+    startingPlayerId: input.startingSlot === "player1" ? playerOneId : input.startingSlot === "player2" ? playerTwoId : "",
+    currentPlayerId: input.startingSlot === "player1" ? playerOneId : input.startingSlot === "player2" ? playerTwoId : playerOneId,
     startedAt: undefined,
     endedAt: undefined,
     players,
@@ -316,8 +317,8 @@ export const updateLocalGameDetails = (game: Game, input: CreateGameInput): Game
     scheduledTime: input.scheduledTime,
     deployment: input.deployment.trim(),
     primaryMission: input.primaryMission.trim(),
-    defenderPlayerId: input.defenderSlot === "player1" ? game.players[0].id : game.players[1].id,
-    startingPlayerId: input.startingSlot === "player1" ? game.players[0].id : game.players[1].id,
+    defenderPlayerId: input.defenderSlot === "player1" ? game.players[0].id : input.defenderSlot === "player2" ? game.players[1].id : "",
+    startingPlayerId: input.startingSlot === "player1" ? game.players[0].id : input.startingSlot === "player2" ? game.players[1].id : "",
     players: [
       {
         ...game.players[0],
