@@ -19,13 +19,12 @@ import {
   createStatsOverview,
   filterGames,
   getCompletedRoundDurationMs,
-  getCompletedTurnDurationMs,
   getFilterOptions,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
+  getPlayerRoundScoreTotal,
   getPlayerSecondaryTotal,
   getPlayerTotalScore,
-  getPlayerTurnDurationTotalMs,
   getTurnRecords,
   prepareGamesForStats,
   type TurnRecord
@@ -298,15 +297,17 @@ const TrendLineChart = ({
   rows,
   primaryLabel,
   secondaryLabel,
+  tertiaryLabel,
   emptyLabel,
   formatValue,
   activeLabel,
   onActivate
 }: {
   title: string;
-  rows: Array<{ label: string; primary: number | null; secondary: number | null }>;
+  rows: Array<{ label: string; primary: number | null; secondary: number | null; tertiary?: number | null }>;
   primaryLabel: string;
   secondaryLabel: string;
+  tertiaryLabel?: string;
   emptyLabel: string;
   formatValue: (value: number) => string;
   activeLabel?: string | null;
@@ -326,7 +327,7 @@ const TrendLineChart = ({
 
   const plotWidth = CHART_WIDTH - CHART_PADDING * 2;
   const plotHeight = CHART_HEIGHT - CHART_PADDING * 2;
-  const maxValue = Math.max(...rows.flatMap((row) => [row.primary ?? 0, row.secondary ?? 0]), 1);
+  const maxValue = Math.max(...rows.flatMap((row) => [row.primary ?? 0, row.secondary ?? 0, row.tertiary ?? 0]), 1);
   const primaryPoints = rows.map((row, index) => ({
     x: CHART_PADDING + (rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(rows.length - 1, 1)) * index),
     y: CHART_HEIGHT - CHART_PADDING - (((row.primary ?? 0) / maxValue) * plotHeight),
@@ -339,7 +340,13 @@ const TrendLineChart = ({
     label: row.label,
     value: row.secondary ?? 0
   }));
-  const activeRow = rows.find((row) => row.label === activeLabel) ?? rows[rows.length - 1];
+  const tertiaryPoints = rows.map((row, index) => ({
+    x: CHART_PADDING + (rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(rows.length - 1, 1)) * index),
+    y: CHART_HEIGHT - CHART_PADDING - (((row.tertiary ?? 0) / maxValue) * plotHeight),
+    label: row.label,
+    value: row.tertiary ?? 0
+  }));
+  const activeRow = activeLabel ? rows.find((row) => row.label === activeLabel) ?? null : null;
 
   return (
     <article className="overview-chart-card">
@@ -348,6 +355,7 @@ const TrendLineChart = ({
         <div className="overview-chart-legend">
           <span className="overview-chart-legend__item is-player-1">{primaryLabel}</span>
           <span className="overview-chart-legend__item is-player-2">{secondaryLabel}</span>
+          {tertiaryLabel ? <span className="overview-chart-legend__item is-warning">{tertiaryLabel}</span> : null}
         </div>
       </div>
       <svg className="overview-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label={title}>
@@ -380,6 +388,7 @@ const TrendLineChart = ({
         />
         <path d={buildLinePath(primaryPoints)} className="overview-chart__line is-player-1" />
         <path d={buildLinePath(secondaryPoints)} className="overview-chart__line is-player-2" />
+        {tertiaryLabel ? <path d={buildLinePath(tertiaryPoints)} className="overview-chart__line is-warning" /> : null}
         {rows.map((row, index) => {
           const isActive = activeRow?.label === row.label;
           return (
@@ -387,10 +396,14 @@ const TrendLineChart = ({
               key={row.label}
               className={isActive ? "overview-chart__point-group is-active" : "overview-chart__point-group"}
               onMouseEnter={() => onActivate?.(row.label)}
-              onClick={() => onActivate?.(row.label)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onActivate?.(row.label);
+              }}
             >
               <circle cx={primaryPoints[index]?.x ?? 0} cy={primaryPoints[index]?.y ?? 0} r={isActive ? 5 : 4} className="overview-chart__point is-player-1" />
               <circle cx={secondaryPoints[index]?.x ?? 0} cy={secondaryPoints[index]?.y ?? 0} r={isActive ? 5 : 4} className="overview-chart__point is-player-2" />
+              {tertiaryLabel ? <circle cx={tertiaryPoints[index]?.x ?? 0} cy={tertiaryPoints[index]?.y ?? 0} r={isActive ? 5 : 4} className="overview-chart__point is-warning" /> : null}
               <text x={primaryPoints[index]?.x ?? 0} y={CHART_HEIGHT - 4} textAnchor="middle" className="overview-chart__label">
                 {row.label}
               </text>
@@ -416,6 +429,13 @@ const TrendLineChart = ({
             <span>{secondaryLabel}</span>
             <strong>{formatValue(activeRow.secondary ?? 0)}</strong>
           </div>
+          {tertiaryLabel ? (
+            <div className="overview-chart-total">
+              <span className="overview-chart-total__marker is-warning" />
+              <span>{tertiaryLabel}</span>
+              <strong>{formatValue(activeRow.tertiary ?? 0)}</strong>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>
@@ -487,12 +507,14 @@ const SingleLineChart = ({
   title,
   rows,
   emptyLabel,
-  formatValue
+  formatValue,
+  scaleByValueOnly = false
 }: {
   title: string;
   rows: SingleLineChartRow[];
   emptyLabel: string;
   formatValue: (value: number) => string;
+  scaleByValueOnly?: boolean;
 }) => {
   const visibleRows = rows.filter((row) => row.value !== null);
   if (!visibleRows.length) {
@@ -509,7 +531,9 @@ const SingleLineChart = ({
 
   const plotWidth = CHART_WIDTH - CHART_PADDING * 2;
   const plotHeight = CHART_HEIGHT - CHART_PADDING * 2;
-  const allValues = visibleRows.flatMap((row) => [row.value ?? 0, row.min ?? row.value ?? 0, row.max ?? row.value ?? 0]);
+  const allValues = scaleByValueOnly
+    ? visibleRows.map((row) => row.value ?? 0)
+    : visibleRows.flatMap((row) => [row.value ?? 0, row.min ?? row.value ?? 0, row.max ?? row.value ?? 0]);
   const maxValue = Math.max(...allValues, 1);
   const points = visibleRows.map((row, index) => ({
     x: CHART_PADDING + (visibleRows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(visibleRows.length - 1, 1)) * index),
@@ -977,8 +1001,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [topCount, setTopCount] = useState(5);
   const [activePlayerChartLabel, setActivePlayerChartLabel] = useState<string | null>(null);
   const [activeArmyChartLabel, setActiveArmyChartLabel] = useState<string | null>(null);
+  const [activePlayerTurnDurationLabel, setActivePlayerTurnDurationLabel] = useState<string | null>(null);
   const [activeDurationRoundLabel, setActiveDurationRoundLabel] = useState<string | null>(null);
-  const [activeScoreRoundLabel, setActiveScoreRoundLabel] = useState<string | null>(null);
   const [activeCpPointId, setActiveCpPointId] = useState<string | null>(null);
   const [tableGroupMode, setTableGroupMode] = useState<TableGroupMode>("players");
   const [selectedTableRow, setSelectedTableRow] = useState<string | null>(null);
@@ -1054,7 +1078,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   );
   const tableOpponentOptions = useMemo(
     () => [
-      { value: "all" as OpponentFilter, label: "Alle Gegner" },
+      { value: "all" as OpponentFilter, label: "vs alle" },
       ...filterOptions.playerNames.map((name) => ({ value: `player:${name}` as OpponentFilter, label: `vs ${name}` })),
       ...filterOptions.armyNames.map((name) => ({ value: `army:${name}` as OpponentFilter, label: `vs ${name}` }))
     ],
@@ -1073,7 +1097,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     [games]
   );
 
-  const overviewGamesMax = getMetricMax([overview.games, overview.players, overview.armies]);
   const playerPrimaryMax = getMetricMax(playerAggregates.map((player) => player.averagePrimary));
   const playerSecondaryMax = getMetricMax(playerAggregates.map((player) => player.averageSecondary));
   const playerTotalMax = getMetricMax(playerAggregates.map((player) => player.averageTotal));
@@ -1084,24 +1107,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const armyTotalMax = getMetricMax(armyAggregates.map((army) => army.averageTotal));
   const missionGamesMax = getMetricMax(missionLeaders.map((mission) => mission.games));
   const deploymentGamesMax = getMetricMax(deploymentLeaders.map((deployment) => deployment.games));
-  const matchupDurationMax = getMetricMax(matchupAggregates.map((matchup) => matchup.averageDurationMs));
-  const matchupScoreMax = getMetricMax(matchupAggregates.map((matchup) => matchup.averageCombinedScore));
-  const matchupDiffMax = getMetricMax(matchupAggregates.map((matchup) => matchup.averageScoreDifference));
   const roundDurationMax = getMetricMax(
-    roundDurationAggregates.flatMap((round) => [round.averageDurationMs, round.maxDurationMs])
-  );
-  const roundScoreMax = getMetricMax(
-    roundScoreAggregates.flatMap((round) => [
-      round.averagePlayerOneScore,
-      round.averagePlayerTwoScore,
-      round.averageCombinedScore
-    ])
-  );
-  const deploymentScoreMax = getMetricMax(
-    deploymentPerformance.flatMap((item) => [item.averageCombinedScore, item.averageDurationMs, item.leaderWinRate])
-  );
-  const playerTurnDurationMax = getMetricMax(
-    playerTurnDurationAggregates.flatMap((item) => [item.averageTurnDurationMs, item.longestTurnMs])
+    roundDurationAggregates.flatMap((round) => [round.minDurationMs, round.averageDurationMs, round.maxDurationMs])
   );
 
   const formatMetric = (value: number | null, digits = 1) =>
@@ -1218,26 +1225,13 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const roundDurationRows = roundDurationAggregates.map((round) => ({
     label: `R${round.roundNumber}`,
     primary: round.averageDurationMs,
-    secondary: round.maxDurationMs
+    secondary: round.maxDurationMs,
+    tertiary: round.minDurationMs
   }));
-  const roundDurationSingleRows: SingleLineChartRow[] = roundDurationAggregates.map((round) => {
-    const durations = filteredGames.flatMap((game) =>
-      game.rounds
-        .filter((entry) => entry.roundNumber === round.roundNumber)
-        .map((entry) => getCompletedRoundDurationMs(entry, game))
-        .filter((value): value is number => value !== null)
-    );
-    return {
-      label: `R${round.roundNumber}`,
-      value: round.averageDurationMs,
-      min: durations.length ? Math.min(...durations) : null,
-      max: round.maxDurationMs
-    };
-  });
   const roundScoreRows = roundScoreAggregates.map((round) => {
     const playerScores = filteredGames.flatMap((game) =>
       game.rounds.some((entry) => entry.roundNumber === round.roundNumber)
-        ? game.players.map((player) => getPlayerPrimaryTotal(game, player.id) + getPlayerSecondaryTotal(game, player.id))
+        ? game.players.map((player) => getPlayerRoundScoreTotal(game, player.id, round.roundNumber))
         : []
     );
     return {
@@ -1247,6 +1241,9 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
       max: playerScores.length ? Math.max(...playerScores) : null
     };
   });
+  const roundScoreMax = getMetricMax(
+    roundScoreRows.flatMap((round) => [round.value, round.min, round.max])
+  );
   const playerSplitRows = playerAggregates
     .filter((player) => player.games > 0)
     .map((player) => ({
@@ -1284,24 +1281,20 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     tone: (point.primaryScore !== null && point.secondaryScore !== null ? "score" : "warning") as StatTone,
     detail: `${point.cpSpent} CP | ${point.totalScore} Punkte | ${formatDateLabel(point.scheduledDate, point.scheduledTime)}`
   }));
-  const matchupDurationTrendRows: SingleLineChartRow[] = filteredGames
-    .map((game, index) => {
-      const duration = game.rounds.reduce((total, round) => total + (getCompletedRoundDurationMs(round, game) ?? 0), 0);
-      return {
-        label: game.scheduledDate ? game.scheduledDate.slice(5) : String(index + 1),
-        value: duration > 0 ? duration : null
-      };
-    });
   const matchupScoreTrendRows: SingleLineChartRow[] = filteredGames.map((game, index) => ({
     label: game.scheduledDate ? game.scheduledDate.slice(5) : String(index + 1),
     value: game.players.reduce((total, player) => total + getPlayerTotalScore(game, player.id), 0)
   }));
-  const roundDurationTrendRows: SingleLineChartRow[] = filteredGames.map((game, index) => ({
-    label: game.scheduledDate ? game.scheduledDate.slice(5) : String(index + 1),
-    value: game.rounds.length
-      ? game.rounds.reduce((total, round) => total + (getCompletedRoundDurationMs(round, game) ?? 0), 0) / game.rounds.length
-      : null
-  }));
+  const roundDurationTrendRows: SingleLineChartRow[] = [...filteredGames]
+    .sort((left, right) => `${right.scheduledDate}${right.scheduledTime}`.localeCompare(`${left.scheduledDate}${left.scheduledTime}`))
+    .flatMap((game, gameIndex) =>
+      game.rounds
+        .map((round) => ({
+          label: `${game.scheduledDate ? game.scheduledDate.slice(5) : gameIndex + 1} R${round.roundNumber}`,
+          value: getCompletedRoundDurationMs(round, game)
+        }))
+        .filter((row): row is SingleLineChartRow => row.value !== null)
+    );
 
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
     setFilters((current) => ({
@@ -1452,7 +1445,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           <>
             <CollapsibleSection
               title="Tabelle"
-              helper={selectedTableRow ? `Auswahl: ${selectedTableRow}` : `${tableRows.length} Eintraege`}
+              helper={selectedTableRow ? `Auswahl: ${selectedTableRow}` : undefined}
               count={tableRows.length}
               open={openSections.table}
               onToggle={() => toggleSection("table")}
@@ -1663,6 +1656,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     subtitle={`Top ${topCount}`}
                     items={playerTurnDurationItems}
                     emptyLabel="Noch keine abgeschlossenen Zuege vorhanden."
+                    activeLabel={activePlayerTurnDurationLabel}
+                    onActivate={setActivePlayerTurnDurationLabel}
                   />
                 </div>
                 {playerAggregates.map((player) => {
@@ -1674,14 +1669,25 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   const isOpen = openPlayerCards[player.name] ?? false;
 
                   return (
-                  <article key={player.name} className="card stack stats-group-card">
+                  <article
+                    key={player.name}
+                    className="card stack stats-group-card stats-group-card--collapsible"
+                    onClick={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest("button, select, input, textarea, [data-no-section-toggle='true']")) {
+                        return;
+                      }
+                      setOpenPlayerCards((current) => ({ ...current, [player.name]: !isOpen }));
+                    }}
+                  >
                     <div className="stats-group-card__head">
                       <div>
                         <strong>{player.name}</strong>
                         <p>{scopedPlayer.games} Spiele</p>
                       </div>
-                      <div className="stats-group-card__actions">
+                      <div className="stats-group-card__actions" data-no-section-toggle="true">
                         <select
+                          className="stats-player-filter"
                           value={playerFilter}
                           onChange={(event) =>
                             setPlayerDetailFilters((current) => ({
@@ -1865,7 +1871,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               open={openSections.missions}
               onToggle={() => toggleSection("missions")}
             >
-              <div className="stack">
+              <div className="stats-row-grid">
                 {missionSummaries.map((mission) => (
                   <article key={mission.label} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
@@ -1902,7 +1908,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               open={openSections.deployments}
               onToggle={() => toggleSection("deployments")}
             >
-              <div className="stack">
+              <div className="stats-row-grid">
                 {deploymentSummaries.map((deployment) => (
                   <article key={deployment.label} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
@@ -2110,6 +2116,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     rows={roundDurationRows}
                     primaryLabel="Durchschnitt"
                     secondaryLabel="Maximum"
+                    tertiaryLabel="Minimum"
                     emptyLabel="Noch keine Rundenzeiten vorhanden."
                     formatValue={formatDuration}
                     activeLabel={activeDurationRoundLabel}
@@ -2120,12 +2127,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     rows={roundScoreRows}
                     emptyLabel="Noch keine Rundenscores vorhanden."
                     formatValue={(value) => value.toFixed(1)}
-                  />
-                  <SingleLineChart
-                    title="Rundendauer je Runde"
-                    rows={roundDurationSingleRows}
-                    emptyLabel="Noch keine Rundenzeiten vorhanden."
-                    formatValue={formatDuration}
+                    scaleByValueOnly
                   />
                   <SingleLineChart
                     title="Rundendauer ueber Zeit"
@@ -2140,6 +2142,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     formatValue={(value) => value.toFixed(0)}
                   />
                 </div>
+                <div className="stats-row-grid">
                 {roundDurationAggregates.map((round) => (
                   <article key={round.roundNumber} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
@@ -2166,7 +2169,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                       />
                       <StatCard
                         label="Dauer Min"
-                        value={formatDurationMetric(roundDurationSingleRows.find((entry) => entry.label === `R${round.roundNumber}`)?.min ?? null)}
+                        value={formatDurationMetric(round.minDurationMs)}
                         tone="time"
                       />
                       <StatCard
@@ -2195,6 +2198,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     </div>
                   </article>
                 ))}
+                </div>
               </div>
             </CollapsibleSection>
 
@@ -2219,81 +2223,41 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("matchups")}
             >
               <div className="stack">
-                <div className="overview-chart-grid stats-chart-grid">
-                  <SingleLineChart
-                    title="Matchdauer ueber Zeit"
-                    rows={matchupDurationTrendRows}
-                    emptyLabel="Noch keine Matchdauer-Daten vorhanden."
-                    formatValue={formatDuration}
-                  />
-                  <SingleLineChart
-                    title="Scoring ueber Zeit"
-                    rows={matchupScoreTrendRows}
-                    emptyLabel="Noch keine Scoring-Daten vorhanden."
-                    formatValue={(value) => value.toFixed(0)}
-                  />
-                </div>
                 {matchupAggregates.map((matchup) => (
                   <article key={matchup.label} className="card stack stats-group-card">
                     <div className="stats-group-card__head">
                       <div>
                         <strong>{matchup.label}</strong>
-                        <p>{matchup.games} Spiele</p>
+                        <p>
+                          {matchup.games} Spiele | {matchup.armyA} {matchup.winsA}-{matchup.winsB}-{matchup.ties} {matchup.armyB}
+                        </p>
                       </div>
                     </div>
-                    <MiniBarChart
-                      items={[
-                        {
-                          label: "Dauer",
-                          value: matchup.averageDurationMs,
-                          display: formatDurationMetric(matchup.averageDurationMs),
-                          max: matchupDurationMax,
-                          tone: "time"
-                        },
-                        {
-                          label: "Score",
-                          value: matchup.averageCombinedScore,
-                          display: formatMetric(matchup.averageCombinedScore),
-                          max: matchupScoreMax,
-                          tone: "score"
-                        },
-                        {
-                          label: "Diff",
-                          value: matchup.averageScoreDifference,
-                          display: formatMetric(matchup.averageScoreDifference),
-                          max: matchupDiffMax,
-                          tone: "warning"
-                        }
-                      ]}
-                    />
                     <div className="stats-grid stats-grid--stats-page">
                       <StatCard
-                        label="Spiele"
-                        value={matchup.games}
+                        label="W-L-D"
+                        value={`${matchup.winsA}-${matchup.winsB}-${matchup.ties}`}
                         tone="success"
-                        chart={defaultMetricCardChart(matchup.games, String(matchup.games), overview.games, "success")}
                       />
                       <StatCard
-                        label="Avg Dauer"
+                        label="Dauer ges"
                         value={formatDurationMetric(matchup.averageDurationMs)}
                         tone="time"
-                        chart={defaultMetricCardChart(
-                          matchup.averageDurationMs,
-                          formatDurationMetric(matchup.averageDurationMs),
-                          matchupDurationMax,
-                          "time"
-                        )}
                       />
                       <StatCard
-                        label="Avg Score ges"
+                        label="Dauer Verhältnis"
+                        value={`${formatDurationMetric(matchup.averageDurationAms)} : ${formatDurationMetric(matchup.averageDurationBms)}`}
+                        tone="time"
+                      />
+                      <StatCard
+                        label="Score ges"
                         value={formatMetric(matchup.averageCombinedScore)}
                         tone="score"
-                        chart={defaultMetricCardChart(
-                          matchup.averageCombinedScore,
-                          formatMetric(matchup.averageCombinedScore),
-                          matchupScoreMax,
-                          "score"
-                        )}
+                      />
+                      <StatCard
+                        label="Score Verhältnis"
+                        value={`${formatMetric(matchup.averageScoreA)} : ${formatMetric(matchup.averageScoreB)}`}
+                        tone="score"
                       />
                     </div>
                   </article>

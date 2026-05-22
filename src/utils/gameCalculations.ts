@@ -604,15 +604,25 @@ export interface ArmyAggregate {
 
 export interface MatchupAggregate {
   label: string;
+  armyA: string;
+  armyB: string;
   games: number;
+  winsA: number;
+  winsB: number;
+  ties: number;
   averageDurationMs: number | null;
+  averageDurationAms: number | null;
+  averageDurationBms: number | null;
   averageCombinedScore: number | null;
+  averageScoreA: number | null;
+  averageScoreB: number | null;
   averageScoreDifference: number | null;
 }
 
 export interface RoundDurationAggregate {
   roundNumber: number;
   games: number;
+  minDurationMs: number | null;
   averageDurationMs: number | null;
   maxDurationMs: number | null;
 }
@@ -1060,32 +1070,74 @@ export const createArmyAggregates = (games: Game[], durationSourceGames: Game[] 
 };
 
 export const createMatchupAggregates = (games: Game[], durationSourceGames: Game[] = games): MatchupAggregate[] => {
-  const grouped = new Map<string, { count: number; durations: number[]; combinedScores: number[]; scoreDifferences: number[] }>();
+  const grouped = new Map<string, {
+    armyA: string;
+    armyB: string;
+    count: number;
+    winsA: number;
+    winsB: number;
+    ties: number;
+    durations: number[];
+    durationsA: number[];
+    durationsB: number[];
+    combinedScores: number[];
+    scoresA: number[];
+    scoresB: number[];
+    scoreDifferences: number[];
+  }>();
   const durationSourceById = createGameSourceById(durationSourceGames);
 
   games.forEach((game) => {
     const [armyA, armyB] = game.players.map((player) => player.army.name).sort((left, right) => left.localeCompare(right));
     const label = `${armyA} vs ${armyB}`;
     const existing = grouped.get(label) ?? {
+      armyA,
+      armyB,
       count: 0,
+      winsA: 0,
+      winsB: 0,
+      ties: 0,
       durations: [],
+      durationsA: [],
+      durationsB: [],
       combinedScores: [],
+      scoresA: [],
+      scoresB: [],
       scoreDifferences: []
     };
-    const scoreA = getPlayerTotalScore(game, game.players[0].id);
-    const scoreB = getPlayerTotalScore(game, game.players[1].id);
+    const playerA = game.players.find((player) => player.army.name === armyA) ?? game.players[0];
+    const playerB = game.players.find((player) => player.id !== playerA.id) ?? game.players[1];
+    const scoreA = getPlayerTotalScore(game, playerA.id);
+    const scoreB = getPlayerTotalScore(game, playerB.id);
 
     existing.count += 1;
-    const completedDuration =
-      game.scoreDetailLevel === "full"
-        ? getStatsGameDurationMs(durationSourceById.get(game.id) ?? game)
-        : null;
+    const durationSourceGame = durationSourceById.get(game.id) ?? game;
+    const completedDuration = game.scoreDetailLevel === "full" ? getStatsGameDurationMs(durationSourceGame) : null;
     if (completedDuration !== null) {
       existing.durations.push(completedDuration);
     }
     if (hasComparableScoreData(game)) {
+      if (scoreA > scoreB) {
+        existing.winsA += 1;
+      } else if (scoreB > scoreA) {
+        existing.winsB += 1;
+      } else {
+        existing.ties += 1;
+      }
       existing.combinedScores.push(scoreA + scoreB);
+      existing.scoresA.push(scoreA);
+      existing.scoresB.push(scoreB);
       existing.scoreDifferences.push(Math.abs(scoreA - scoreB));
+    }
+    if (durationSourceGame.scoreDetailLevel === "full") {
+      const durationA = getPlayerTurnDurationTotalMs(durationSourceGame, playerA.id);
+      const durationB = getPlayerTurnDurationTotalMs(durationSourceGame, playerB.id);
+      if (durationA > 0) {
+        existing.durationsA.push(durationA);
+      }
+      if (durationB > 0) {
+        existing.durationsB.push(durationB);
+      }
     }
     grouped.set(label, existing);
   });
@@ -1093,9 +1145,18 @@ export const createMatchupAggregates = (games: Game[], durationSourceGames: Game
   return Array.from(grouped.entries())
     .map(([label, values]) => ({
       label,
+      armyA: values.armyA,
+      armyB: values.armyB,
       games: values.count,
+      winsA: values.winsA,
+      winsB: values.winsB,
+      ties: values.ties,
       averageDurationMs: averageOrNull(values.durations),
+      averageDurationAms: averageOrNull(values.durationsA),
+      averageDurationBms: averageOrNull(values.durationsB),
       averageCombinedScore: averageOrNull(values.combinedScores),
+      averageScoreA: averageOrNull(values.scoresA),
+      averageScoreB: averageOrNull(values.scoresB),
       averageScoreDifference: averageOrNull(values.scoreDifferences)
     }))
     .sort((left, right) => right.games - left.games || left.label.localeCompare(right.label));
@@ -1124,6 +1185,7 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
     .map(([roundNumber, durations]) => ({
       roundNumber,
       games: durations.length,
+      minDurationMs: durations.length ? Math.min(...durations) : null,
       averageDurationMs: averageOrNull(durations),
       maxDurationMs: durations.length ? Math.max(...durations) : null
     }))

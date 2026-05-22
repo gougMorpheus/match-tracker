@@ -683,32 +683,72 @@ const createMatchupAggregates = (games, durationSourceGames = games) => {
         const [armyA, armyB] = game.players.map((player) => player.army.name).sort((left, right) => left.localeCompare(right));
         const label = `${armyA} vs ${armyB}`;
         const existing = grouped.get(label) ?? {
+            armyA,
+            armyB,
             count: 0,
+            winsA: 0,
+            winsB: 0,
+            ties: 0,
             durations: [],
+            durationsA: [],
+            durationsB: [],
             combinedScores: [],
+            scoresA: [],
+            scoresB: [],
             scoreDifferences: []
         };
-        const scoreA = (0, exports.getPlayerTotalScore)(game, game.players[0].id);
-        const scoreB = (0, exports.getPlayerTotalScore)(game, game.players[1].id);
+        const playerA = game.players.find((player) => player.army.name === armyA) ?? game.players[0];
+        const playerB = game.players.find((player) => player.id !== playerA.id) ?? game.players[1];
+        const scoreA = (0, exports.getPlayerTotalScore)(game, playerA.id);
+        const scoreB = (0, exports.getPlayerTotalScore)(game, playerB.id);
         existing.count += 1;
-        const completedDuration = game.scoreDetailLevel === "full"
-            ? getStatsGameDurationMs(durationSourceById.get(game.id) ?? game)
-            : null;
+        const durationSourceGame = durationSourceById.get(game.id) ?? game;
+        const completedDuration = game.scoreDetailLevel === "full" ? getStatsGameDurationMs(durationSourceGame) : null;
         if (completedDuration !== null) {
             existing.durations.push(completedDuration);
         }
         if (hasComparableScoreData(game)) {
+            if (scoreA > scoreB) {
+                existing.winsA += 1;
+            }
+            else if (scoreB > scoreA) {
+                existing.winsB += 1;
+            }
+            else {
+                existing.ties += 1;
+            }
             existing.combinedScores.push(scoreA + scoreB);
+            existing.scoresA.push(scoreA);
+            existing.scoresB.push(scoreB);
             existing.scoreDifferences.push(Math.abs(scoreA - scoreB));
+        }
+        if (durationSourceGame.scoreDetailLevel === "full") {
+            const durationA = (0, exports.getPlayerTurnDurationTotalMs)(durationSourceGame, playerA.id);
+            const durationB = (0, exports.getPlayerTurnDurationTotalMs)(durationSourceGame, playerB.id);
+            if (durationA > 0) {
+                existing.durationsA.push(durationA);
+            }
+            if (durationB > 0) {
+                existing.durationsB.push(durationB);
+            }
         }
         grouped.set(label, existing);
     });
     return Array.from(grouped.entries())
         .map(([label, values]) => ({
         label,
+        armyA: values.armyA,
+        armyB: values.armyB,
         games: values.count,
+        winsA: values.winsA,
+        winsB: values.winsB,
+        ties: values.ties,
         averageDurationMs: averageOrNull(values.durations),
+        averageDurationAms: averageOrNull(values.durationsA),
+        averageDurationBms: averageOrNull(values.durationsB),
         averageCombinedScore: averageOrNull(values.combinedScores),
+        averageScoreA: averageOrNull(values.scoresA),
+        averageScoreB: averageOrNull(values.scoresB),
         averageScoreDifference: averageOrNull(values.scoreDifferences)
     }))
         .sort((left, right) => right.games - left.games || left.label.localeCompare(right.label));
@@ -734,6 +774,7 @@ const createRoundDurationAggregates = (games) => {
         .map(([roundNumber, durations]) => ({
         roundNumber,
         games: durations.length,
+        minDurationMs: durations.length ? Math.min(...durations) : null,
         averageDurationMs: averageOrNull(durations),
         maxDurationMs: durations.length ? Math.max(...durations) : null
     }))

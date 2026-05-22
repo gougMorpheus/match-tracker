@@ -21,37 +21,41 @@ export const CollapsibleSection = ({
   <section
     className={`card stack collapsible-section ${open ? "is-open" : ""}`}
     onClick={(event) => {
-      if (event.target === event.currentTarget) {
-        onToggle();
+      const target = event.target as HTMLElement;
+      if (target.closest("button, a, input, select, textarea, [data-no-section-toggle='true']")) {
+        return;
       }
+      onToggle();
     }}
   >
-    <button
-      type="button"
-      className="collapsible-section__toggle"
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle();
-      }}
-    >
-      <div className="collapsible-section__head">
+    <div className="collapsible-section__head">
+      <div className="collapsible-section__title-row">
+        {count !== undefined ? <span className="meta-chip">{count}</span> : null}
         <div>
           <h2>{title}</h2>
           {helper ? <p>{helper}</p> : null}
         </div>
-        <div className="collapsible-section__meta">
-          {actions ? (
-            <span className="collapsible-section__actions" onClick={(event) => event.stopPropagation()}>
-              {actions}
-            </span>
-          ) : null}
-          {count !== undefined ? <span className="meta-chip">{count}</span> : null}
-          <span className="meta-chip meta-chip--accent">{open ? "Weniger" : "Mehr"}</span>
-        </div>
       </div>
-    </button>
+      <div className="collapsible-section__meta">
+        {actions ? (
+          <span className="collapsible-section__actions" data-no-section-toggle="true">
+            {actions}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="meta-chip meta-chip--accent collapsible-section__toggle"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
+          }}
+        >
+          {open ? "Weniger" : "Mehr"}
+        </button>
+      </div>
+    </div>
     {open ? (
-      <div className="stack" onClick={(event) => event.stopPropagation()}>
+      <div className="stack">
         {children}
       </div>
     ) : null}
