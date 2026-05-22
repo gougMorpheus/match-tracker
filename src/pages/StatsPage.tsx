@@ -39,7 +39,7 @@ interface StatsPageProps {
 }
 
 type StatsSectionKey = "overview" | "players" | "armies" | "rounds" | "records" | "matchups";
-type ExtendedStatsSectionKey = StatsSectionKey | "missions" | "deployments";
+type ExtendedStatsSectionKey = StatsSectionKey | "table" | "missions" | "deployments";
 type StatTone = "default" | "score" | "time" | "success" | "warning";
 
 interface MiniBarItem {
@@ -85,7 +85,6 @@ interface TableRow {
   losses: number;
   ties: number;
   winRate: number | null;
-  averageOwnTurnDurationMs: number | null;
 }
 
 interface SingleLineChartRow {
@@ -93,6 +92,11 @@ interface SingleLineChartRow {
   value: number | null;
   min?: number | null;
   max?: number | null;
+}
+
+interface MultiLineChartSeries {
+  label: string;
+  rows: SingleLineChartRow[];
 }
 
 interface ScenarioSummary {
@@ -107,6 +111,7 @@ interface ScenarioSummary {
 
 const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
   overview: false,
+  table: false,
   players: false,
   armies: false,
   rounds: false,
@@ -560,6 +565,99 @@ const SingleLineChart = ({
   );
 };
 
+const MultiLineChart = ({
+  title,
+  series,
+  emptyLabel,
+  formatValue
+}: {
+  title: string;
+  series: MultiLineChartSeries[];
+  emptyLabel: string;
+  formatValue: (value: number) => string;
+}) => {
+  const visibleSeries = series
+    .map((entry) => ({
+      ...entry,
+      rows: entry.rows.filter((row) => row.value !== null)
+    }))
+    .filter((entry) => entry.rows.length > 0);
+
+  if (!visibleSeries.length) {
+    return (
+      <article className="overview-chart-card">
+        <div className="overview-chart-card__head">
+          <strong>{title}</strong>
+          <span>0 Werte</span>
+        </div>
+        <p className="muted-copy">{emptyLabel}</p>
+      </article>
+    );
+  }
+
+  const plotWidth = CHART_WIDTH - CHART_PADDING * 2;
+  const plotHeight = CHART_HEIGHT - CHART_PADDING * 2;
+  const maxValue = Math.max(
+    ...visibleSeries.flatMap((entry) => entry.rows.map((row) => row.value ?? 0)),
+    1
+  );
+  const palette = ["#38bdf8", "#34d399", "#f59e0b", "#a78bfa", "#fb7185", "#5eead4", "#facc15", "#60a5fa"];
+
+  return (
+    <article className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <strong>{title}</strong>
+        <span>{visibleSeries.length} Linien</span>
+      </div>
+      <svg className="overview-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label={title}>
+        {[0, 0.5, 1].map((ratio) => {
+          const y = CHART_HEIGHT - CHART_PADDING - plotHeight * ratio;
+          return <line key={ratio} x1={CHART_PADDING} x2={CHART_WIDTH - CHART_PADDING} y1={y} y2={y} className="overview-chart__guide" />;
+        })}
+        <line x1={CHART_PADDING} x2={CHART_PADDING} y1={CHART_PADDING} y2={CHART_HEIGHT - CHART_PADDING} className="overview-chart__axis" />
+        <line x1={CHART_PADDING} x2={CHART_WIDTH - CHART_PADDING} y1={CHART_HEIGHT - CHART_PADDING} y2={CHART_HEIGHT - CHART_PADDING} className="overview-chart__axis" />
+        {visibleSeries.map((entry, seriesIndex) => {
+          const points = entry.rows.map((row, rowIndex) => ({
+            x: CHART_PADDING + (entry.rows.length === 1 ? plotWidth / 2 : (plotWidth / Math.max(entry.rows.length - 1, 1)) * rowIndex),
+            y: CHART_HEIGHT - CHART_PADDING - (((row.value ?? 0) / maxValue) * plotHeight)
+          }));
+          const color = palette[seriesIndex % palette.length];
+
+          return (
+            <g key={entry.label}>
+              <path d={buildLinePath(points)} className="overview-chart__line stats-multi-line-chart__line" style={{ stroke: color }} />
+              {points.map((point, pointIndex) => (
+                <circle
+                  key={`${entry.label}-${pointIndex}`}
+                  cx={point.x}
+                  cy={point.y}
+                  r={3}
+                  className="overview-chart__point stats-multi-line-chart__point"
+                  style={{ fill: color }}
+                />
+              ))}
+            </g>
+          );
+        })}
+        <text x={CHART_PADDING - 4} y={CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
+          {formatValue(maxValue)}
+        </text>
+        <text x={CHART_PADDING - 4} y={CHART_HEIGHT - CHART_PADDING + 4} textAnchor="end" className="overview-chart__scale">
+          {formatValue(0)}
+        </text>
+      </svg>
+      <div className="stats-multi-line-chart__legend">
+        {visibleSeries.map((entry, index) => (
+          <span key={entry.label} className="overview-chart-total">
+            <span className="overview-chart-total__marker" style={{ background: palette[index % palette.length] }} />
+            <strong>{entry.label}</strong>
+          </span>
+        ))}
+      </div>
+    </article>
+  );
+};
+
 const ScatterChart = ({
   title,
   points,
@@ -703,29 +801,26 @@ const matchesOpponentFilter = (game: Game, player: Player, filter: OpponentFilte
 const createTableRows = (
   games: Game[],
   mode: TableGroupMode,
-  opponentFilter: OpponentFilter
+  selectedLabel: string | null
 ): TableRow[] => {
-  const grouped = new Map<string, { games: number; wins: number; losses: number; ties: number; durations: number[] }>();
+  const grouped = new Map<string, { games: number; wins: number; losses: number; ties: number }>();
 
   games.forEach((game) => {
     game.players.forEach((player) => {
-      if (!matchesOpponentFilter(game, player, opponentFilter)) {
+      const label = getGroupLabel(player, mode);
+      const opponent = game.players.find((entry) => entry.id !== player.id);
+      const opponentLabel = opponent ? getGroupLabel(opponent, mode) : null;
+
+      if (selectedLabel && label !== selectedLabel && opponentLabel !== selectedLabel) {
         return;
       }
 
-      const label = getGroupLabel(player, mode);
       const result = getPlayerResult(game, player.id);
-      const row = grouped.get(label) ?? { games: 0, wins: 0, losses: 0, ties: 0, durations: [] };
+      const row = grouped.get(label) ?? { games: 0, wins: 0, losses: 0, ties: 0 };
       row.games += 1;
       row.wins += result === "win" ? 1 : 0;
       row.losses += result === "loss" ? 1 : 0;
       row.ties += result === "tie" ? 1 : 0;
-      if (game.scoreDetailLevel === "full") {
-        const duration = getPlayerTurnDurationTotalMs(game, player.id);
-        if (duration > 0) {
-          row.durations.push(duration);
-        }
-      }
       grouped.set(label, row);
     });
   });
@@ -737,10 +832,7 @@ const createTableRows = (
       wins: row.wins,
       losses: row.losses,
       ties: row.ties,
-      winRate: row.games ? (row.wins / row.games) * 100 : null,
-      averageOwnTurnDurationMs: row.durations.length
-        ? row.durations.reduce((total, value) => total + value, 0) / row.durations.length
-        : null
+      winRate: row.games ? (row.wins / row.games) * 100 : null
     }))
     .sort((left, right) => (right.winRate ?? 0) - (left.winRate ?? 0) || right.games - left.games || left.label.localeCompare(right.label));
 };
@@ -749,7 +841,7 @@ const createWinRateTrendRows = (
   games: Game[],
   mode: TableGroupMode,
   groupLabel: string | null,
-  opponentFilter: OpponentFilter,
+  selectedLabel: string | null,
   range: TableRange
 ): SingleLineChartRow[] => {
   const now = new Date();
@@ -764,7 +856,14 @@ const createWinRateTrendRows = (
     .flatMap((game) =>
       game.players
         .filter((player) => !groupLabel || getGroupLabel(player, mode) === groupLabel)
-        .filter((player) => matchesOpponentFilter(game, player, opponentFilter))
+        .filter((player) => {
+          if (!selectedLabel || groupLabel === selectedLabel) {
+            return true;
+          }
+
+          const opponent = game.players.find((entry) => entry.id !== player.id);
+          return opponent ? getGroupLabel(opponent, mode) === selectedLabel : false;
+        })
         .map((player) => ({ game, player }))
     )
     .map(({ game, player }) => {
@@ -777,6 +876,18 @@ const createWinRateTrendRows = (
       };
     });
 };
+
+const createWinRateTrendSeries = (
+  games: Game[],
+  mode: TableGroupMode,
+  labels: string[],
+  selectedLabel: string | null,
+  range: TableRange
+): MultiLineChartSeries[] =>
+  labels.map((label) => ({
+    label,
+    rows: createWinRateTrendRows(games, mode, label, selectedLabel, range)
+  }));
 
 const createScenarioSummaries = (
   games: Game[],
@@ -870,7 +981,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [activeScoreRoundLabel, setActiveScoreRoundLabel] = useState<string | null>(null);
   const [activeCpPointId, setActiveCpPointId] = useState<string | null>(null);
   const [tableGroupMode, setTableGroupMode] = useState<TableGroupMode>("players");
-  const [selectedTableOpponent, setSelectedTableOpponent] = useState<OpponentFilter>("all");
   const [selectedTableRow, setSelectedTableRow] = useState<string | null>(null);
   const [tableRange, setTableRange] = useState<TableRange>("all");
   const [playerDetailFilters, setPlayerDetailFilters] = useState<Record<string, OpponentFilter>>({});
@@ -924,12 +1034,23 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const cpScorePoints = useMemo(() => createCpScoreCorrelationPoints(filteredGames), [filteredGames]);
   const turnRecords = useMemo(() => getTurnRecords(filteredGames), [filteredGames]);
   const tableRows = useMemo(
-    () => createTableRows(filteredGames, tableGroupMode, selectedTableOpponent),
-    [filteredGames, selectedTableOpponent, tableGroupMode]
+    () => createTableRows(filteredGames, tableGroupMode, selectedTableRow),
+    [filteredGames, selectedTableRow, tableGroupMode]
   );
   const tableTrendRows = useMemo(
-    () => createWinRateTrendRows(filteredGames, tableGroupMode, selectedTableRow, selectedTableOpponent, tableRange),
-    [filteredGames, selectedTableOpponent, selectedTableRow, tableGroupMode, tableRange]
+    () => createWinRateTrendRows(filteredGames, tableGroupMode, selectedTableRow, selectedTableRow, tableRange),
+    [filteredGames, selectedTableRow, tableGroupMode, tableRange]
+  );
+  const tableTrendSeries = useMemo(
+    () =>
+      createWinRateTrendSeries(
+        filteredGames,
+        tableGroupMode,
+        tableRows.map((row) => row.label),
+        selectedTableRow,
+        tableRange
+      ),
+    [filteredGames, selectedTableRow, tableGroupMode, tableRange, tableRows]
   );
   const tableOpponentOptions = useMemo(
     () => [
@@ -940,6 +1061,17 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     [filterOptions.armyNames, filterOptions.playerNames]
   );
   const pointOptions = filterOptions.gamePoints;
+  const dateOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          games
+            .map((game) => game.scheduledDate || game.createdAt.slice(0, 10))
+            .filter(Boolean)
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [games]
+  );
 
   const overviewGamesMax = getMetricMax([overview.games, overview.players, overview.armies]);
   const playerPrimaryMax = getMetricMax(playerAggregates.map((player) => player.averagePrimary));
@@ -1189,29 +1321,29 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     <Layout
       title="Statistik"
       actions={
-        <FloatingMenu
-          fixed
-          ariaLabel="Hauptmenue"
-          sections={[
-            {
-              label: "Navigation",
-              items: [
-                { label: "Main", onClick: onBack },
-                { label: "Neues Spiel", onClick: onCreateGame },
-                { label: "Statistik", onClick: () => window.location.hash = "/stats" }
-              ]
-            },
-            {
-              label: "Optionen",
-              items: [
-                {
-                  label: filtersOpen ? "Filter schliessen" : "Filter",
-                  onClick: () => setFiltersOpen((current) => !current)
-                }
-              ]
-            }
-          ]}
-        />
+        <>
+          <button
+            type="button"
+            className={`ghost-button compact-button stats-filter-toggle ${filtersOpen ? "is-active" : ""}`}
+            onClick={() => setFiltersOpen((current) => !current)}
+          >
+            Filter
+          </button>
+          <FloatingMenu
+            fixed
+            ariaLabel="Hauptmenue"
+            sections={[
+              {
+                label: "Navigation",
+                items: [
+                  { label: "Main", onClick: onBack },
+                  { label: "Neues Spiel", onClick: onCreateGame },
+                  { label: "Statistik", onClick: () => window.location.hash = "/stats" }
+                ]
+              }
+            ]}
+          />
+        </>
       }
     >
       <section className="stack stats-page">
@@ -1230,8 +1362,12 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
         ) : null}
 
         {filtersOpen ? (
-          <section className="card stack">
-            <div className="button-row button-row--compact">
+          <section className="card stack stats-filter-card">
+            <div className="list-row">
+              <div>
+                <h2>Filter</h2>
+                <p className="muted-copy">Armee-Punkte und Zeitraum</p>
+              </div>
               <button
                 type="button"
                 className="ghost-button compact-button"
@@ -1240,100 +1376,69 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                 Reset
               </button>
             </div>
-            <label className="field">
-              <span>Suche</span>
-              <input
-                value={filters.query}
-                onChange={(event) => updateFilter("query", event.target.value)}
-                placeholder="Name, Armee, Punkte"
-              />
-            </label>
-            <div className="two-column-grid">
-              <label className="field">
-                <span>Status</span>
-                <select
-                  value={filters.status}
-                  onChange={(event) =>
-                    updateFilter("status", event.target.value as typeof filters.status)
-                  }
-                >
-                  <option value="all">Alle</option>
-                  <option value="active">Aktiv</option>
-                  <option value="completed">Abgeschlossen</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Spieler</span>
-                <select
-                  value={filters.playerName}
-                  onChange={(event) => updateFilter("playerName", event.target.value)}
-                >
-                  <option value="all">Alle</option>
-                  {filterOptions.playerNames.map((playerName) => (
-                    <option key={playerName} value={playerName}>
-                      {playerName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Armee</span>
-                <select
-                  value={filters.armyName}
-                  onChange={(event) => updateFilter("armyName", event.target.value)}
-                >
-                  <option value="all">Alle</option>
-                  {filterOptions.armyNames.map((armyName) => (
-                    <option key={armyName} value={armyName}>
-                      {armyName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Punkte von</span>
-                <select
-                  value={filters.pointsFrom}
-                  onChange={(event) => updateFilter("pointsFrom", event.target.value)}
-                >
-                  <option value="all">Alle</option>
-                  {pointOptions.map((points) => (
-                    <option key={points} value={points}>
-                      {points}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Punkte bis</span>
-                <select
-                  value={filters.pointsTo}
-                  onChange={(event) => updateFilter("pointsTo", event.target.value)}
-                >
-                  <option value="all">Alle</option>
-                  {pointOptions.map((points) => (
-                    <option key={points} value={points}>
-                      {points}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Von</span>
-                <input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(event) => updateFilter("dateFrom", event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Bis</span>
-                <input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(event) => updateFilter("dateTo", event.target.value)}
-                />
-              </label>
+            <div className="stats-filter-grid">
+              <div className="stats-filter-row">
+                <span>Armee-Punkte</span>
+                <label className="field">
+                  <span>Von</span>
+                  <select
+                    value={filters.pointsFrom}
+                    onChange={(event) => updateFilter("pointsFrom", event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {pointOptions.map((points) => (
+                      <option key={points} value={points}>
+                        {points}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Bis</span>
+                  <select
+                    value={filters.pointsTo}
+                    onChange={(event) => updateFilter("pointsTo", event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {pointOptions.map((points) => (
+                      <option key={points} value={points}>
+                        {points}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="stats-filter-row">
+                <span>Datum</span>
+                <label className="field">
+                  <span>Von</span>
+                  <select
+                    value={filters.dateFrom}
+                    onChange={(event) => updateFilter("dateFrom", event.target.value)}
+                  >
+                    <option value="">Alle</option>
+                    {dateOptions.map((date) => (
+                      <option key={date} value={date}>
+                        {formatDateLabel(date, "")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Bis</span>
+                  <select
+                    value={filters.dateTo}
+                    onChange={(event) => updateFilter("dateTo", event.target.value)}
+                  >
+                    <option value="">Alle</option>
+                    {dateOptions.map((date) => (
+                      <option key={date} value={date}>
+                        {formatDateLabel(date, "")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
           </section>
         ) : null}
@@ -1345,53 +1450,44 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           </article>
         ) : filteredGames.length ? (
           <>
-            <section className="stats-hero">
-              <article className="stats-hero__feature stats-hero__feature--table">
-                <div className="stats-table-card__head">
-                  <div>
-                    <span>Tabelle</span>
-                    <p>{selectedTableRow ? `Auswahl: ${selectedTableRow}` : `${tableRows.length} Eintraege`}</p>
-                  </div>
-                  <div className="stats-toolbar__group">
-                    <button
-                      type="button"
-                      className={`chip-button ${tableGroupMode === "armies" ? "is-selected" : ""}`}
-                      onClick={() => {
-                        setTableGroupMode("armies");
-                        setSelectedTableRow(null);
-                      }}
-                    >
-                      Armeen
-                    </button>
-                    <button
-                      type="button"
-                      className={`chip-button ${tableGroupMode === "players" ? "is-selected" : ""}`}
-                      onClick={() => {
-                        setTableGroupMode("players");
-                        setSelectedTableRow(null);
-                      }}
-                    >
-                      Spieler
-                    </button>
-                  </div>
+            <CollapsibleSection
+              title="Tabelle"
+              helper={selectedTableRow ? `Auswahl: ${selectedTableRow}` : `${tableRows.length} Eintraege`}
+              count={tableRows.length}
+              open={openSections.table}
+              onToggle={() => toggleSection("table")}
+              actions={
+                <div className="stats-toolbar__group">
+                  <button
+                    type="button"
+                    className={`chip-button ${tableGroupMode === "armies" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      setTableGroupMode("armies");
+                      setSelectedTableRow(null);
+                    }}
+                  >
+                    Armeen
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip-button ${tableGroupMode === "players" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      setTableGroupMode("players");
+                      setSelectedTableRow(null);
+                    }}
+                  >
+                    Spieler
+                  </button>
                 </div>
-                <label className="field stats-table-filter">
-                  <span>Gegnerfilter</span>
-                  <select value={selectedTableOpponent} onChange={(event) => setSelectedTableOpponent(event.target.value as OpponentFilter)}>
-                    {tableOpponentOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              }
+            >
+              <div className="stats-table-card">
                 <div className="stats-table" role="table" aria-label="Tabelle">
                   <div className="stats-table__row stats-table__row--head" role="row">
                     <span>Name</span>
                     <span>Win%</span>
                     <span>W/L/D</span>
                     <span>Spiele</span>
-                    <span>Eigene Zuege</span>
                   </div>
                   {tableRows.map((row) => (
                     <button
@@ -1404,11 +1500,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                       <strong>{formatPercent(row.winRate)}</strong>
                       <span>{row.wins}/{row.losses}/{row.ties}</span>
                       <span>{row.games}</span>
-                      <span>{formatDurationMetric(row.averageOwnTurnDurationMs)}</span>
                     </button>
                   ))}
                 </div>
-                <div className="button-row button-row--compact stats-toolbar">
+                <div className="stats-table-range">
                   {(["3m", "6m", "12m", "all"] as const).map((range) => (
                     <button
                       key={range}
@@ -1420,13 +1515,25 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     </button>
                   ))}
                 </div>
-                <SingleLineChart
-                  title="Win%-Entwicklung"
-                  rows={tableTrendRows}
-                  emptyLabel="Noch keine Entwicklung vorhanden."
-                  formatValue={(value) => `${value.toFixed(0)}%`}
-                />
-              </article>
+                {selectedTableRow ? (
+                  <SingleLineChart
+                    title="Win%-Entwicklung"
+                    rows={tableTrendRows}
+                    emptyLabel="Noch keine Entwicklung vorhanden."
+                    formatValue={(value) => `${value.toFixed(0)}%`}
+                  />
+                ) : (
+                  <MultiLineChart
+                    title="Win%-Entwicklung"
+                    series={tableTrendSeries}
+                    emptyLabel="Noch keine Entwicklung vorhanden."
+                    formatValue={(value) => `${value.toFixed(0)}%`}
+                  />
+                )}
+              </div>
+            </CollapsibleSection>
+
+            <section className="stats-hero">
               <AverageMetricCard
                 label="Avg Dauer"
                 value={formatDurationMetric(overview.averageDurationMs)}

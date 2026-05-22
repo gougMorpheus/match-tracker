@@ -4,6 +4,7 @@ interface CollapsibleSectionProps extends PropsWithChildren {
   title: string;
   helper?: ReactNode;
   count?: ReactNode;
+  actions?: ReactNode;
   open: boolean;
   onToggle: () => void;
 }
@@ -12,6 +13,7 @@ export const CollapsibleSection = ({
   title,
   helper,
   count,
+  actions,
   open,
   onToggle,
   children
@@ -38,6 +40,11 @@ export const CollapsibleSection = ({
           {helper ? <p>{helper}</p> : null}
         </div>
         <div className="collapsible-section__meta">
+          {actions ? (
+            <span className="collapsible-section__actions" onClick={(event) => event.stopPropagation()}>
+              {actions}
+            </span>
+          ) : null}
           {count !== undefined ? <span className="meta-chip">{count}</span> : null}
           <span className="meta-chip meta-chip--accent">{open ? "Weniger" : "Mehr"}</span>
         </div>

@@ -1711,6 +1711,86 @@ textarea {
   min-width: 0;
 }
 
+.stats-filter-toggle {
+  margin-right: 2.9rem;
+}
+
+.stats-filter-toggle.is-active {
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--text);
+}
+
+.stats-filter-card {
+  gap: 0.75rem;
+}
+
+.stats-filter-card h2 {
+  margin: 0;
+}
+
+.stats-filter-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.stats-filter-row {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 0.85fr) repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.stats-filter-row > span {
+  align-self: center;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.stats-filter-row .field {
+  gap: 0.25rem;
+}
+
+.stats-filter-row select {
+  min-height: 2.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+}
+
+.stats-table-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stats-table-range {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.stats-table-range .chip-button {
+  min-width: 0;
+  padding-left: 0.42rem;
+  padding-right: 0.42rem;
+  white-space: normal;
+}
+
+.stats-multi-line-chart__line {
+  fill: none;
+}
+
+.stats-multi-line-chart__point {
+  stroke: rgba(15, 23, 42, 0.95);
+  stroke-width: 1.8;
+}
+
+.stats-multi-line-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .stats-page .overview-chart__label {
   font-size: 0.54rem;
   opacity: 0.78;
@@ -2113,18 +2193,14 @@ textarea {
 .stats-table {
   display: grid;
   gap: 0.35rem;
-  overflow-x: auto;
-  padding-bottom: 0.2rem;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.45) rgba(15, 23, 42, 0.55);
+  width: 100%;
 }
 
 .stats-table__row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.45fr) minmax(74px, 0.7fr) minmax(78px, 0.75fr) minmax(72px, 0.65fr) minmax(130px, 1fr);
-  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(3.25rem, 0.6fr) minmax(4.4rem, 0.7fr) minmax(3.3rem, 0.5fr);
+  gap: 0.5rem;
   align-items: center;
-  min-width: 690px;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 0.55rem 0.7rem;
@@ -2136,6 +2212,11 @@ textarea {
 .stats-table__row > * {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.stats-table__row strong,
+.stats-table__row span {
+  line-height: 1.15;
 }
 
 .stats-table__row--head {
@@ -2219,6 +2300,11 @@ button.stats-table__row.is-active {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.collapsible-section__actions {
+  display: inline-flex;
+  min-width: 0;
 }
 
 .stats-group-card {
@@ -2558,6 +2644,39 @@ button.stats-table__row.is-active {
 }
 
 @media (max-width: 420px) {
+  .stats-filter-toggle {
+    margin-right: 2.7rem;
+  }
+
+  .stats-filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-filter-row > span {
+    grid-column: 1 / -1;
+  }
+
+  .stats-table__row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(2.8rem, 0.5fr) minmax(3.6rem, 0.6fr) minmax(2.8rem, 0.45fr);
+    gap: 0.35rem;
+    padding: 0.48rem 0.52rem;
+    font-size: 0.72rem;
+  }
+
+  .stats-table__row--head {
+    font-size: 0.64rem;
+  }
+
+  .stats-table-range {
+    gap: 0.3rem;
+  }
+
+  .stats-table-range .chip-button {
+    min-height: 2.35rem;
+    padding: 0.4rem 0.24rem;
+    font-size: 0.7rem;
+  }
+
   .stats-hero {
     grid-template-columns: 1fr;
   }
