@@ -1214,7 +1214,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
         />
       }
     >
-      <section className="stack">
+      <section className="stack stats-page">
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">

@@ -1089,13 +1089,15 @@ textarea {
 }
 
 .stats-chart-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
 .overview-chart-card {
   display: grid;
-  gap: 0.5rem;
-  padding: 0.72rem;
+  gap: 0.65rem;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0.82rem;
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid var(--border);
@@ -1150,11 +1152,18 @@ textarea {
   flex-wrap: wrap;
 }
 
+.overview-chart-card__head > *,
+.overview-chart-total > * {
+  min-width: 0;
+}
+
 .overview-chart-card__head strong {
   font-size: 0.88rem;
+  overflow-wrap: anywhere;
 }
 
 .overview-chart {
+  display: block;
   width: 100%;
   height: auto;
   overflow: visible;
@@ -1205,6 +1214,13 @@ textarea {
   font-size: 0.72rem;
 }
 
+.overview-chart-total {
+  max-width: 100%;
+  border-radius: 14px;
+  flex-wrap: wrap;
+  line-height: 1.15;
+}
+
 .overview-chart-legend__item {
   border: 1px solid transparent;
   appearance: none;
@@ -1228,6 +1244,7 @@ textarea {
 .overview-chart-total strong {
   color: var(--text);
   font-size: 0.76rem;
+  overflow-wrap: anywhere;
 }
 
 .overview-chart-total__marker {
@@ -1349,7 +1366,7 @@ textarea {
 
 .stats-ranked-list__row {
   display: grid;
-  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(7rem, 0.9fr) minmax(110px, 1fr) minmax(4.5rem, auto);
   align-items: center;
   gap: 0.55rem;
   padding: 0.45rem 0.5rem;
@@ -1373,10 +1390,13 @@ textarea {
 .stats-ranked-list__label {
   color: var(--text);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .stats-ranked-list__value {
   color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .stats-ranked-list__track,
@@ -1657,6 +1677,57 @@ textarea {
   background: linear-gradient(90deg, #f59e0b, #f97316);
 }
 
+.app-shell:has(.stats-page) {
+  max-width: 1120px;
+}
+
+.stats-page {
+  gap: 1.15rem;
+}
+
+.stats-page > .card,
+.stats-page > .collapsible-section {
+  overflow: hidden;
+}
+
+.stats-page .field {
+  min-width: 0;
+}
+
+.stats-page .field select,
+.stats-page .field input {
+  min-width: 0;
+}
+
+.stats-page .stats-toolbar {
+  align-items: stretch;
+}
+
+.stats-page .stats-toolbar__group {
+  min-width: 0;
+}
+
+.stats-page .stats-toolbar__group .chip-button {
+  min-width: 0;
+}
+
+.stats-page .overview-chart__label {
+  font-size: 0.54rem;
+  opacity: 0.78;
+}
+
+.stats-page .overview-chart__scale {
+  font-size: 0.58rem;
+}
+
+.stats-page .overview-chart__line {
+  stroke-width: 2.6;
+}
+
+.stats-page .overview-chart__line.is-active {
+  stroke-width: 3.2;
+}
+
 .game-page .button-grid--tracker {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.35rem;
@@ -1886,6 +1957,7 @@ textarea {
   background: rgba(15, 23, 42, 0.56);
   border: 1px solid rgba(148, 163, 184, 0.1);
   min-height: 5rem;
+  min-width: 0;
   display: grid;
   align-content: start;
   gap: 0.28rem;
@@ -1918,9 +1990,9 @@ textarea {
 
 .stat-card__value {
   margin-top: 0;
-  font-size: 0.92rem;
+  font-size: clamp(0.82rem, 1.8vw, 0.98rem);
   line-height: 1.05;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .stat-card__helper {
@@ -1945,6 +2017,12 @@ textarea {
   gap: 0.4rem;
   font-size: 0.56rem;
   color: var(--muted);
+}
+
+.stats-mini-bar__meta span,
+.stats-mini-bar__meta strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stats-mini-bar__meta strong {
@@ -1984,7 +2062,7 @@ textarea {
 .stats-hero {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 0.9rem;
 }
 
 .stats-hero__feature--clickable {
@@ -2005,7 +2083,8 @@ textarea {
 }
 
 .stats-hero__feature {
-  padding: 0.82rem 0.88rem;
+  min-width: 0;
+  padding: 0.95rem;
 }
 
 .stats-table-card__head,
@@ -2015,6 +2094,12 @@ textarea {
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.stats-table-card__head > div:first-child,
+.stats-group-card__head > div:first-child,
+.stats-row-card__title-block {
+  min-width: 0;
 }
 
 .stats-group-card__actions select,
@@ -2029,20 +2114,28 @@ textarea {
   display: grid;
   gap: 0.35rem;
   overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) rgba(15, 23, 42, 0.55);
 }
 
 .stats-table__row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.4fr) repeat(4, minmax(80px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: minmax(170px, 1.45fr) minmax(74px, 0.7fr) minmax(78px, 0.75fr) minmax(72px, 0.65fr) minmax(130px, 1fr);
+  gap: 0.65rem;
   align-items: center;
-  min-width: 620px;
+  min-width: 690px;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 0.55rem 0.7rem;
   background: rgba(15, 23, 42, 0.5);
   color: var(--text);
   text-align: left;
+}
+
+.stats-table__row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stats-table__row--head {
@@ -2083,7 +2176,7 @@ button.stats-table__row.is-active {
 }
 
 .collapsible-section {
-  gap: 0.8rem;
+  gap: 0.9rem;
 }
 
 .collapsible-section__toggle {
@@ -2108,6 +2201,7 @@ button.stats-table__row.is-active {
 .stats-row-card {
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .collapsible-section__head h2,
@@ -2129,11 +2223,13 @@ button.stats-table__row.is-active {
 
 .stats-group-card {
   background: rgba(15, 23, 42, 0.72);
-  padding: 0.78rem;
+  min-width: 0;
+  padding: 0.9rem;
 }
 
 .stats-row-card {
-  padding: 0.78rem 0.82rem;
+  min-width: 0;
+  padding: 0.9rem;
 }
 
 .stats-row-card--stacked {
@@ -2203,13 +2299,13 @@ button.stats-table__row.is-active {
 }
 
 .stats-grid--stats-page {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.42rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.55rem;
 }
 
 .stats-average-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.55rem;
 }
 
@@ -2217,6 +2313,7 @@ button.stats-table__row.is-active {
   display: grid;
   gap: 0.62rem;
   align-content: start;
+  min-width: 0;
   padding: 0.78rem 0.82rem;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -2247,13 +2344,14 @@ button.stats-table__row.is-active {
 
 .stats-average-card__details {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 0.35rem;
 }
 
 .stats-average-card__detail {
   display: grid;
   gap: 0.08rem;
+  min-width: 0;
   min-height: 2.35rem;
   padding: 0.38rem 0.42rem;
   border-radius: 10px;
@@ -2270,6 +2368,7 @@ button.stats-table__row.is-active {
   color: var(--text);
   font-size: 0.78rem;
   line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .event-editor {
@@ -2459,6 +2558,47 @@ button.stats-table__row.is-active {
 }
 
 @media (max-width: 420px) {
+  .stats-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-ranked-list__row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .stats-ranked-list__value {
+    text-align: left;
+  }
+
+  .overview-chart-card__head,
+  .overview-chart-card__totals {
+    align-items: flex-start;
+  }
+
+  .overview-chart-total {
+    width: 100%;
+  }
+
+  .collapsible-section__head,
+  .stats-group-card__head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .collapsible-section__meta,
+  .stats-group-card__actions {
+    justify-content: flex-start;
+  }
+
+  .stats-group-card__actions select {
+    width: 100%;
+  }
+
   .game-page .tracker-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
