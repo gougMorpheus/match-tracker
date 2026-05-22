@@ -28,6 +28,7 @@ export type UpdateSupabaseEventPayload = Database["public"]["Tables"]["events"][
 const scoreTypeByEventType = {
   "score-primary": "primary",
   "score-secondary": "secondary",
+  "score-challenge": "challenge",
   "score-total": "legacy-total"
 } as const;
 
@@ -1064,7 +1065,9 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
           ? "score-primary"
           : event.scoreType === "secondary"
             ? "score-secondary"
-            : "score-total",
+            : event.scoreType === "challenge"
+              ? "score-challenge"
+              : "score-total",
       value_number: event.value,
       note: event.note ?? null,
       occurred_at: occurredAt
@@ -1163,7 +1166,9 @@ export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayloa
             ? "score-primary"
             : event.scoreType === "secondary"
               ? "score-secondary"
-              : "score-total",
+              : event.scoreType === "challenge"
+                ? "score-challenge"
+                : "score-total",
         value_number: event.value,
         note: event.note ?? null,
         occurred_at: event.createdAt

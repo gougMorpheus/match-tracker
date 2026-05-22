@@ -1,5 +1,4 @@
-import { useState } from "react";
-import type { Player } from "../types/game";
+import type { Player, ScoreType } from "../types/game";
 
 interface QuickAdjustControlsProps {
   player: Player;
@@ -9,13 +8,18 @@ interface QuickAdjustControlsProps {
   onCommandPointChange: (playerId: string, direction: "plus" | "minus", amount: number) => Promise<void>;
   onScoreChange: (
     playerId: string,
-    scoreType: "primary" | "secondary",
+    scoreType: Exclude<ScoreType, "legacy-total">,
     direction: "plus" | "minus",
     amount: number
   ) => Promise<void>;
 }
 
-const SCORE_AMOUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const SCORE_AMOUNT_OPTIONS = Array.from({ length: 20 }, (_, index) => index + 1);
+const SCORE_SELECTS: { scoreType: Exclude<ScoreType, "legacy-total">; label: string }[] = [
+  { scoreType: "primary", label: "Prim" },
+  { scoreType: "secondary", label: "Sek" },
+  { scoreType: "challenge", label: "Chal" }
+];
 
 export const QuickAdjustControls = ({
   player,
@@ -25,60 +29,52 @@ export const QuickAdjustControls = ({
   onCommandPointChange,
   onScoreChange
 }: QuickAdjustControlsProps) => {
-  const [scoreAmount, setScoreAmount] = useState(1);
-
   return (
     <div className="quick-controls">
       <div className="quick-controls__row quick-controls__row--cp">
         <div className="quick-controls__actions quick-controls__actions--pair">
           <button
             type="button"
-            className="mini-button"
-            disabled={isSubmitting || !canSpendCommandPoints || currentCommandPoints <= 0}
-            onClick={() => void onCommandPointChange(player.id, "minus", 1)}
-          >
-            1 CP spend
-          </button>
-          <button
-            type="button"
             className="mini-button mini-button--accent"
             disabled={isSubmitting}
             onClick={() => void onCommandPointChange(player.id, "plus", 1)}
           >
-            1 CP earn
+            1 CP earn (+)
+          </button>
+          <button
+            type="button"
+            className="mini-button"
+            disabled={isSubmitting || !canSpendCommandPoints || currentCommandPoints <= 0}
+            onClick={() => void onCommandPointChange(player.id, "minus", 1)}
+          >
+            1 CP spend (-)
           </button>
         </div>
       </div>
 
       <div className="quick-controls__row quick-controls__row--score">
-        <button
-          type="button"
-          className="mini-button mini-button--accent"
-          disabled={isSubmitting}
-          onClick={() => void onScoreChange(player.id, "primary", "plus", scoreAmount)}
-        >
-          Prim +{scoreAmount}
-        </button>
-        <select
-          className="step-input"
-          value={scoreAmount}
-          disabled={isSubmitting}
-          onChange={(event) => setScoreAmount(Number(event.target.value))}
-        >
-          {SCORE_AMOUNT_OPTIONS.map((amount) => (
-            <option key={amount} value={amount}>
-              {amount}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="mini-button mini-button--accent"
-          disabled={isSubmitting}
-          onClick={() => void onScoreChange(player.id, "secondary", "plus", scoreAmount)}
-        >
-          Sek +{scoreAmount}
-        </button>
+        {SCORE_SELECTS.map(({ scoreType, label }) => (
+          <select
+            key={scoreType}
+            className="step-input quick-controls__score-select"
+            value=""
+            disabled={isSubmitting}
+            aria-label={`${label} Punkte gutschreiben`}
+            onChange={(event) => {
+              const amount = Number(event.target.value);
+              if (amount > 0) {
+                void onScoreChange(player.id, scoreType, "plus", amount);
+              }
+            }}
+          >
+            <option value="">{label}</option>
+            {SCORE_AMOUNT_OPTIONS.map((amount) => (
+              <option key={amount} value={amount}>
+                +{amount}
+              </option>
+            ))}
+          </select>
+        ))}
       </div>
     </div>
   );

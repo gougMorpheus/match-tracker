@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.isStatsEligibleGame = exports.getCountedRounds = void 0;
-exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = void 0;
+exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.isStatsEligibleGame = exports.getCountedRounds = void 0;
+exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = void 0;
 exports.getTimeoutDurationMs = getTimeoutDurationMs;
 const time_1 = require("./time");
 const sumValues = (items) => items.reduce((total, item) => total + item.value, 0);
@@ -79,6 +79,8 @@ const getPlayerPrimaryTotal = (game, playerId) => (0, exports.getPlayerScoreTota
 exports.getPlayerPrimaryTotal = getPlayerPrimaryTotal;
 const getPlayerSecondaryTotal = (game, playerId) => (0, exports.getPlayerScoreTotal)(game, playerId, "secondary");
 exports.getPlayerSecondaryTotal = getPlayerSecondaryTotal;
+const getPlayerChallengeTotal = (game, playerId) => (0, exports.getPlayerScoreTotal)(game, playerId, "challenge");
+exports.getPlayerChallengeTotal = getPlayerChallengeTotal;
 const getPlayerLegacyRoundTotal = (game, playerId) => (0, exports.getPlayerScoreTotal)(game, playerId, "legacy-total");
 exports.getPlayerLegacyRoundTotal = getPlayerLegacyRoundTotal;
 const hasLegacyRoundTotals = (game) => game.scoreEvents.some((event) => event.scoreType === "legacy-total");
@@ -86,7 +88,7 @@ const getPlayerTotalScore = (game, playerId) => game.scoreDetailLevel === "total
     ? clampFloor(hasLegacyRoundTotals(game)
         ? (0, exports.getPlayerLegacyRoundTotal)(game, playerId)
         : game.legacyScoreTotals[playerId] ?? 0)
-    : (0, exports.getPlayerPrimaryTotal)(game, playerId) + (0, exports.getPlayerSecondaryTotal)(game, playerId);
+    : (0, exports.getPlayerPrimaryTotal)(game, playerId) + (0, exports.getPlayerSecondaryTotal)(game, playerId) + (0, exports.getPlayerChallengeTotal)(game, playerId);
 exports.getPlayerTotalScore = getPlayerTotalScore;
 const hasDetailedScoreData = (game) => game.scoreDetailLevel === "full";
 exports.hasDetailedScoreData = hasDetailedScoreData;
@@ -113,6 +115,8 @@ const getPlayerCurrentRoundPrimaryTotal = (game, playerId, roundNumber = (0, exp
 exports.getPlayerCurrentRoundPrimaryTotal = getPlayerCurrentRoundPrimaryTotal;
 const getPlayerCurrentRoundSecondaryTotal = (game, playerId, roundNumber = (0, exports.getCurrentRoundNumber)(game)) => (0, exports.getPlayerRoundScoreTotal)(game, playerId, roundNumber, "secondary");
 exports.getPlayerCurrentRoundSecondaryTotal = getPlayerCurrentRoundSecondaryTotal;
+const getPlayerCurrentRoundChallengeTotal = (game, playerId, roundNumber = (0, exports.getCurrentRoundNumber)(game)) => (0, exports.getPlayerRoundScoreTotal)(game, playerId, roundNumber, "challenge");
+exports.getPlayerCurrentRoundChallengeTotal = getPlayerCurrentRoundChallengeTotal;
 const getPlayerCurrentRoundTotalScore = (game, playerId, roundNumber = (0, exports.getCurrentRoundNumber)(game)) => game.scoreDetailLevel === "total-only"
     ? (0, exports.getPlayerRoundScoreTotal)(game, playerId, roundNumber, "legacy-total")
     : (0, exports.getPlayerRoundScoreTotal)(game, playerId, roundNumber);
@@ -381,7 +385,8 @@ exports.createGameSummary = createGameSummary;
 const hasPlayerScoreData = (game, playerId, scoreType) => game.scoreDetailLevel === "full" &&
     (!scoreType ||
         scoreType === "primary" ||
-        scoreType === "secondary") &&
+        scoreType === "secondary" ||
+        scoreType === "challenge") &&
     game.players.some((player) => player.id === playerId);
 const hasComparableScoreData = (game) => (0, exports.hasComparableTotalScoreData)(game);
 const hasPlayerCommandPointData = (game, playerId) => (0, exports.hasComparableCommandPointData)(game, playerId);

@@ -44,6 +44,7 @@ import {
   getLatestRound,
   getLatestTurn,
   getPlayerCommandPoints,
+  getPlayerChallengeTotal,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
   getSetupBaseDurationMs,
@@ -199,7 +200,13 @@ const getPlayerName = (game: Game, playerId: PlayerId): string =>
   game.players.find((player) => player.id === playerId)?.name ?? "-";
 
 const getScoreTypeLabel = (scoreType: ScoreType): string =>
-  scoreType === "primary" ? "Prim" : scoreType === "secondary" ? "Sek" : "Ges";
+  scoreType === "primary"
+    ? "Prim"
+    : scoreType === "secondary"
+      ? "Sek"
+      : scoreType === "challenge"
+        ? "Chal"
+        : "Ges";
 
 const getEventActionLabel = (game: Game, eventId: string): string => {
   const scoreEvent = game.scoreEvents.find((event) => event.id === eventId);
@@ -596,7 +603,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const currentTotal =
           scoreEvent.scoreType === "primary"
             ? getPlayerPrimaryTotal(game, scoreEvent.playerId)
-            : getPlayerSecondaryTotal(game, scoreEvent.playerId);
+            : scoreEvent.scoreType === "secondary"
+              ? getPlayerSecondaryTotal(game, scoreEvent.playerId)
+              : scoreEvent.scoreType === "challenge"
+                ? getPlayerChallengeTotal(game, scoreEvent.playerId)
+                : getPlayerSecondaryTotal(game, scoreEvent.playerId);
         const safeAmount = typeof patch.value_number === "number" && Number.isFinite(patch.value_number)
           ? clampNonNegative(Math.abs(patch.value_number))
           : Math.abs(scoreEvent.value);
@@ -1271,7 +1282,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const currentTotal =
           scoreType === "primary"
             ? getPlayerPrimaryTotal(game, playerId)
-            : getPlayerSecondaryTotal(game, playerId);
+            : scoreType === "secondary"
+              ? getPlayerSecondaryTotal(game, playerId)
+              : scoreType === "challenge"
+                ? getPlayerChallengeTotal(game, playerId)
+                : getPlayerSecondaryTotal(game, playerId);
         const safeValue =
           value < 0 ? -Math.min(Math.abs(value), currentTotal) : clampNonNegative(value);
         if (safeValue === 0) {

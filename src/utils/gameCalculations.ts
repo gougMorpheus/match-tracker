@@ -135,6 +135,9 @@ export const getPlayerPrimaryTotal = (game: Game, playerId: PlayerId): number =>
 export const getPlayerSecondaryTotal = (game: Game, playerId: PlayerId): number =>
   getPlayerScoreTotal(game, playerId, "secondary");
 
+export const getPlayerChallengeTotal = (game: Game, playerId: PlayerId): number =>
+  getPlayerScoreTotal(game, playerId, "challenge");
+
 export const getPlayerLegacyRoundTotal = (game: Game, playerId: PlayerId): number =>
   getPlayerScoreTotal(game, playerId, "legacy-total");
 
@@ -148,7 +151,7 @@ export const getPlayerTotalScore = (game: Game, playerId: PlayerId): number =>
           ? getPlayerLegacyRoundTotal(game, playerId)
           : game.legacyScoreTotals[playerId] ?? 0
       )
-    : getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId);
+    : getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId) + getPlayerChallengeTotal(game, playerId);
 
 export const hasDetailedScoreData = (game: Game): boolean => game.scoreDetailLevel === "full";
 
@@ -199,6 +202,12 @@ export const getPlayerCurrentRoundSecondaryTotal = (
   playerId: PlayerId,
   roundNumber = getCurrentRoundNumber(game)
 ): number => getPlayerRoundScoreTotal(game, playerId, roundNumber, "secondary");
+
+export const getPlayerCurrentRoundChallengeTotal = (
+  game: Game,
+  playerId: PlayerId,
+  roundNumber = getCurrentRoundNumber(game)
+): number => getPlayerRoundScoreTotal(game, playerId, roundNumber, "challenge");
 
 export const getPlayerCurrentRoundTotalScore = (
   game: Game,
@@ -699,7 +708,8 @@ const hasPlayerScoreData = (
   game.scoreDetailLevel === "full" &&
   (!scoreType ||
     scoreType === "primary" ||
-    scoreType === "secondary") &&
+    scoreType === "secondary" ||
+    scoreType === "challenge") &&
   game.players.some((player) => player.id === playerId);
 
 const hasComparableScoreData = (game: Game): boolean =>

@@ -14,6 +14,7 @@ import {
   getCurrentRoundNumber,
   getGameDurationMs,
   getLatestTurn,
+  getPlayerChallengeTotal,
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
@@ -50,6 +51,7 @@ type EditableEventFilterType =
   | "cp-spent"
   | "primary"
   | "secondary"
+  | "challenge"
   | "legacy-total"
   | "note";
 
@@ -78,9 +80,11 @@ interface ScoreLimitWarning {
 
 const SCORE_LIMITS: Record<ScoreType, number[]> = {
   primary: [50],
-  secondary: [20, 40, 54],
+  secondary: [20],
+  challenge: [12],
   "legacy-total": []
 };
+const COMBINED_PRIMARY_SECONDARY_LIMITS = [90];
 const SETUP_TURN_KEY = "setup";
 const SETUP_TURN_REF = {
   roundNumber: 0,
@@ -107,14 +111,27 @@ const getRoundSurfaceClassName = (roundNumber?: number) =>
   roundNumber && roundNumber % 2 === 0 ? "round-surface round-surface--even" : "round-surface round-surface--odd";
 
 const getScoreLimitLabel = (scoreType: ScoreType): string =>
-  scoreType === "primary" ? "Primary" : scoreType === "secondary" ? "Secondary" : "Gesamt";
+  scoreType === "primary"
+    ? "Primary"
+    : scoreType === "secondary"
+      ? "Secondary"
+      : scoreType === "challenge"
+        ? "Challenge"
+        : "Gesamt";
 
 const getCrossedScoreLimits = (
   scoreType: ScoreType,
   previousScore: number,
   nextScore: number
 ): number[] =>
-  SCORE_LIMITS[scoreType].filter(
+  getCrossedThresholds(SCORE_LIMITS[scoreType], previousScore, nextScore);
+
+const getCrossedThresholds = (
+  thresholds: number[],
+  previousScore: number,
+  nextScore: number
+): number[] =>
+  thresholds.filter(
     (threshold) => previousScore < threshold && nextScore >= threshold
   );
 
@@ -245,7 +262,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   ? "Primary"
                   : event.scoreType === "secondary"
                     ? "Secondary"
-                    : "Gesamt"
+                    : event.scoreType === "challenge"
+                      ? "Challenge"
+                      : "Gesamt"
               } ${event.value < 0 ? "-" : "+"}`,
               value: event.value,
               displayValue: Math.abs(event.value),
@@ -1520,7 +1539,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       const currentScore =
                         scoreType === "primary"
                           ? getPlayerPrimaryTotal(game, playerId)
-                          : getPlayerSecondaryTotal(game, playerId);
+                          : scoreType === "secondary"
+                            ? getPlayerSecondaryTotal(game, playerId)
+                            : getPlayerChallengeTotal(game, playerId);
+                      const currentPrimarySecondaryScore =
+                        getPlayerPrimaryTotal(game, playerId) + getPlayerSecondaryTotal(game, playerId);
                       const safeAmount =
                         direction === "minus" ? Math.min(amount, currentScore) : amount;
                       if (safeAmount <= 0) {
@@ -1551,6 +1574,24 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                             thresholds: crossedLimits,
                             total: currentScore + safeAmount
                           });
+                        }
+                        if (scoreType === "primary" || scoreType === "secondary") {
+                          const crossedCombinedLimits = getCrossedThresholds(
+                            COMBINED_PRIMARY_SECONDARY_LIMITS,
+                            currentPrimarySecondaryScore,
+                            currentPrimarySecondaryScore + safeAmount
+                          );
+                          if (crossedCombinedLimits.length) {
+                            const playerName =
+                              game.players.find((entry) => entry.id === playerId)?.name ?? "Spieler";
+                            setScoreLimitWarning({
+                              id: `${playerId}-primary-secondary-${crossedCombinedLimits.join("-")}-${Date.now()}`,
+                              playerName,
+                              scoreLabel: "Primary + Secondary",
+                              thresholds: crossedCombinedLimits,
+                              total: currentPrimarySecondaryScore + safeAmount
+                            });
+                          }
                         }
                       }
                       setActionFlash("score");
@@ -1860,6 +1901,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     <option value="all">Alle Ereignisse</option>
                     <option value="primary">Primary</option>
                     <option value="secondary">Secondary</option>
+                    <option value="challenge">Challenge</option>
                     <option value="legacy-total">Gesamt</option>
                     <option value="cp-gained">CP +</option>
                     <option value="cp-spent">CP -</option>

@@ -7,7 +7,7 @@ export type GameFinishReason =
   | "abandoned"
   | "player-1-conceded"
   | "player-2-conceded";
-export type ScoreType = "primary" | "secondary" | "legacy-total";
+export type ScoreType = "primary" | "secondary" | "challenge" | "legacy-total";
 export type CommandPointType = "gained" | "spent";
 export type ScoreDetailLevel = "full" | "total-only" | "none";
 export type TimeEventAction =

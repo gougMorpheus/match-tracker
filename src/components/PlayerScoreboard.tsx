@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import {
   getPlayerCommandPoints,
   getPlayerCommandPointsGained,
+  getPlayerChallengeTotal,
+  getPlayerCurrentRoundChallengeTotal,
   getPlayerCurrentRoundPrimaryTotal,
   getPlayerCurrentRoundSecondaryTotal,
   getPlayerCurrentRoundTotalScore,
@@ -37,9 +39,11 @@ export const PlayerScoreboard = ({
 }: PlayerScoreboardProps) => {
   const primary = getPlayerPrimaryTotal(game, player.id);
   const secondary = getPlayerSecondaryTotal(game, player.id);
+  const challenge = getPlayerChallengeTotal(game, player.id);
   const total = getPlayerTotalScore(game, player.id);
   const currentRoundPrimary = getPlayerCurrentRoundPrimaryTotal(game, player.id, roundNumber);
   const currentRoundSecondary = getPlayerCurrentRoundSecondaryTotal(game, player.id, roundNumber);
+  const currentRoundChallenge = getPlayerCurrentRoundChallengeTotal(game, player.id, roundNumber);
   const currentRoundTotal = getPlayerCurrentRoundTotalScore(game, player.id, roundNumber);
   const currentRoundCpGained = getPlayerCurrentRoundCommandPointsGained(game, player.id, roundNumber);
   const currentRoundCpSpent = getPlayerCurrentRoundCommandPointsSpent(game, player.id, roundNumber);
@@ -75,6 +79,13 @@ export const PlayerScoreboard = ({
             <strong>{secondary}</strong>
           </div>
           <span className="scoreboard-stat__meta">Runde +{currentRoundSecondary}</span>
+        </div>
+        <div className="scoreboard-stat scoreboard-stat--challenge">
+          <div className="scoreboard-stat__top">
+            <span>Chal</span>
+            <strong>{challenge}</strong>
+          </div>
+          <span className="scoreboard-stat__meta">Runde +{currentRoundChallenge}</span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--accent scoreboard-stat--total">
           <div className="scoreboard-stat__top">
