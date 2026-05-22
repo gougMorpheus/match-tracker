@@ -2298,17 +2298,17 @@ button.stats-table__row.is-active {
 
 .collapsible-section__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 0.6rem;
+  grid-template-columns: minmax(3.2rem, 1fr) minmax(0, auto) minmax(3.2rem, 1fr);
+  gap: 0.5rem;
   align-items: center;
 }
 
 .collapsible-section__count {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .collapsible-section__control {
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .collapsible-section__title {
@@ -2322,13 +2322,8 @@ button.stats-table__row.is-active {
   margin: 0;
 }
 
-.collapsible-section__head p,
 .stats-group-card__head p {
   margin: 0.2rem 0 0;
-}
-
-.collapsible-section__head p {
-  text-align: center;
 }
 
 .collapsible-section__actions {

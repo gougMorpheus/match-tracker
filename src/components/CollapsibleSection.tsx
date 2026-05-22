@@ -34,7 +34,6 @@ export const CollapsibleSection = ({
       </div>
       <div className="collapsible-section__title">
         <h2>{title}</h2>
-        {helper ? <p>{helper}</p> : null}
       </div>
       <div className="collapsible-section__control">
         <button
