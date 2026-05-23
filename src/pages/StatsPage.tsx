@@ -20,6 +20,8 @@ import {
   filterGames,
   getCompletedRoundDurationMs,
   getFilterOptions,
+  getOfficialStatsGameDurationMs,
+  hasComparableTotalScoreData,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
   getPlayerRoundScoreTotal,
@@ -38,7 +40,7 @@ interface StatsPageProps {
 }
 
 type StatsSectionKey = "overview" | "players" | "armies" | "rounds" | "records" | "matchups";
-type ExtendedStatsSectionKey = StatsSectionKey | "table" | "missions" | "deployments";
+type ExtendedStatsSectionKey = StatsSectionKey | "table" | "duration" | "score" | "missions" | "deployments";
 type StatTone = "default" | "score" | "time" | "success" | "warning";
 
 interface MiniBarItem {
@@ -110,7 +112,9 @@ interface ScenarioSummary {
 
 const defaultOpenSections: Record<ExtendedStatsSectionKey, boolean> = {
   overview: false,
-  table: false,
+  table: true,
+  duration: false,
+  score: false,
   players: false,
   armies: false,
   rounds: false,
@@ -835,8 +839,12 @@ const createTableRows = (
       const opponent = game.players.find((entry) => entry.id !== player.id);
       const opponentLabel = opponent ? getGroupLabel(opponent, mode) : null;
 
-      if (selectedLabel && label !== selectedLabel && opponentLabel !== selectedLabel) {
-        return;
+      if (selectedLabel) {
+        const isSelectedRow = label === selectedLabel;
+        const isAgainstSelected = opponentLabel === selectedLabel;
+        if (!isSelectedRow && !isAgainstSelected) {
+          return;
+        }
       }
 
       const result = getPlayerResult(game, player.id);
@@ -1001,7 +1009,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const [topCount, setTopCount] = useState(5);
   const [activePlayerChartLabel, setActivePlayerChartLabel] = useState<string | null>(null);
   const [activeArmyChartLabel, setActiveArmyChartLabel] = useState<string | null>(null);
-  const [activePlayerTurnDurationLabel, setActivePlayerTurnDurationLabel] = useState<string | null>(null);
   const [activeDurationRoundLabel, setActiveDurationRoundLabel] = useState<string | null>(null);
   const [activeCpPointId, setActiveCpPointId] = useState<string | null>(null);
   const [tableGroupMode, setTableGroupMode] = useState<TableGroupMode>("players");
@@ -1018,6 +1025,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     const statsGameIds = new Set(filteredGames.map((game) => game.id));
     return filteredSourceGames.filter((game) => statsGameIds.has(game.id));
   }, [filteredGames, filteredSourceGames]);
+  const filteredStatsSourceById = useMemo(
+    () => new Map(filteredStatsSourceGames.map((game) => [game.id, game])),
+    [filteredStatsSourceGames]
+  );
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
   const overview = useMemo(
     () => createStatsOverview(filteredGames, filteredStatsSourceGames),
@@ -1101,15 +1112,13 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const playerSecondaryMax = getMetricMax(playerAggregates.map((player) => player.averageSecondary));
   const playerTotalMax = getMetricMax(playerAggregates.map((player) => player.averageTotal));
   const playerDurationMax = getMetricMax(playerAggregates.map((player) => player.averageDurationMs));
+  const playerTurnDurationMax = getMetricMax(playerTurnDurationAggregates.map((player) => player.averageTurnDurationMs));
   const playerCpMax = getMetricMax(playerAggregates.map((player) => player.averageSpentCp));
   const armyPrimaryMax = getMetricMax(armyAggregates.map((army) => army.averagePrimary));
   const armySecondaryMax = getMetricMax(armyAggregates.map((army) => army.averageSecondary));
   const armyTotalMax = getMetricMax(armyAggregates.map((army) => army.averageTotal));
   const missionGamesMax = getMetricMax(missionLeaders.map((mission) => mission.games));
   const deploymentGamesMax = getMetricMax(deploymentLeaders.map((deployment) => deployment.games));
-  const roundDurationMax = getMetricMax(
-    roundDurationAggregates.flatMap((round) => [round.minDurationMs, round.averageDurationMs, round.maxDurationMs])
-  );
 
   const formatMetric = (value: number | null, digits = 1) =>
     value === null ? "-" : value.toFixed(digits);
@@ -1241,9 +1250,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
       max: playerScores.length ? Math.max(...playerScores) : null
     };
   });
-  const roundScoreMax = getMetricMax(
-    roundScoreRows.flatMap((round) => [round.value, round.min, round.max])
-  );
   const playerSplitRows = playerAggregates
     .filter((player) => player.games > 0)
     .map((player) => ({
@@ -1251,17 +1257,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
       primary: player.averagePrimary,
       secondary: player.averageSecondary,
       total: player.averageTotal
-    }));
-  const playerTurnDurationItems = playerTurnDurationAggregates
-    .filter((player) => player.averageTurnDurationMs !== null)
-    .sort((left, right) => (left.averageTurnDurationMs ?? 0) - (right.averageTurnDurationMs ?? 0) || left.playerName.localeCompare(right.playerName))
-    .slice(0, topCount)
-    .map((player) => ({
-      label: player.playerName,
-      value: player.averageTurnDurationMs ?? 0,
-      display: formatDurationMetric(player.averageTurnDurationMs),
-      tone: "time" as const,
-      detail: `${player.turns} Zuege | Max ${formatDurationMetric(player.longestTurnMs)}`
     }));
   const deploymentWinRateItems = deploymentPerformance
     .filter((item) => item.leaderWinRate !== null)
@@ -1281,19 +1276,32 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
     tone: (point.primaryScore !== null && point.secondaryScore !== null ? "score" : "warning") as StatTone,
     detail: `${point.cpSpent} CP | ${point.totalScore} Punkte | ${formatDateLabel(point.scheduledDate, point.scheduledTime)}`
   }));
-  const matchupScoreTrendRows: SingleLineChartRow[] = filteredGames.map((game, index) => ({
-    label: game.scheduledDate ? game.scheduledDate.slice(5) : String(index + 1),
-    value: game.players.reduce((total, player) => total + getPlayerTotalScore(game, player.id), 0)
-  }));
+  const chronologicalGames = [...filteredGames].sort((left, right) =>
+    `${left.scheduledDate}${left.scheduledTime}`.localeCompare(`${right.scheduledDate}${right.scheduledTime}`)
+  );
+  const durationTrendRows: SingleLineChartRow[] = chronologicalGames
+    .map((game, index) => ({
+      label: game.scheduledDate ? game.scheduledDate.slice(5) : String(index + 1),
+      value: getOfficialStatsGameDurationMs(filteredStatsSourceById.get(game.id) ?? game)
+    }))
+    .filter((row): row is SingleLineChartRow => row.value !== null && row.value > 0);
+  const scoreTrendRows: SingleLineChartRow[] = chronologicalGames
+    .map((game, index) => ({
+      label: game.scheduledDate ? game.scheduledDate.slice(5) : String(index + 1),
+      value: hasComparableTotalScoreData(game)
+        ? game.players.reduce((total, player) => total + getPlayerTotalScore(game, player.id), 0)
+        : null
+    }))
+    .filter((row): row is SingleLineChartRow => row.value !== null);
   const roundDurationTrendRows: SingleLineChartRow[] = [...filteredGames]
-    .sort((left, right) => `${right.scheduledDate}${right.scheduledTime}`.localeCompare(`${left.scheduledDate}${left.scheduledTime}`))
+    .sort((left, right) => `${left.scheduledDate}${left.scheduledTime}`.localeCompare(`${right.scheduledDate}${right.scheduledTime}`))
     .flatMap((game, gameIndex) =>
       game.rounds
         .map((round) => ({
           label: `${game.scheduledDate ? game.scheduledDate.slice(5) : gameIndex + 1} R${round.roundNumber}`,
           value: getCompletedRoundDurationMs(round, game)
         }))
-        .filter((row): row is SingleLineChartRow => row.value !== null)
+        .filter((row): row is SingleLineChartRow => row.value !== null && row.value > 0)
     );
 
   const updateFilter = <K extends keyof typeof filters,>(key: K, value: (typeof filters)[K]) => {
@@ -1449,7 +1457,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               count={tableRows.length}
               open={openSections.table}
               onToggle={() => toggleSection("table")}
-              actions={
+            >
+              <div className="stats-table-card">
                 <div className="stats-toolbar__group">
                   <button
                     type="button"
@@ -1472,9 +1481,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     Spieler
                   </button>
                 </div>
-              }
-            >
-              <div className="stats-table-card">
                 <div className="stats-table" role="table" aria-label="Tabelle">
                   <div className="stats-table__row stats-table__row--head" role="row">
                     <span>Name</span>
@@ -1526,28 +1532,57 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               </div>
             </CollapsibleSection>
 
-            <section className="stats-hero">
-              <AverageMetricCard
-                label="Avg Dauer"
-                value={formatDurationMetric(overview.averageDurationMs)}
-                tone="time"
-                details={[
-                  { label: "Avg Spieler", value: formatDurationMetric(overview.averagePlayerDurationMs) },
-                  { label: "Runden", value: formatMetric(overview.averageRounds) },
-                  { label: "CP spent", value: formatMetric(overview.averageSpentCp) },
-                  { label: "Spiele", value: String(overview.averageDurationGameCount) }
-                ]}
-              />
-              <AverageMetricCard
-                label="Avg Score"
-                value={formatMetric(overview.averageCombinedScore)}
-                tone="score"
-                details={[
-                  { label: "Avg Spieler", value: formatMetric(overview.averagePlayerScore) },
-                  { label: "Spiele", value: String(overview.averageScoreGameCount) }
-                ]}
-              />
-            </section>
+            <CollapsibleSection
+              title="Score"
+              count={overview.averageScoreGameCount}
+              open={openSections.score}
+              onToggle={() => toggleSection("score")}
+            >
+              <div className="stack">
+                <AverageMetricCard
+                  label="Avg Score"
+                  value={formatMetric(overview.averageCombinedScore)}
+                  tone="score"
+                  details={[
+                    { label: "Avg Spieler", value: formatMetric(overview.averagePlayerScore) },
+                    { label: "Spiele", value: String(overview.averageScoreGameCount) }
+                  ]}
+                />
+                <SingleLineChart
+                  title="Score ueber Zeit"
+                  rows={scoreTrendRows}
+                  emptyLabel="Noch keine Score-Daten vorhanden."
+                  formatValue={(value) => value.toFixed(0)}
+                />
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Dauer"
+              count={overview.averageDurationGameCount}
+              open={openSections.duration}
+              onToggle={() => toggleSection("duration")}
+            >
+              <div className="stack">
+                <AverageMetricCard
+                  label="Avg Dauer"
+                  value={formatDurationMetric(overview.averageDurationMs)}
+                  tone="time"
+                  details={[
+                    { label: "Avg Spieler", value: formatDurationMetric(overview.averagePlayerDurationMs) },
+                    { label: "Runden", value: formatMetric(overview.averageRounds) },
+                    { label: "CP spent", value: formatMetric(overview.averageSpentCp) },
+                    { label: "Spiele", value: String(overview.averageDurationGameCount) }
+                  ]}
+                />
+                <SingleLineChart
+                  title="Dauer ueber Zeit"
+                  rows={durationTrendRows}
+                  emptyLabel="Noch keine Dauer-Daten vorhanden."
+                  formatValue={formatDuration}
+                />
+              </div>
+            </CollapsibleSection>
 
             {false ? <CollapsibleSection
               title="Uebersicht"
@@ -1650,22 +1685,14 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("players")}
             >
               <div className="stack">
-                <div className="overview-chart-grid stats-chart-grid">
-                  <RankedBarChart
-                    title="Dauer pro Spielerzug"
-                    subtitle={`Top ${topCount}`}
-                    items={playerTurnDurationItems}
-                    emptyLabel="Noch keine abgeschlossenen Zuege vorhanden."
-                    activeLabel={activePlayerTurnDurationLabel}
-                    onActivate={setActivePlayerTurnDurationLabel}
-                  />
-                </div>
                 {playerAggregates.map((player) => {
                   const playerFilter = playerDetailFilters[player.name] ?? "all";
                   const scopedGames = filteredGames.filter((game) =>
                     game.players.some((entry) => entry.name === player.name && matchesOpponentFilter(game, entry, playerFilter))
                   );
                   const scopedPlayer = createPlayerAggregates(scopedGames).find((entry) => entry.name === player.name) ?? player;
+                  const scopedTurnDuration =
+                    createPlayerTurnDurationAggregates(scopedGames).find((entry) => entry.playerName === player.name) ?? null;
                   const isOpen = openPlayerCards[player.name] ?? false;
 
                   return (
@@ -1680,12 +1707,15 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                       setOpenPlayerCards((current) => ({ ...current, [player.name]: !isOpen }));
                     }}
                   >
-                    <div className="stats-group-card__head">
+                    <div className="stats-group-card__head stats-group-card__head--player">
                       <div>
                         <strong>{player.name}</strong>
                         <p>{scopedPlayer.games} Spiele</p>
                       </div>
-                      <div className="stats-group-card__actions" data-no-section-toggle="true">
+                      <div className="stats-group-card__actions stats-group-card__actions--player" data-no-section-toggle="true">
+                        <span className="meta-chip meta-chip--accent stats-player-winrate">
+                          {formatPercent(scopedPlayer.winRate)} Winrate
+                        </span>
                         <select
                           className="stats-player-filter"
                           value={playerFilter}
@@ -1702,13 +1732,12 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                             </option>
                           ))}
                         </select>
-                        <span className="meta-chip meta-chip--accent">{formatPercent(scopedPlayer.winRate)} Winrate</span>
                         <button
                           type="button"
-                          className="ghost-button compact-button"
+                          className="meta-chip meta-chip--accent stats-group-card__toggle"
                           onClick={() => setOpenPlayerCards((current) => ({ ...current, [player.name]: !isOpen }))}
                         >
-                          {isOpen ? "Zuklappen" : "Aufklappen"}
+                          {isOpen ? "Weniger" : "Mehr"}
                         </button>
                       </div>
                     </div>
@@ -1766,6 +1795,17 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                           formatMetric(scopedPlayer.averageTotal),
                           playerTotalMax,
                           "score"
+                        )}
+                      />
+                      <StatCard
+                        label="Dauer pro Spielzug"
+                        value={formatDurationMetric(scopedTurnDuration?.averageTurnDurationMs ?? null)}
+                        tone="time"
+                        chart={defaultMetricCardChart(
+                          scopedTurnDuration?.averageTurnDurationMs ?? null,
+                          formatDurationMetric(scopedTurnDuration?.averageTurnDurationMs ?? null),
+                          playerTurnDurationMax,
+                          "time"
                         )}
                       />
                       <StatCard
@@ -1861,97 +1901,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   </article>
                   );
                 })}
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Primaermissionen"
-              helper="Leader, Winrate, Spiele, Score, CP und Zeit"
-              count={missionSummaries.length}
-              open={openSections.missions}
-              onToggle={() => toggleSection("missions")}
-            >
-              <div className="stats-row-grid">
-                {missionSummaries.map((mission) => (
-                  <article key={mission.label} className="stats-row-card stats-row-card--stacked">
-                    <div className="stats-row-card__title-block">
-                      <strong>{mission.label}</strong>
-                      <p>{mission.leaderName}</p>
-                    </div>
-                    <div className="stats-grid stats-grid--stats-page">
-                      <StatCard label="Leader" value={mission.leaderName} />
-                      <StatCard
-                        label="Win%"
-                        value={formatPercent(mission.leaderWinRate)}
-                        tone="success"
-                        chart={defaultMetricCardChart(mission.leaderWinRate, formatPercent(mission.leaderWinRate), 100, "success")}
-                      />
-                      <StatCard
-                        label="Spiele"
-                        value={mission.games}
-                        tone="warning"
-                        chart={defaultMetricCardChart(mission.games, String(mission.games), missionGamesMax, "warning")}
-                      />
-                      <StatCard label="Avg Score" value={formatMetric(mission.averageScore)} tone="score" />
-                      <StatCard label="Avg CP spent" value={formatMetric(mission.averageSpentCp)} tone="warning" />
-                      <StatCard label="Avg Time" value={formatDurationMetric(mission.averageDurationMs)} tone="time" />
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Aufstellungen"
-              helper="Leader, Winrate, Spiele, Score, CP und Zeit"
-              count={deploymentSummaries.length}
-              open={openSections.deployments}
-              onToggle={() => toggleSection("deployments")}
-            >
-              <div className="stats-row-grid">
-                {deploymentSummaries.map((deployment) => (
-                  <article key={deployment.label} className="stats-row-card stats-row-card--stacked">
-                    <div className="stats-row-card__title-block">
-                      <strong>{deployment.label}</strong>
-                      <p>{deployment.leaderName}</p>
-                    </div>
-                    <div className="stats-grid stats-grid--stats-page">
-                      <StatCard label="Leader" value={deployment.leaderName} />
-                      <StatCard
-                        label="Win%"
-                        value={formatPercent(deployment.leaderWinRate)}
-                        tone="success"
-                        chart={defaultMetricCardChart(
-                          deployment.leaderWinRate,
-                          formatPercent(deployment.leaderWinRate),
-                          100,
-                          "success"
-                        )}
-                      />
-                      <StatCard
-                        label="Avg Score ges"
-                        value={formatMetric(deployment.averageScore)}
-                        tone="score"
-                      />
-                      <StatCard
-                        label="Avg CP spent"
-                        value={formatMetric(deployment.averageSpentCp)}
-                        tone="warning"
-                      />
-                      <StatCard
-                        label="Avg Time"
-                        value={formatDurationMetric(deployment.averageDurationMs)}
-                        tone="time"
-                      />
-                      <StatCard
-                        label="Spiele"
-                        value={deployment.games}
-                        tone="warning"
-                        chart={defaultMetricCardChart(deployment.games, String(deployment.games), deploymentGamesMax, "warning")}
-                      />
-                    </div>
-                  </article>
-                ))}
               </div>
             </CollapsibleSection>
 
@@ -2103,6 +2052,57 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
             </CollapsibleSection> : null}
 
             <CollapsibleSection
+              title="Matchups"
+              helper="Tempo, Score und Diff pro Paarung"
+              count={matchupAggregates.length}
+              open={openSections.matchups}
+              onToggle={() => toggleSection("matchups")}
+            >
+              <div className="stack">
+                {matchupAggregates.map((matchup) => (
+                  <article key={matchup.label} className="card stack stats-group-card stats-group-card--compact">
+                    <div className="stats-group-card__head">
+                      <div>
+                        <strong>{matchup.label}</strong>
+                        <p>
+                          {matchup.games} Spiele | {matchup.armyA} {matchup.winsA}-{matchup.winsB}-{matchup.ties} {matchup.armyB}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="stats-grid stats-grid--stats-page stats-grid--matchup">
+                      <StatCard
+                        label="W-L-D"
+                        value={`${matchup.winsA}-${matchup.winsB}-${matchup.ties}`}
+                        tone="success"
+                      />
+                      <StatCard
+                        label="Dauer ges"
+                        value={formatDurationMetric(matchup.averageDurationMs)}
+                        tone="time"
+                      />
+                      <StatCard
+                        label="Dauer Verhältnis"
+                        value={`${formatDurationMetric(matchup.averageDurationAms)} : ${formatDurationMetric(matchup.averageDurationBms)}`}
+                        helper={`${matchup.armyA} : ${matchup.armyB}`}
+                        tone="time"
+                      />
+                      <StatCard
+                        label="Score ges"
+                        value={formatMetric(matchup.averageCombinedScore)}
+                        tone="score"
+                      />
+                      <StatCard
+                        label="Score Verhältnis"
+                        value={`${formatMetric(matchup.averageScoreA)} : ${formatMetric(matchup.averageScoreB)}`}
+                        helper={`${matchup.armyA} : ${matchup.armyB}`}
+                        tone="score"
+                      />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </CollapsibleSection>
+            <CollapsibleSection
               title="Runden"
               helper="Rundendauer und Scoring mit Durchschnitt, Min und Max"
               count={roundDurationAggregates.length}
@@ -2135,70 +2135,120 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     emptyLabel="Noch keine Rundendauer-Daten vorhanden."
                     formatValue={formatDuration}
                   />
-                  <SingleLineChart
-                    title="Scoring ueber Zeit"
-                    rows={matchupScoreTrendRows}
-                    emptyLabel="Noch keine Scoring-Daten vorhanden."
-                    formatValue={(value) => value.toFixed(0)}
-                  />
                 </div>
-                <div className="stats-row-grid">
-                {roundDurationAggregates.map((round) => (
-                  <article key={round.roundNumber} className="stats-row-card stats-row-card--stacked">
+                <div className="stats-row-grid stats-row-grid--rounds">
+                {roundDurationAggregates.map((round) => {
+                  const roundScore =
+                    roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ?? null;
+
+                  return (
+                    <article key={round.roundNumber} className="stats-row-card stats-row-card--stacked stats-row-card--compact">
+                      <div className="stats-row-card__title-block">
+                        <strong>Runde {round.roundNumber}</strong>
+                        <p>{round.games} Spiele</p>
+                      </div>
+                      <div className="stats-grid stats-grid--stats-page stats-grid--compact">
+                        <StatCard label="Spiele" value={round.games} tone="warning" />
+                        <StatCard label="Dauer Avg" value={formatDurationMetric(round.averageDurationMs)} tone="time" />
+                        <StatCard label="Dauer Min" value={formatDurationMetric(round.minDurationMs)} tone="time" />
+                        <StatCard label="Dauer Max" value={formatDurationMetric(round.maxDurationMs)} tone="time" />
+                        <StatCard label="Avg Score ges" value={formatMetric(roundScore)} tone="score" />
+                      </div>
+                    </article>
+                  );
+                })}
+                </div>
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Primaermissionen"
+              helper="Leader, Winrate, Spiele, Score, CP und Zeit"
+              count={missionSummaries.length}
+              open={openSections.missions}
+              onToggle={() => toggleSection("missions")}
+            >
+              <div className="stats-row-grid">
+                {missionSummaries.map((mission) => (
+                  <article key={mission.label} className="stats-row-card stats-row-card--stacked">
                     <div className="stats-row-card__title-block">
-                      <strong>Runde {round.roundNumber}</strong>
-                      <p>{round.games} Spiele</p>
+                      <strong>{mission.label}</strong>
+                      <p>{mission.leaderName}</p>
                     </div>
                     <div className="stats-grid stats-grid--stats-page">
+                      <StatCard label="Leader" value={mission.leaderName} />
+                      <StatCard
+                        label="Win%"
+                        value={formatPercent(mission.leaderWinRate)}
+                        tone="success"
+                        chart={defaultMetricCardChart(mission.leaderWinRate, formatPercent(mission.leaderWinRate), 100, "success")}
+                      />
                       <StatCard
                         label="Spiele"
-                        value={round.games}
+                        value={mission.games}
                         tone="warning"
-                        chart={defaultMetricCardChart(round.games, String(round.games), overview.games, "warning")}
+                        chart={defaultMetricCardChart(mission.games, String(mission.games), missionGamesMax, "warning")}
                       />
+                      <StatCard label="Avg Score" value={formatMetric(mission.averageScore)} tone="score" />
+                      <StatCard label="Avg CP spent" value={formatMetric(mission.averageSpentCp)} tone="warning" />
+                      <StatCard label="Avg Time" value={formatDurationMetric(mission.averageDurationMs)} tone="time" />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Aufstellungen"
+              helper="Leader, Winrate, Spiele, Score, CP und Zeit"
+              count={deploymentSummaries.length}
+              open={openSections.deployments}
+              onToggle={() => toggleSection("deployments")}
+            >
+              <div className="stats-row-grid">
+                {deploymentSummaries.map((deployment) => (
+                  <article key={deployment.label} className="stats-row-card stats-row-card--stacked">
+                    <div className="stats-row-card__title-block">
+                      <strong>{deployment.label}</strong>
+                      <p>{deployment.leaderName}</p>
+                    </div>
+                    <div className="stats-grid stats-grid--stats-page">
+                      <StatCard label="Leader" value={deployment.leaderName} />
                       <StatCard
-                        label="Dauer Avg"
-                        value={formatDurationMetric(round.averageDurationMs)}
-                        tone="time"
+                        label="Win%"
+                        value={formatPercent(deployment.leaderWinRate)}
+                        tone="success"
                         chart={defaultMetricCardChart(
-                          round.averageDurationMs,
-                          formatDurationMetric(round.averageDurationMs),
-                          roundDurationMax,
-                          "time"
+                          deployment.leaderWinRate,
+                          formatPercent(deployment.leaderWinRate),
+                          100,
+                          "success"
                         )}
-                      />
-                      <StatCard
-                        label="Dauer Min"
-                        value={formatDurationMetric(round.minDurationMs)}
-                        tone="time"
-                      />
-                      <StatCard
-                        label="Dauer Max"
-                        value={formatDurationMetric(round.maxDurationMs)}
-                        tone="time"
                       />
                       <StatCard
                         label="Avg Score ges"
-                        value={formatMetric(
-                          roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ??
-                            null
-                        )}
+                        value={formatMetric(deployment.averageScore)}
                         tone="score"
-                        chart={defaultMetricCardChart(
-                          roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ??
-                            null,
-                          formatMetric(
-                            roundScoreAggregates.find((entry) => entry.roundNumber === round.roundNumber)?.averageCombinedScore ??
-                              null
-                          ),
-                          roundScoreMax,
-                          "score"
-                        )}
+                      />
+                      <StatCard
+                        label="Avg CP spent"
+                        value={formatMetric(deployment.averageSpentCp)}
+                        tone="warning"
+                      />
+                      <StatCard
+                        label="Avg Time"
+                        value={formatDurationMetric(deployment.averageDurationMs)}
+                        tone="time"
+                      />
+                      <StatCard
+                        label="Spiele"
+                        value={deployment.games}
+                        tone="warning"
+                        chart={defaultMetricCardChart(deployment.games, String(deployment.games), deploymentGamesMax, "warning")}
                       />
                     </div>
                   </article>
                 ))}
-                </div>
               </div>
             </CollapsibleSection>
 
@@ -2215,55 +2265,6 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               </div>
             </CollapsibleSection>
 
-            <CollapsibleSection
-              title="Matchups"
-              helper="Tempo, Score und Diff pro Paarung"
-              count={matchupAggregates.length}
-              open={openSections.matchups}
-              onToggle={() => toggleSection("matchups")}
-            >
-              <div className="stack">
-                {matchupAggregates.map((matchup) => (
-                  <article key={matchup.label} className="card stack stats-group-card">
-                    <div className="stats-group-card__head">
-                      <div>
-                        <strong>{matchup.label}</strong>
-                        <p>
-                          {matchup.games} Spiele | {matchup.armyA} {matchup.winsA}-{matchup.winsB}-{matchup.ties} {matchup.armyB}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="stats-grid stats-grid--stats-page">
-                      <StatCard
-                        label="W-L-D"
-                        value={`${matchup.winsA}-${matchup.winsB}-${matchup.ties}`}
-                        tone="success"
-                      />
-                      <StatCard
-                        label="Dauer ges"
-                        value={formatDurationMetric(matchup.averageDurationMs)}
-                        tone="time"
-                      />
-                      <StatCard
-                        label="Dauer Verhältnis"
-                        value={`${formatDurationMetric(matchup.averageDurationAms)} : ${formatDurationMetric(matchup.averageDurationBms)}`}
-                        tone="time"
-                      />
-                      <StatCard
-                        label="Score ges"
-                        value={formatMetric(matchup.averageCombinedScore)}
-                        tone="score"
-                      />
-                      <StatCard
-                        label="Score Verhältnis"
-                        value={`${formatMetric(matchup.averageScoreA)} : ${formatMetric(matchup.averageScoreB)}`}
-                        tone="score"
-                      />
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </CollapsibleSection>
           </>
         ) : (
           <article className="empty-state">
