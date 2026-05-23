@@ -18,12 +18,51 @@ create table if not exists public.games (
   defender_player smallint null check (defender_player in (1, 2)),
   starting_player smallint null check (starting_player in (1, 2)),
   winner_player smallint null check (winner_player in (1, 2)),
+  timer_corrections jsonb null,
   notes text null
 );
 
 alter table public.games add column if not exists deployment text null;
 alter table public.games add column if not exists primary_mission text null;
 alter table public.games add column if not exists deleted_at timestamptz null;
+alter table public.games add column if not exists timer_corrections jsonb null;
+
+do $$
+declare
+  game_record record;
+  parsed_notes jsonb;
+  legacy_timer_corrections jsonb;
+begin
+  for game_record in
+    select id, notes, timer_corrections
+    from public.games
+    where notes is not null
+  loop
+    begin
+      parsed_notes := game_record.notes::jsonb;
+    exception
+      when others then
+        continue;
+    end;
+
+    if jsonb_typeof(parsed_notes) = 'object' and parsed_notes ? 'timerCorrections' then
+      legacy_timer_corrections := parsed_notes -> 'timerCorrections';
+
+      if game_record.timer_corrections is null then
+        update public.games
+        set timer_corrections = legacy_timer_corrections
+        where id = game_record.id;
+      end if;
+
+      if game_record.timer_corrections is null or game_record.timer_corrections = legacy_timer_corrections then
+        update public.games
+        set notes = nullif((parsed_notes - 'timerCorrections')::text, '{}')
+        where id = game_record.id;
+      end if;
+    end if;
+  end loop;
+end
+$$;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

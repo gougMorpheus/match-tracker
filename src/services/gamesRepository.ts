@@ -13,6 +13,7 @@ import type {
 } from "../types/game";
 import { getSupabaseClient } from "../lib/supabase";
 import type { Database } from "../types/supabase";
+import type { Json } from "../types/supabase";
 import { createId } from "../utils/id";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
@@ -112,6 +113,34 @@ const createEmptyTimerCorrections = (): TimerCorrections => ({
   turns: {}
 });
 
+const normalizeTimerCorrections = (value: unknown): TimerCorrections => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return createEmptyTimerCorrections();
+  }
+
+  const timerCorrections = value as {
+    totalMs?: unknown;
+    rounds?: Record<string, unknown>;
+    turns?: Record<string, unknown>;
+  };
+
+  return {
+    totalMs: typeof timerCorrections.totalMs === "number" ? timerCorrections.totalMs : 0,
+    rounds: Object.fromEntries(
+      Object.entries(timerCorrections.rounds ?? {}).filter(([, amount]) => typeof amount === "number")
+    ) as Record<string, number>,
+    turns: Object.fromEntries(
+      Object.entries(timerCorrections.turns ?? {}).filter(([, amount]) => typeof amount === "number")
+    ) as Record<string, number>
+  };
+};
+
+const serializeTimerCorrections = (timerCorrections: TimerCorrections): Json => ({
+  totalMs: timerCorrections.totalMs,
+  rounds: timerCorrections.rounds,
+  turns: timerCorrections.turns
+});
+
 const createDefaultScoreMeta = (): {
   scoreDetailLevel: ScoreDetailLevel;
   legacyScoreTotals: Record<string, number>;
@@ -154,7 +183,31 @@ const createPlayerDetachmentsFromInput = (payload: CreateGameInput): Record<stri
   "player-2": payload.playerTwoDetachment.trim()
 });
 
-const parseTimerCorrections = (value: string | null): TimerCorrections => {
+const parseTimerCorrections = (value: unknown, legacyNotes?: string | null): TimerCorrections => {
+  const normalizedValue = normalizeTimerCorrections(value);
+  const hasTimerCorrectionValue =
+    normalizedValue.totalMs !== 0 ||
+    Object.keys(normalizedValue.rounds).length > 0 ||
+    Object.keys(normalizedValue.turns).length > 0;
+  if (hasTimerCorrectionValue) {
+    return normalizedValue;
+  }
+
+  if (legacyNotes !== undefined) {
+    const legacyCorrections = parseTimerCorrectionsFromNotes(legacyNotes);
+    const hasLegacyTimerCorrectionValue =
+      legacyCorrections.totalMs !== 0 ||
+      Object.keys(legacyCorrections.rounds).length > 0 ||
+      Object.keys(legacyCorrections.turns).length > 0;
+    if (hasLegacyTimerCorrectionValue) {
+      return legacyCorrections;
+    }
+  }
+
+  return normalizedValue;
+};
+
+const parseTimerCorrectionsFromNotes = (value: string | null): TimerCorrections => {
   if (!value) {
     return createEmptyTimerCorrections();
   }
@@ -168,15 +221,7 @@ const parseTimerCorrections = (value: string | null): TimerCorrections => {
       };
     };
     const timerCorrections = parsed?.timerCorrections;
-    return {
-      totalMs: typeof timerCorrections?.totalMs === "number" ? timerCorrections.totalMs : 0,
-      rounds: Object.fromEntries(
-        Object.entries(timerCorrections?.rounds ?? {}).filter(([, amount]) => typeof amount === "number")
-      ),
-      turns: Object.fromEntries(
-        Object.entries(timerCorrections?.turns ?? {}).filter(([, amount]) => typeof amount === "number")
-      )
-    };
+    return normalizeTimerCorrections(timerCorrections);
   } catch {
     return createEmptyTimerCorrections();
   }
@@ -352,7 +397,6 @@ const serializeSoftDeletedNotes = (value: string | null, deletedAt: string): str
 };
 
 const serializeGameNotes = (
-  timerCorrections: TimerCorrections,
   scoreDetailLevel: ScoreDetailLevel,
   legacyScoreTotals: Record<string, number>,
   optionsMeta: { autoCommandPointOn: boolean; autoCommandPointAwards: Record<string, boolean> },
@@ -360,10 +404,6 @@ const serializeGameNotes = (
   scenarioMeta?: { deployment: string; primaryMission: string },
   finishReason?: GameFinishReason
 ): string | null => {
-  const hasCorrections =
-    Boolean(timerCorrections.totalMs) ||
-    Object.keys(timerCorrections.rounds).length > 0 ||
-    Object.keys(timerCorrections.turns).length > 0;
   const hasScoreMeta = scoreDetailLevel !== "full" || Object.keys(legacyScoreTotals).length > 0;
   const hasOptionsMeta =
     optionsMeta.autoCommandPointOn !== true ||
@@ -375,7 +415,6 @@ const serializeGameNotes = (
   const hasFinishMeta = Boolean(finishReason && finishReason !== "completed");
 
   if (
-    !hasCorrections &&
     !hasScoreMeta &&
     !hasOptionsMeta &&
     !hasPlayerMeta &&
@@ -386,7 +425,6 @@ const serializeGameNotes = (
   }
 
   return JSON.stringify({
-    timerCorrections,
     scoreMeta: {
       scoreDetailLevel,
       legacyScoreTotals
@@ -421,6 +459,11 @@ const hasMissingDeletedAtColumnError = (message: string): boolean => {
   return normalizedMessage.includes("deleted_at");
 };
 
+const hasMissingTimerCorrectionsColumnError = (message: string): boolean => {
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("timer_corrections");
+};
+
 const stripOptionalScenarioFields = <
   T extends {
     deployment?: string | null;
@@ -430,6 +473,35 @@ const stripOptionalScenarioFields = <
   payload: T
 ): Omit<T, "deployment" | "primary_mission"> => {
   const { deployment: _deployment, primary_mission: _primaryMission, ...rest } = payload;
+  return rest;
+};
+
+const stripTimerCorrectionsField = <
+  T extends {
+    timer_corrections?: Json | null;
+  }
+>(
+  payload: T
+): Omit<T, "timer_corrections"> => {
+  const { timer_corrections: _timerCorrections, ...rest } = payload;
+  return rest;
+};
+
+const stripOptionalGameFields = <
+  T extends {
+    deployment?: string | null;
+    primary_mission?: string | null;
+    timer_corrections?: Json | null;
+  }
+>(
+  payload: T
+): Omit<T, "deployment" | "primary_mission" | "timer_corrections"> => {
+  const {
+    deployment: _deployment,
+    primary_mission: _primaryMission,
+    timer_corrections: _timerCorrections,
+    ...rest
+  } = payload;
   return rest;
 };
 
@@ -490,6 +562,7 @@ const getComparableGamePayload = (
   defender_player: payload.defender_player ?? null,
   starting_player: payload.starting_player ?? null,
   winner_player: payload.winner_player ?? null,
+  timer_corrections: "timer_corrections" in payload ? normalizeComparableValue(payload.timer_corrections) : null,
   notes: normalizeJsonString(payload.notes)
 });
 
@@ -915,7 +988,10 @@ export const mapSupabaseGameToAppGame = (
     commandPointEvents: mappedEvents.commandPointEvents,
     noteEvents: mappedEvents.noteEvents,
     timeEvents: mappedEvents.timeEvents,
-    timerCorrections: parseTimerCorrections(row.notes),
+    timerCorrections: parseTimerCorrections(
+      (row as SupabaseGameRecord & { timer_corrections?: Json | null }).timer_corrections,
+      row.notes
+    ),
     autoCommandPointOn: optionsMeta.autoCommandPointOn,
     autoCommandPointAwards: optionsMeta.autoCommandPointAwards,
     legacyScoreTotals: scoreMeta.legacyScoreTotals
@@ -937,8 +1013,8 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
+  timer_corrections: serializeTimerCorrections(createEmptyTimerCorrections()),
   notes: serializeGameNotes(
-    createEmptyTimerCorrections(),
     "full",
     {},
     { autoCommandPointOn: true, autoCommandPointAwards: {} },
@@ -1001,7 +1077,8 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: getWinnerPlayerSlot(game),
-  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
+  timer_corrections: serializeTimerCorrections(game.timerCorrections),
+  notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
     autoCommandPointAwards: game.autoCommandPointAwards
   }, {
@@ -1109,7 +1186,8 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
-  notes: serializeGameNotes(game.timerCorrections, game.scoreDetailLevel, game.legacyScoreTotals, {
+  timer_corrections: serializeTimerCorrections(game.timerCorrections),
+  notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
     autoCommandPointAwards: game.autoCommandPointAwards
   }, {
@@ -1272,10 +1350,10 @@ export const gamesRepository = {
       .select("*")
       .single();
 
-    if (error && hasMissingScenarioColumnError(error.message)) {
+    if (error && (hasMissingScenarioColumnError(error.message) || hasMissingTimerCorrectionsColumnError(error.message))) {
       ({ data, error } = await supabase
         .from("games")
-        .insert(stripOptionalScenarioFields(insertPayload))
+        .insert(stripOptionalGameFields(insertPayload))
         .select("*")
         .single());
     }
@@ -1297,10 +1375,10 @@ export const gamesRepository = {
       .select("*")
       .single();
 
-    if (error && hasMissingScenarioColumnError(error.message)) {
+    if (error && (hasMissingScenarioColumnError(error.message) || hasMissingTimerCorrectionsColumnError(error.message))) {
       ({ data, error } = await supabase
         .from("games")
-        .update(stripOptionalScenarioFields(updatePayload))
+        .update(stripOptionalGameFields(updatePayload))
         .eq("id", gameId)
         .select("*")
         .single());
@@ -1329,10 +1407,10 @@ export const gamesRepository = {
       .select("*")
       .single();
 
-    if (error && hasMissingScenarioColumnError(error.message)) {
+    if (error && (hasMissingScenarioColumnError(error.message) || hasMissingTimerCorrectionsColumnError(error.message))) {
       ({ data, error } = await supabase
         .from("games")
-        .upsert(stripOptionalScenarioFields(upsertPayload), {
+        .upsert(stripOptionalGameFields(upsertPayload), {
           onConflict: "id"
         })
         .select("*")
@@ -1358,8 +1436,8 @@ export const gamesRepository = {
       onConflict: "id"
     });
 
-    if (error && hasMissingScenarioColumnError(error.message)) {
-      ({ error } = await supabase.from("games").upsert(stripOptionalScenarioFields(upsertPayload), {
+    if (error && (hasMissingScenarioColumnError(error.message) || hasMissingTimerCorrectionsColumnError(error.message))) {
+      ({ error } = await supabase.from("games").upsert(stripOptionalGameFields(upsertPayload), {
         onConflict: "id"
       }));
     }

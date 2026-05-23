@@ -48,7 +48,7 @@ Der App-State liegt in `GameStoreProvider` (`src/store/GameStore.tsx`). Komponen
 
 Das Domain-Modell ist eventbasiert: Score-, Command-Point-, Note- und Time-Events werden gespeichert. Runden, Zuege, aktueller Spieler, Status, Start-/Endzeiten und Dauerwerte werden daraus abgeleitet. Zentrale Ableitung passiert in `syncDerivedGameState()` in `src/utils/gameState.ts`; Berechnungen fuer UI und Stats liegen in `src/utils/gameCalculations.ts`.
 
-Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spiel-Metadaten in `games` und einzelne Ereignisse in `events`. App-Spieler-IDs haben das Format `<gameId>:player-1` und `<gameId>:player-2`; Supabase speichert dafuer `player_slot` 1 oder 2. Einige Zusatzdaten wie Timer-Korrekturen, Score-Meta und Detachments werden JSON-codiert im Feld `games.notes` abgelegt.
+Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spiel-Metadaten in `games` und einzelne Ereignisse in `events`. App-Spieler-IDs haben das Format `<gameId>:player-1` und `<gameId>:player-2`; Supabase speichert dafuer `player_slot` 1 oder 2. Timer-Korrekturen liegen in `games.timer_corrections` als JSONB; andere Zusatzdaten wie Score-Meta und Detachments werden JSON-codiert im Feld `games.notes` abgelegt.
 
 ## Build, Test und Deploy
 

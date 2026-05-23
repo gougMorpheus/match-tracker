@@ -28,6 +28,7 @@ export interface Database {
           defender_player: 1 | 2 | null;
           starting_player: 1 | 2 | null;
           winner_player: 1 | 2 | null;
+          timer_corrections: Json | null;
           notes: string | null;
         };
         Insert: {
@@ -48,6 +49,7 @@ export interface Database {
           defender_player?: 1 | 2 | null;
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
+          timer_corrections?: Json | null;
           notes?: string | null;
         };
         Update: {
@@ -68,6 +70,7 @@ export interface Database {
           defender_player?: 1 | 2 | null;
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
+          timer_corrections?: Json | null;
           notes?: string | null;
         };
         Relationships: [];
