@@ -31,6 +31,7 @@ const createDefaultFormState = (): CreateGameInput => ({
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   const { createGame, games, isMutating, errorMessage, clearError } = useGameStore();
   const [formState, setFormState] = useState<CreateGameInput>(() => createDefaultFormState());
+  const [formError, setFormError] = useState("");
   const {
     playerOptions,
     latestArmyByPlayerName,
@@ -41,6 +42,9 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   } = useMemo(() => buildGameFormOptions(games), [games]);
 
   function updateField<K extends keyof CreateGameInput>(key: K, value: CreateGameInput[K]) {
+    if (key === "defenderSlot" && formError) {
+      setFormError("");
+    }
     setFormState((current) => ({
       ...current,
       [key]: value
@@ -86,6 +90,11 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!formState.defenderSlot) {
+      setFormError("Bitte waehle aus, wer Defender ist.");
+      return;
+    }
+
     try {
       const game = await createGame(formState);
       onCreated(game.id);
@@ -111,6 +120,15 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
               <button type="button" className="ghost-button" onClick={clearError}>
                 Meldung ausblenden
               </button>
+            </div>
+          </article>
+        ) : null}
+
+        {formError ? (
+          <article className="notice-card notice-card--error">
+            <div>
+              <h2>Angabe fehlt</h2>
+              <p>{formError}</p>
             </div>
           </article>
         ) : null}

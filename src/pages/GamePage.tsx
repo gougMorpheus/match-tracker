@@ -235,8 +235,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [deletePasswordError, setDeletePasswordError] = useState("");
   const [startingPlayerPromptOpen, setStartingPlayerPromptOpen] = useState(false);
   const [startingPlayerPromptSlot, setStartingPlayerPromptSlot] = useState<CreateGameInput["startingSlot"]>("");
+  const [redoHoldOpen, setRedoHoldOpen] = useState(false);
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
+  const redoHoldTimerRef = useRef<number | null>(null);
+  const redoHoldTriggeredRef = useRef(false);
   const game = getGame(gameId);
   const accessMode = getGameAccessMode(gameId);
   const viewOnlyActive = game ? isGameViewOnly(game.id) : false;
@@ -353,6 +356,32 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const undoActionLabel = getUndoActionLabel(gameId);
   const redoActionLabel = getRedoActionLabel(gameId);
   const undoLabel = undoActionLabel ? `Undo: ${undoActionLabel}` : "Undo";
+  const redoLabel = redoActionLabel ? `Redo: ${redoActionLabel}` : "Redo";
+
+  const clearRedoHoldTimer = () => {
+    if (redoHoldTimerRef.current !== null) {
+      window.clearTimeout(redoHoldTimerRef.current);
+      redoHoldTimerRef.current = null;
+    }
+  };
+
+  const startRedoHold = () => {
+    if (writeDisabled || !redoActionLabel || isClosed) {
+      return;
+    }
+
+    clearRedoHoldTimer();
+    redoHoldTriggeredRef.current = false;
+    redoHoldTimerRef.current = window.setTimeout(() => {
+      redoHoldTimerRef.current = null;
+      redoHoldTriggeredRef.current = true;
+      setRedoHoldOpen(true);
+    }, 520);
+  };
+
+  const cancelRedoHold = () => {
+    clearRedoHoldTimer();
+  };
 
   useEffect(() => {
     if (!game) {
@@ -367,6 +396,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
     setGameForm(createGameFormState(game));
   }, [game, isEditingGame]);
+
+  useEffect(
+    () => () => {
+      clearRedoHoldTimer();
+    },
+    []
+  );
 
   useEffect(() => {
     if (!game) {
@@ -454,6 +490,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
     return () => window.clearTimeout(timeout);
   }, [roundChangePulse]);
+
+  useEffect(() => {
+    if (!redoActionLabel || isMutating || viewOnlyActive || game?.status === "completed") {
+      setRedoHoldOpen(false);
+      clearRedoHoldTimer();
+    }
+  }, [game?.status, isMutating, redoActionLabel, viewOnlyActive]);
 
   if (!game && isLoading) {
     return <Layout title="Tracker" subtitle="Spiel wird geladen" />;
@@ -640,7 +683,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
-    if (isTimerRunning) {
+    if (event.kind !== "time" && isTimerRunning) {
       await pauseActiveTimer(
         game.id,
         selectedTurn
@@ -1050,12 +1093,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       ]
                     : []),
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
-                  {
-                    label: "Redo",
-                    detail: redoActionLabel ?? undefined,
-                    onClick: () => void handleRedoEvent(),
-                    disabled: writeDisabled || !redoActionLabel || isClosed
-                  },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
                   ...(!showOverview
                     ? [
@@ -1773,6 +1810,26 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   Schliessen
                 </button>
               </div>
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => void handleUndoLastEvent()}
+                  disabled={writeDisabled || !undoActionLabel}
+                  title={undoLabel}
+                >
+                  {undoLabel}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => void handleRedoEvent()}
+                  disabled={writeDisabled || !redoActionLabel || isClosed}
+                  title={redoLabel}
+                >
+                  {redoLabel}
+                </button>
+              </div>
               <div className="modal-filters">
                 <label className="field">
                   <span>Spieler</span>
@@ -1952,15 +2009,49 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
             >
               Zurueck
             </button>
-            <button
-              type="button"
-              className="ghost-button compact-button game-bottom-dock__undo"
-              onClick={() => void handleUndoLastEvent()}
-              disabled={writeDisabled || !undoActionLabel}
-              title={undoLabel}
-            >
-              {undoLabel}
-            </button>
+            <div className="game-bottom-dock__undo-wrap">
+              {redoHoldOpen ? (
+                <button
+                  type="button"
+                  className="secondary-button compact-button game-bottom-dock__redo-popover"
+                  onClick={() => {
+                    setRedoHoldOpen(false);
+                    void handleRedoEvent();
+                  }}
+                  disabled={writeDisabled || !redoActionLabel || isClosed}
+                  title={redoLabel}
+                >
+                  {redoLabel}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ghost-button compact-button game-bottom-dock__undo"
+                onPointerDown={(event) => {
+                  if (event.pointerType === "mouse" && event.button !== 0) {
+                    return;
+                  }
+                  startRedoHold();
+                }}
+                onPointerUp={cancelRedoHold}
+                onPointerLeave={cancelRedoHold}
+                onPointerCancel={cancelRedoHold}
+                onContextMenu={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  if (redoHoldTriggeredRef.current) {
+                    event.preventDefault();
+                    redoHoldTriggeredRef.current = false;
+                    return;
+                  }
+                  setRedoHoldOpen(false);
+                  void handleUndoLastEvent();
+                }}
+                disabled={writeDisabled || !undoActionLabel}
+                title={`${undoLabel}${redoActionLabel ? " | Halten fuer Redo" : ""}`}
+              >
+                {undoLabel}
+              </button>
+            </div>
             <button
               type="button"
               className="secondary-button compact-button"
