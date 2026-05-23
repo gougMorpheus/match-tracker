@@ -57,7 +57,7 @@ const ensureTurn = (round: Round, turnNumber: number, playerId: PlayerId): Turn 
 const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
   const roundsByNumber = new Map<number, Round>();
 
-  sortByCreatedAt(timeEvents).forEach((event) => {
+  timeEvents.forEach((event) => {
     if (!event.roundNumber) {
       return;
     }
@@ -199,23 +199,23 @@ const createEmptyTimerCorrections = (): TimerCorrections => ({
 });
 
 export const syncDerivedGameState = (game: Game): Game => {
-  const sortedTimeEvents = sortByCreatedAt(game.timeEvents);
-  const hasTimeEvents = sortedTimeEvents.length > 0;
-  const rounds = buildRoundsFromTimeEvents(sortedTimeEvents);
+  const orderedTimeEvents = [...game.timeEvents];
+  const hasTimeEvents = orderedTimeEvents.length > 0;
+  const rounds = buildRoundsFromTimeEvents(orderedTimeEvents);
   const timestamps = [
     game.createdAt,
     ...game.scoreEvents.map((event) => event.createdAt),
     ...game.commandPointEvents.map((event) => event.createdAt),
     ...game.noteEvents.map((event) => event.createdAt),
-    ...sortedTimeEvents.map((event) => event.createdAt)
+    ...orderedTimeEvents.map((event) => event.createdAt)
   ].sort((left, right) => left.localeCompare(right));
   const startedAt =
-    sortedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
-    sortedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
-    sortedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
+    orderedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
+    orderedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
+    orderedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
     (hasTimeEvents ? undefined : game.startedAt);
   const endedAt =
-    [...sortedTimeEvents]
+    [...orderedTimeEvents]
       .reverse()
       .find((event) => event.action === "game-end")?.createdAt ??
     (hasTimeEvents ? undefined : game.endedAt);
@@ -231,7 +231,7 @@ export const syncDerivedGameState = (game: Game): Game => {
     startedAt,
     endedAt,
     currentPlayerId: getCurrentPlayerId(game.id, game.startingPlayerId, rounds, endedAt),
-    timeEvents: sortedTimeEvents,
+    timeEvents: orderedTimeEvents,
     scoreEvents: sortByCreatedAt(game.scoreEvents),
     commandPointEvents: sortByCreatedAt(game.commandPointEvents),
     noteEvents: sortByCreatedAt(game.noteEvents),
@@ -472,9 +472,11 @@ export const updateLocalEvent = (
   patch: {
     value_number?: number | null;
     note?: string | null;
+    occurred_at?: string;
   }
 ): Game => {
   const nextNote = patch.note?.trim() || undefined;
+  const nextCreatedAt = patch.occurred_at?.trim();
 
   return syncDerivedGameState({
     ...game,
@@ -482,6 +484,7 @@ export const updateLocalEvent = (
       event.id === eventId
         ? {
             ...event,
+            createdAt: nextCreatedAt || event.createdAt,
             value: typeof patch.value_number === "number" ? patch.value_number : event.value,
             note: nextNote
           }
@@ -491,6 +494,7 @@ export const updateLocalEvent = (
       event.id === eventId
         ? {
             ...event,
+            createdAt: nextCreatedAt || event.createdAt,
             value: typeof patch.value_number === "number" ? patch.value_number : event.value,
             note: nextNote
           }
@@ -500,7 +504,16 @@ export const updateLocalEvent = (
       event.id === eventId
         ? {
             ...event,
+            createdAt: nextCreatedAt || event.createdAt,
             note: nextNote ?? ""
+          }
+        : event
+    ),
+    timeEvents: game.timeEvents.map((event) =>
+      event.id === eventId
+        ? {
+            ...event,
+            createdAt: nextCreatedAt || event.createdAt
           }
         : event
     )

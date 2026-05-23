@@ -8,7 +8,7 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { useGameStore } from "../store/GameStore";
-import type { CreateGameInput, Game, GameFinishReason, PlayerId, ScoreType, TurnRef } from "../types/game";
+import type { CreateGameInput, Game, GameFinishReason, PlayerId, ScoreType, TimeEventAction } from "../types/game";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
   getCurrentRoundNumber,
@@ -18,11 +18,7 @@ import {
   getPlayerCommandPoints,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
-  getSetupBaseDurationMs,
   getSetupDurationMs,
-  getSetupCorrectionMs,
-  getTurnBaseDurationMs,
-  getTurnCorrectionMs,
   getTurnDurationMs,
   isSetupActive,
   isSetupPaused,
@@ -47,6 +43,7 @@ interface GamePageProps {
 
 type EditableEventFilterType =
   | "all"
+  | "time"
   | "cp-gained"
   | "cp-spent"
   | "primary"
@@ -57,9 +54,9 @@ type EditableEventFilterType =
 
 interface EditableEventItem {
   id: string;
-  playerId: string;
+  playerId?: string;
   playerName: string;
-  kind: "cp" | "score" | "note";
+  kind: "cp" | "score" | "note" | "time";
   eventType: Exclude<EditableEventFilterType, "all">;
   label: string;
   value?: number;
@@ -119,6 +116,51 @@ const getScoreLimitLabel = (scoreType: ScoreType): string =>
         ? "Challenge"
         : "Gesamt";
 
+const getTimeEventActionLabel = (action: TimeEventAction): string => {
+  const labels: Record<TimeEventAction, string> = {
+    "game-start": "Spiel Start",
+    "game-end": "Spiel Ende",
+    "setup-start": "Aufstellung Start",
+    "setup-end": "Aufstellung Ende",
+    "setup-pause": "Aufstellung Pause",
+    "setup-resume": "Aufstellung Weiter",
+    "round-start": "Runde Start",
+    "round-end": "Runde Ende",
+    "turn-start": "Zug Start",
+    "turn-end": "Zug Ende",
+    "turn-pause": "Zug Pause",
+    "turn-resume": "Zug Weiter",
+    "timeout-start": "Time-out Start",
+    "timeout-end": "Time-out Ende"
+  };
+
+  return labels[action];
+};
+
+const toDateTimeLocalInput = (iso?: string): string => {
+  if (!iso) {
+    return "";
+  }
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 19);
+};
+
+const fromDateTimeLocalInput = (value: string, fallbackIso: string): string => {
+  if (!value) {
+    return fallbackIso;
+  }
+
+  const normalizedValue = value.length === 16 ? `${value}:00` : value;
+  const date = new Date(normalizedValue);
+  return Number.isNaN(date.getTime()) ? fallbackIso : date.toISOString();
+};
+
 const getCrossedScoreLimits = (
   scoreType: ScoreType,
   previousScore: number,
@@ -145,8 +187,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     clearError,
     advanceGame,
     rewindLastTurn,
-    setTimerCorrections,
-    resetAllGameTimers,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
@@ -180,8 +220,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [notesOpen, setNotesOpen] = useState(false);
   const [entriesOpen, setEntriesOpen] = useState(false);
   const [overviewOpen, setOverviewOpen] = useState(false);
-  const [timerAdjustOpen, setTimerAdjustOpen] = useState(false);
-  const [timerAdjustSecondsByKey, setTimerAdjustSecondsByKey] = useState<Record<string, string>>({});
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [actionFlash, setActionFlash] = useState<"cp" | "score" | null>(null);
   const [scoreLimitWarning, setScoreLimitWarning] = useState<ScoreLimitWarning | null>(null);
@@ -236,6 +274,20 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     () =>
       game
         ? [
+            ...game.timeEvents.map((event) => ({
+              id: event.id,
+              playerId: event.playerId,
+              playerName: event.playerId
+                ? game.players.find((player) => player.id === event.playerId)?.name ?? "-"
+                : "Timer",
+              kind: "time" as const,
+              eventType: "time" as const,
+              label: getTimeEventActionLabel(event.action),
+              displayValue: undefined,
+              roundNumber: event.roundNumber,
+              turnNumber: event.turnNumber,
+              createdAt: event.createdAt
+            })),
             ...game.commandPointEvents.map((event) => ({
               id: event.id,
               playerId: event.playerId,
@@ -464,28 +516,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       )
     : 0;
   const setupDurationMs = getSetupDurationMs(game);
-  const timerAdjustmentRows: Array<{
-    key: string;
-    label: string;
-    turnRef: TurnRef;
-    baseMs: number;
-    currentMs: number;
-  }> = [
-    {
-      key: SETUP_TURN_KEY,
-      label: "R0 / Z1 Aufstellung",
-      turnRef: { roundNumber: 0, turnNumber: 1 },
-      baseMs: getSetupBaseDurationMs(game, false),
-      currentMs: setupDurationMs
-    },
-    ...allTurns.map((turn) => ({
-      key: `${turn.roundNumber}:${turn.turnNumber}`,
-      label: `R${turn.roundNumber} / Z${turn.turnNumber}`,
-      turnRef: { roundNumber: turn.roundNumber, turnNumber: turn.turnNumber },
-      baseMs: getTurnBaseDurationMs(turn, game.endedAt),
-      currentMs: getTurnDurationMs(turn, game)
-    }))
-  ];
   const currentRoundNumber = isSetupScreen ? 0 : selectedRound?.roundNumber ?? getCurrentRoundNumber(game);
   const roundThemeClassName =
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
@@ -622,7 +652,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       );
     }
     setEditingEventId(event.id);
-    setEditingValue(typeof event.displayValue === "number" ? String(event.displayValue) : "");
+    setEditingValue(event.kind === "time" ? toDateTimeLocalInput(event.createdAt) : typeof event.displayValue === "number" ? String(event.displayValue) : "");
     setEditingNote(event.note ?? "");
   };
 
@@ -638,9 +668,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
-    const parsedValue = event.kind === "note" ? undefined : Math.abs(Number(editingValue));
+    const parsedValue = event.kind === "note" || event.kind === "time" ? undefined : Math.abs(Number(editingValue));
     const nextValue =
-      event.kind === "note"
+      event.kind === "note" || event.kind === "time"
         ? undefined
         : typeof parsedValue === "number" && Number.isFinite(parsedValue)
           ? event.kind === "score" && (event.value ?? 0) < 0
@@ -650,6 +680,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
     await updateGameEvent(game.id, event.id, {
       value_number: nextValue,
+      occurred_at: event.kind === "time" ? fromDateTimeLocalInput(editingValue, event.createdAt) : undefined,
       note: editingNote.trim() || null
     });
     closeEditor();
@@ -704,52 +735,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     setReopenPasswordOpen(false);
     setReopenPassword("");
     setReopenPasswordError("");
-  };
-
-  const openTimerAdjustDialog = async () => {
-    if (isReadOnly) {
-      return;
-    }
-
-    if (selectedTurn && isTimerRunning) {
-      await pauseActiveTimer(game.id, {
-        roundNumber: selectedTurn.roundNumber,
-        turnNumber: selectedTurn.turnNumber
-      });
-    }
-
-    setTimerAdjustSecondsByKey(
-      Object.fromEntries(
-        timerAdjustmentRows.map((row) => [row.key, String(Math.round(row.currentMs / 1000))])
-      )
-    );
-    setTimerAdjustOpen(true);
-  };
-
-  const closeTimerAdjustDialog = () => {
-    setTimerAdjustOpen(false);
-  };
-
-  const handleSaveTimerAdjustments = async () => {
-    await setTimerCorrections({
-      gameId: game.id,
-      corrections: timerAdjustmentRows.map((row) => {
-        const targetMs = Math.max(0, Math.round(Number(timerAdjustSecondsByKey[row.key]) || 0) * 1000);
-        return {
-          turnRef: row.turnRef,
-          turnMs: targetMs - row.baseMs
-        };
-      })
-    });
-
-    closeTimerAdjustDialog();
-  };
-
-  const handleResetTimerAdjustments = async () => {
-    await resetAllGameTimers(game.id);
-
-    setTimerAdjustSecondsByKey({});
-    closeTimerAdjustDialog();
   };
 
   const openFinishDialog = () => {
@@ -1072,11 +1057,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     disabled: writeDisabled || !redoActionLabel || isClosed
                   },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
-                  {
-                    label: "Timer korrigieren",
-                    onClick: () => void openTimerAdjustDialog(),
-                    disabled: writeDisabled
-                  },
                   ...(!showOverview
                     ? [
                         {
@@ -1238,84 +1218,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           onClose={closeDeleteDialog}
           onConfirm={() => void handleConfirmDeleteGame()}
         />
-      ) : null}
-      {timerAdjustOpen ? (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="stack">
-              <div className="list-row">
-                <div>
-                  <h2>Timer korrigieren</h2>
-                  <p className="muted-copy">
-                    Aufstellung und alle Zuege
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  onClick={closeTimerAdjustDialog}
-                >
-                  Schliessen
-                </button>
-              </div>
-              <div className="timer-adjust-list">
-                {timerAdjustmentRows.map((row) => {
-                  const correctionMs =
-                    row.turnRef.roundNumber === 0
-                      ? getSetupCorrectionMs(game)
-                      : getTurnCorrectionMs(game, row.turnRef.roundNumber, row.turnRef.turnNumber);
-
-                  return (
-                    <label key={row.key} className="timer-adjust-row">
-                      <span>
-                        <strong>{row.label}</strong>
-                        <small>
-                          Basis {formatDuration(row.baseMs)}
-                          {correctionMs
-                            ? ` | Korrektur ${correctionMs < 0 ? "-" : "+"}${formatDuration(Math.abs(correctionMs))}`
-                            : ""}
-                        </small>
-                      </span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={timerAdjustSecondsByKey[row.key] ?? String(Math.round(row.currentMs / 1000))}
-                        disabled={writeDisabled}
-                        onChange={(event) =>
-                          setTimerAdjustSecondsByKey((current) => ({
-                            ...current,
-                            [row.key]: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-              <p className="muted-copy">
-                Werte sind Zielzeiten in Sekunden. Aufstellung wird als R0 / Z1 gespeichert.
-              </p>
-              <div className="button-row button-row--compact">
-                <button
-                  type="button"
-                  className="primary-button compact-button"
-                  disabled={writeDisabled}
-                  onClick={() => void handleSaveTimerAdjustments()}
-                >
-                  Speichern
-                </button>
-                <button
-                  type="button"
-                  className="danger-button compact-button"
-                  disabled={writeDisabled}
-                  onClick={() => void handleResetTimerAdjustments()}
-                >
-                  Zuruecksetzen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       ) : null}
       {finishDialogOpen ? (
         <div className="modal-backdrop">
@@ -1899,6 +1801,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     }
                   >
                     <option value="all">Alle Ereignisse</option>
+                    <option value="time">Zeit</option>
                     <option value="primary">Primary</option>
                     <option value="secondary">Secondary</option>
                     <option value="challenge">Challenge</option>
@@ -1948,7 +1851,15 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
                       {editingEventId === event.id ? (
                         <div className="event-editor__form">
-                          {event.kind !== "note" ? (
+                          {event.kind === "time" ? (
+                            <input
+                              type="datetime-local"
+                              step={1}
+                              value={editingValue}
+                              disabled={writeDisabled}
+                              onChange={(editEvent) => setEditingValue(editEvent.target.value)}
+                            />
+                          ) : event.kind !== "note" ? (
                             <input
                               type="number"
                               min={0}
@@ -1958,12 +1869,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                               onChange={(editEvent) => setEditingValue(editEvent.target.value)}
                             />
                           ) : null}
-                          <textarea
-                            rows={2}
-                            value={editingNote}
-                            disabled={writeDisabled}
-                            onChange={(editEvent) => setEditingNote(editEvent.target.value)}
-                          />
+                          {event.kind !== "time" ? (
+                            <textarea
+                              rows={2}
+                              value={editingNote}
+                              disabled={writeDisabled}
+                              onChange={(editEvent) => setEditingNote(editEvent.target.value)}
+                            />
+                          ) : null}
                           <div className="button-row button-row--compact">
                             <button
                               type="button"
@@ -1985,7 +1898,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         </div>
                       ) : (
                         <p className="event-list__detail">
-                          {typeof event.displayValue === "number"
+                          {event.kind === "time"
+                            ? `Zeitpunkt ${formatClockTimeWithSeconds(event.createdAt)}`
+                            : typeof event.displayValue === "number"
                             ? `${event.displayValue}`
                             : event.note || "Keine Notiz"}
                           {event.note && typeof event.displayValue === "number" ? ` | ${event.note}` : ""}

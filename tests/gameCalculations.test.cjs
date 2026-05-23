@@ -25,7 +25,8 @@ const {
 const {
   appendLocalCommandPointEvent,
   appendLocalScoreEvent,
-  appendLocalTimeEvents
+  appendLocalTimeEvents,
+  updateLocalEvent
 } = require("../.test-dist/utils/gameState.js");
 const { overlayLocalGameMetadata } = require("../.test-dist/utils/gameState.js");
 const {
@@ -308,6 +309,79 @@ const runGameCalculationsTests = () => {
     ]);
 
     assert.equal(getSetupDurationMs(game), 8 * 60 * 1000);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-edit-score-event" });
+    const [playerOne] = game.players;
+
+    game = appendLocalScoreEvent(game, {
+      playerId: playerOne.id,
+      scoreType: "primary",
+      value: 5,
+      roundNumber: 1,
+      turnNumber: 1,
+      note: "before",
+      createdAt: "2026-04-20T18:02:00.000Z"
+    });
+
+    const event = game.scoreEvents[0];
+    game = updateLocalEvent(game, event.id, {
+      value_number: 8,
+      note: "after"
+    });
+
+    assert.equal(getPlayerPrimaryTotal(game, playerOne.id), 8);
+    assert.equal(game.scoreEvents[0].note, "after");
+  }
+
+  {
+    let game = createBaseGame({ id: "game-edit-time-event" });
+    const [playerOne, playerTwo] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:10:00.000Z"
+      },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 1,
+        turnNumber: 2,
+        createdAt: "2026-04-20T18:10:00.000Z"
+      }
+    ]);
+
+    const turnEndEvent = game.timeEvents.find((event) => event.action === "turn-end");
+    assert.ok(turnEndEvent);
+    game = updateLocalEvent(game, turnEndEvent.id, {
+      occurred_at: "2026-04-20T17:58:00.000Z"
+    });
+
+    const turn = game.rounds[0]?.turns[0];
+    const nextTurn = game.rounds[0]?.turns[1];
+    assert.ok(turn);
+    assert.ok(nextTurn);
+    assert.equal(turn.playerId, playerOne.id);
+    assert.equal(turn.roundNumber, 1);
+    assert.equal(turn.turnNumber, 1);
+    assert.equal(turn.timing.endedAt, "2026-04-20T17:58:00.000Z");
+    assert.equal(nextTurn.playerId, playerTwo.id);
+    assert.equal(nextTurn.turnNumber, 2);
+    assert.equal(getTurnDurationMs(turn, game), 0);
   }
 
   {

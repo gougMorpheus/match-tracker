@@ -36,7 +36,7 @@ const ensureTurn = (round, turnNumber, playerId) => {
 };
 const buildRoundsFromTimeEvents = (timeEvents) => {
     const roundsByNumber = new Map();
-    sortByCreatedAt(timeEvents).forEach((event) => {
+    timeEvents.forEach((event) => {
         if (!event.roundNumber) {
             return;
         }
@@ -159,21 +159,21 @@ const createEmptyTimerCorrections = () => ({
     turns: {}
 });
 const syncDerivedGameState = (game) => {
-    const sortedTimeEvents = sortByCreatedAt(game.timeEvents);
-    const hasTimeEvents = sortedTimeEvents.length > 0;
-    const rounds = buildRoundsFromTimeEvents(sortedTimeEvents);
+    const orderedTimeEvents = [...game.timeEvents];
+    const hasTimeEvents = orderedTimeEvents.length > 0;
+    const rounds = buildRoundsFromTimeEvents(orderedTimeEvents);
     const timestamps = [
         game.createdAt,
         ...game.scoreEvents.map((event) => event.createdAt),
         ...game.commandPointEvents.map((event) => event.createdAt),
         ...game.noteEvents.map((event) => event.createdAt),
-        ...sortedTimeEvents.map((event) => event.createdAt)
+        ...orderedTimeEvents.map((event) => event.createdAt)
     ].sort((left, right) => left.localeCompare(right));
-    const startedAt = sortedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
-        sortedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
-        sortedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
+    const startedAt = orderedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
+        orderedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
+        orderedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
         (hasTimeEvents ? undefined : game.startedAt);
-    const endedAt = [...sortedTimeEvents]
+    const endedAt = [...orderedTimeEvents]
         .reverse()
         .find((event) => event.action === "game-end")?.createdAt ??
         (hasTimeEvents ? undefined : game.endedAt);
@@ -188,7 +188,7 @@ const syncDerivedGameState = (game) => {
         startedAt,
         endedAt,
         currentPlayerId: getCurrentPlayerId(game.id, game.startingPlayerId, rounds, endedAt),
-        timeEvents: sortedTimeEvents,
+        timeEvents: orderedTimeEvents,
         scoreEvents: sortByCreatedAt(game.scoreEvents),
         commandPointEvents: sortByCreatedAt(game.commandPointEvents),
         noteEvents: sortByCreatedAt(game.noteEvents),
@@ -376,11 +376,13 @@ const removeLocalEvent = (game, eventId) => (0, exports.syncDerivedGameState)({
 exports.removeLocalEvent = removeLocalEvent;
 const updateLocalEvent = (game, eventId, patch) => {
     const nextNote = patch.note?.trim() || undefined;
+    const nextCreatedAt = patch.occurred_at?.trim();
     return (0, exports.syncDerivedGameState)({
         ...game,
         scoreEvents: game.scoreEvents.map((event) => event.id === eventId
             ? {
                 ...event,
+                createdAt: nextCreatedAt || event.createdAt,
                 value: typeof patch.value_number === "number" ? patch.value_number : event.value,
                 note: nextNote
             }
@@ -388,6 +390,7 @@ const updateLocalEvent = (game, eventId, patch) => {
         commandPointEvents: game.commandPointEvents.map((event) => event.id === eventId
             ? {
                 ...event,
+                createdAt: nextCreatedAt || event.createdAt,
                 value: typeof patch.value_number === "number" ? patch.value_number : event.value,
                 note: nextNote
             }
@@ -395,7 +398,14 @@ const updateLocalEvent = (game, eventId, patch) => {
         noteEvents: game.noteEvents.map((event) => event.id === eventId
             ? {
                 ...event,
+                createdAt: nextCreatedAt || event.createdAt,
                 note: nextNote ?? ""
+            }
+            : event),
+        timeEvents: game.timeEvents.map((event) => event.id === eventId
+            ? {
+                ...event,
+                createdAt: nextCreatedAt || event.createdAt
             }
             : event)
     });

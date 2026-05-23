@@ -47,8 +47,6 @@ import {
   getPlayerChallengeTotal,
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
-  getSetupBaseDurationMs,
-  getTurnBaseDurationMs,
   isSetupActive,
   isSetupPaused,
   isSetupRunning,
@@ -1191,35 +1189,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
         }
-        const correctionItems = corrections ?? (turnRef ? [{ turnRef, turnMs: turnMs ?? 0 }] : []);
 
-        const nextGame = {
-          ...game,
-          timerCorrections: (() => {
-            const nextTurns = { ...game.timerCorrections.turns };
-
-            correctionItems.forEach((correction) => {
-              const turnKey = `${correction.turnRef.roundNumber}:${correction.turnRef.turnNumber}`;
-
-              if (correction.turnMs) {
-                nextTurns[turnKey] = correction.turnMs;
-              } else {
-                delete nextTurns[turnKey];
-              }
-            });
-
-            return {
-              totalMs: 0,
-              rounds: {},
-              turns: nextTurns
-            };
-          })()
-        };
-
-        commitGameSnapshot("Timer korrigiert", game, nextGame);
-        void flushSyncQueue();
+        if (import.meta.env.DEV) {
+          console.warn("[timer-corrections] Ignored write. Edit the affected time event in Verlauf instead.", {
+            gameId,
+            turnRef,
+            turnMs,
+            corrections
+          });
+        }
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
+    [getGame, runMutation, shouldBlockGameWrite]
   );
 
   const resetAllGameTimers = useCallback(
@@ -1234,29 +1214,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           throw new Error("Spiel nicht gefunden.");
         }
 
-        const nextGame = {
-          ...game,
-          timerCorrections: {
-            totalMs: 0,
-            rounds: {},
-            turns: Object.fromEntries(
-              [
-                ["0:1", -getSetupBaseDurationMs(game, false)] as const,
-                ...game.rounds
-                  .flatMap((round) => round.turns)
-                  .map((turn) => [
-                    `${turn.roundNumber}:${turn.turnNumber}`,
-                    -getTurnBaseDurationMs(turn, game.endedAt)
-                  ] as const)
-              ].filter(([, correction]) => correction !== 0)
-            )
-          }
-        };
-
-        commitGameSnapshot("Timer zurueckgesetzt", game, nextGame);
-        void flushSyncQueue();
+        if (import.meta.env.DEV) {
+          console.warn("[timer-corrections] Ignored reset. Edit or delete time events in Verlauf instead.", {
+            gameId
+          });
+        }
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
+    [getGame, runMutation, shouldBlockGameWrite]
   );
 
   const addScoreEvent = useCallback(

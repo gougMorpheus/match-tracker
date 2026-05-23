@@ -562,7 +562,6 @@ const getComparableGamePayload = (
   defender_player: payload.defender_player ?? null,
   starting_player: payload.starting_player ?? null,
   winner_player: payload.winner_player ?? null,
-  timer_corrections: "timer_corrections" in payload ? normalizeComparableValue(payload.timer_corrections) : null,
   notes: normalizeJsonString(payload.notes)
 });
 
@@ -654,6 +653,13 @@ const sortEventRecords = (events: SupabaseEventRecord[]): SupabaseEventRecord[] 
     return left.occurred_at.localeCompare(right.occurred_at) || left.created_at.localeCompare(right.created_at);
   });
 
+const sortEventRecordsByCreation = (events: SupabaseEventRecord[]): SupabaseEventRecord[] =>
+  [...events].sort(
+    (left, right) =>
+      left.created_at.localeCompare(right.created_at) ||
+      left.occurred_at.localeCompare(right.occurred_at)
+  );
+
 const ensureRound = (roundsByNumber: Map<number, Round>, roundNumber: number): Round => {
   const existing = roundsByNumber.get(roundNumber);
   if (existing) {
@@ -695,20 +701,20 @@ const ensureTurn = (
 const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Round[] => {
   const roundsByNumber = new Map<number, Round>();
 
-  sortEventRecords(
-    timeEvents.map((event) => ({
+  timeEvents
+    .map((event) => ({
       id: event.id,
       created_at: event.createdAt,
       game_id: gameId,
       round_number: event.roundNumber ?? null,
       turn_number: event.turnNumber ?? null,
-      player_slot: event.playerId?.endsWith("player-2") ? 2 : 1,
+      player_slot: (event.playerId?.endsWith("player-2") ? 2 : 1) as 1 | 2,
       event_type: event.action,
       value_number: null,
       note: null,
       occurred_at: event.createdAt
     }))
-  ).forEach((event) => {
+    .forEach((event) => {
     if (!event.round_number) {
       return;
     }
@@ -856,7 +862,7 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
   const noteEvents: NoteEvent[] = [];
   const timeEvents: TimeEvent[] = [];
 
-  sortEventRecords(events).forEach((event) => {
+  sortEventRecordsByCreation(events).forEach((event) => {
     const playerId = getPlayerIdFromSlot(gameId, event.player_slot);
     const eventNote = event.note ?? undefined;
     const baseEvent = {
@@ -1013,7 +1019,6 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
-  timer_corrections: serializeTimerCorrections(createEmptyTimerCorrections()),
   notes: serializeGameNotes(
     "full",
     {},
@@ -1186,7 +1191,6 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
-  timer_corrections: serializeTimerCorrections(game.timerCorrections),
   notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
     autoCommandPointAwards: game.autoCommandPointAwards
