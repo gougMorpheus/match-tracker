@@ -14,23 +14,14 @@ const getTurnKey = (roundNumber, turnNumber) => roundNumber && turnNumber ? `${r
 const hasTurnScoreEvents = (game, turn) => game.scoreEvents.some((event) => event.playerId === turn.playerId &&
     event.roundNumber === turn.roundNumber &&
     event.turnNumber === turn.turnNumber);
-const hasTurnCommandPointEvents = (game, turn) => game.commandPointEvents.some((event) => event.playerId === turn.playerId &&
-    event.roundNumber === turn.roundNumber &&
-    event.turnNumber === turn.turnNumber);
 const hasTurnNoteEvents = (game, turn) => game.noteEvents.some((event) => event.playerId === turn.playerId &&
     event.roundNumber === turn.roundNumber &&
     event.turnNumber === turn.turnNumber);
-const hasTurnTimeEvents = (game, turn) => game.timeEvents.some((event) => event.playerId === turn.playerId &&
-    event.roundNumber === turn.roundNumber &&
-    event.turnNumber === turn.turnNumber);
 const hasRoundLevelStatsEvents = (game, round) => game.scoreEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber) ||
-    game.commandPointEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber) ||
-    game.noteEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber) ||
-    game.timeEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber);
+    game.noteEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber);
 const hasRelevantStatsEventsInTurn = (game, turn) => hasTurnScoreEvents(game, turn) ||
-    hasTurnCommandPointEvents(game, turn) ||
-    hasTurnNoteEvents(game, turn) ||
-    hasTurnTimeEvents(game, turn);
+    hasTurnNoteEvents(game, turn);
+const getStatsEligibilityMode = (game) => game.statsEligibilityMode ?? "auto";
 const isStatsEligibleTurn = (game, turn) => {
     const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
     return ((durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS) ||
@@ -40,6 +31,16 @@ const isStatsDurationEligibleTurn = (game, turn) => {
     const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
     return durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
 };
+const getEligibleCommandPointTurnEvents = (game, playerId) => game.rounds.flatMap((round) => round.turns.flatMap((turn) => {
+    if (turn.playerId !== playerId || !isStatsDurationEligibleTurn(game, turn)) {
+        return [];
+    }
+    return game.commandPointEvents.filter((event) => event.playerId === playerId &&
+        event.roundNumber === turn.roundNumber &&
+        event.turnNumber === turn.turnNumber);
+}));
+const getEligibleCommandPointsSpent = (game, playerId) => sumValues(getEligibleCommandPointTurnEvents(game, playerId).filter((event) => event.cpType === "spent"));
+const hasEligibleCommandPointData = (game, playerId) => getEligibleCommandPointTurnEvents(game, playerId).length > 0;
 const getCountedRounds = (game) => {
     if (game.scoreDetailLevel !== "full") {
         return game.rounds;
@@ -51,11 +52,17 @@ const hasStatsTurnKey = (validTurnKeys, event) => {
     const turnKey = getTurnKey(event.roundNumber, event.turnNumber);
     return turnKey ? validTurnKeys.has(turnKey) : false;
 };
-const isStatsEligibleGame = (game) => game.finishReason !== "interrupted" && game.finishReason !== "abandoned";
+const isStatsEligibleGame = (game) => getStatsEligibilityMode(game) === "exclude"
+    ? false
+    : getStatsEligibilityMode(game) === "include" ||
+        (game.finishReason !== "interrupted" && game.finishReason !== "abandoned");
 exports.isStatsEligibleGame = isStatsEligibleGame;
 const prepareGameForStats = (game) => {
     if (!(0, exports.isStatsEligibleGame)(game)) {
         return null;
+    }
+    if (getStatsEligibilityMode(game) === "include") {
+        return game;
     }
     if (game.scoreDetailLevel !== "full") {
         return game;
@@ -458,8 +465,8 @@ const createPlayerAggregates = (games, durationSourceGames = games) => {
             .map(({ game }) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
             .filter((value) => value !== null);
         const spentCpValues = playerGames
-            .filter(({ game, player }) => game.scoreDetailLevel === "full" && hasPlayerCommandPointData(game, player.id))
-            .map(({ game, player }) => (0, exports.getPlayerCommandPointsSpent)(game, player.id));
+            .filter(({ game, player }) => game.scoreDetailLevel === "full" && hasEligibleCommandPointData(game, player.id))
+            .map(({ game, player }) => getEligibleCommandPointsSpent(game, player.id));
         return {
             name,
             games: gamesCount,
@@ -638,8 +645,8 @@ const createStatsOverview = (games, durationSourceGames = games) => {
     const playerScoreValues = comparableScoreGames.flatMap((game) => game.players.map((player) => (0, exports.getPlayerTotalScore)(game, player.id)));
     const spentCpValues = games.flatMap((game) => game.scoreDetailLevel === "full"
         ? game.players
-            .filter((player) => hasPlayerCommandPointData(game, player.id))
-            .map((player) => (0, exports.getPlayerCommandPointsSpent)(game, player.id))
+            .filter((player) => hasEligibleCommandPointData(game, player.id))
+            .map((player) => getEligibleCommandPointsSpent(game, player.id))
         : []);
     return {
         games: games.length,
@@ -880,14 +887,14 @@ const createPlayerTurnDurationAggregates = (games) => {
 exports.createPlayerTurnDurationAggregates = createPlayerTurnDurationAggregates;
 const createCpScoreCorrelationPoints = (games) => games.flatMap((game) => game.scoreDetailLevel === "full"
     ? game.players
-        .filter((player) => hasPlayerCommandPointData(game, player.id) &&
+        .filter((player) => hasEligibleCommandPointData(game, player.id) &&
         (0, exports.getPlayerComparableTotalScore)(game, player.id) !== null)
         .map((player) => ({
         playerName: player.name,
         gameId: game.id,
         scheduledDate: game.scheduledDate,
         scheduledTime: game.scheduledTime,
-        cpSpent: (0, exports.getPlayerCommandPointsSpent)(game, player.id),
+        cpSpent: getEligibleCommandPointsSpent(game, player.id),
         totalScore: (0, exports.getPlayerTotalScore)(game, player.id),
         primaryScore: (0, exports.getPlayerComparablePrimaryScore)(game, player.id),
         secondaryScore: (0, exports.getPlayerComparableSecondaryScore)(game, player.id)

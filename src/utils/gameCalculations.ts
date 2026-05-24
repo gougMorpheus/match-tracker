@@ -32,24 +32,8 @@ const hasTurnScoreEvents = (game: Game, turn: Turn): boolean =>
       event.turnNumber === turn.turnNumber
   );
 
-const hasTurnCommandPointEvents = (game: Game, turn: Turn): boolean =>
-  game.commandPointEvents.some(
-    (event) =>
-      event.playerId === turn.playerId &&
-      event.roundNumber === turn.roundNumber &&
-      event.turnNumber === turn.turnNumber
-  );
-
 const hasTurnNoteEvents = (game: Game, turn: Turn): boolean =>
   game.noteEvents.some(
-    (event) =>
-      event.playerId === turn.playerId &&
-      event.roundNumber === turn.roundNumber &&
-      event.turnNumber === turn.turnNumber
-  );
-
-const hasTurnTimeEvents = (game: Game, turn: Turn): boolean =>
-  game.timeEvents.some(
     (event) =>
       event.playerId === turn.playerId &&
       event.roundNumber === turn.roundNumber &&
@@ -60,21 +44,16 @@ const hasRoundLevelStatsEvents = (game: Game, round: Round): boolean =>
   game.scoreEvents.some(
     (event) => event.roundNumber === round.roundNumber && !event.turnNumber
   ) ||
-  game.commandPointEvents.some(
-    (event) => event.roundNumber === round.roundNumber && !event.turnNumber
-  ) ||
   game.noteEvents.some(
-    (event) => event.roundNumber === round.roundNumber && !event.turnNumber
-  ) ||
-  game.timeEvents.some(
     (event) => event.roundNumber === round.roundNumber && !event.turnNumber
   );
 
 const hasRelevantStatsEventsInTurn = (game: Game, turn: Turn): boolean =>
   hasTurnScoreEvents(game, turn) ||
-  hasTurnCommandPointEvents(game, turn) ||
-  hasTurnNoteEvents(game, turn) ||
-  hasTurnTimeEvents(game, turn);
+  hasTurnNoteEvents(game, turn);
+
+const getStatsEligibilityMode = (game: Game): Game["statsEligibilityMode"] =>
+  game.statsEligibilityMode ?? "auto";
 
 const isStatsEligibleTurn = (game: Game, turn: Turn): boolean => {
   const durationMs = getCompletedTurnDurationMs(turn, game);
@@ -88,6 +67,31 @@ const isStatsDurationEligibleTurn = (game: Game, turn: Turn): boolean => {
   const durationMs = getCompletedTurnDurationMs(turn, game);
   return durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
 };
+
+const getEligibleCommandPointTurnEvents = (
+  game: Game,
+  playerId: PlayerId
+): CommandPointEvent[] =>
+  game.rounds.flatMap((round) =>
+    round.turns.flatMap((turn) => {
+      if (turn.playerId !== playerId || !isStatsDurationEligibleTurn(game, turn)) {
+        return [];
+      }
+
+      return game.commandPointEvents.filter(
+        (event) =>
+          event.playerId === playerId &&
+          event.roundNumber === turn.roundNumber &&
+          event.turnNumber === turn.turnNumber
+      );
+    })
+  );
+
+const getEligibleCommandPointsSpent = (game: Game, playerId: PlayerId): number =>
+  sumValues(getEligibleCommandPointTurnEvents(game, playerId).filter((event) => event.cpType === "spent"));
+
+const hasEligibleCommandPointData = (game: Game, playerId: PlayerId): boolean =>
+  getEligibleCommandPointTurnEvents(game, playerId).length > 0;
 
 export const getCountedRounds = (game: Game): Round[] => {
   if (game.scoreDetailLevel !== "full") {
@@ -108,11 +112,18 @@ const hasStatsTurnKey = (
 };
 
 export const isStatsEligibleGame = (game: Game): boolean =>
-  game.finishReason !== "interrupted" && game.finishReason !== "abandoned";
+  getStatsEligibilityMode(game) === "exclude"
+    ? false
+    : getStatsEligibilityMode(game) === "include" ||
+      (game.finishReason !== "interrupted" && game.finishReason !== "abandoned");
 
 export const prepareGameForStats = (game: Game): Game | null => {
   if (!isStatsEligibleGame(game)) {
     return null;
+  }
+
+  if (getStatsEligibilityMode(game) === "include") {
+    return game;
   }
 
   if (game.scoreDetailLevel !== "full") {
@@ -842,8 +853,8 @@ export const createPlayerAggregates = (games: Game[], durationSourceGames: Game[
         .map(({ game }) => getStatsGameDurationMs(durationSourceById.get(game.id) ?? game))
         .filter((value): value is number => value !== null);
       const spentCpValues = playerGames
-        .filter(({ game, player }) => game.scoreDetailLevel === "full" && hasPlayerCommandPointData(game, player.id))
-        .map(({ game, player }) => getPlayerCommandPointsSpent(game, player.id));
+        .filter(({ game, player }) => game.scoreDetailLevel === "full" && hasEligibleCommandPointData(game, player.id))
+        .map(({ game, player }) => getEligibleCommandPointsSpent(game, player.id));
 
       return {
         name,
@@ -1064,8 +1075,8 @@ export const createStatsOverview = (games: Game[], durationSourceGames: Game[] =
   const spentCpValues = games.flatMap((game) =>
     game.scoreDetailLevel === "full"
       ? game.players
-          .filter((player) => hasPlayerCommandPointData(game, player.id))
-          .map((player) => getPlayerCommandPointsSpent(game, player.id))
+          .filter((player) => hasEligibleCommandPointData(game, player.id))
+          .map((player) => getEligibleCommandPointsSpent(game, player.id))
       : []
   );
 
@@ -1342,7 +1353,7 @@ export const createCpScoreCorrelationPoints = (games: Game[]): CpScorePoint[] =>
       ? game.players
           .filter(
             (player) =>
-              hasPlayerCommandPointData(game, player.id) &&
+              hasEligibleCommandPointData(game, player.id) &&
               getPlayerComparableTotalScore(game, player.id) !== null
           )
           .map((player) => ({
@@ -1350,7 +1361,7 @@ export const createCpScoreCorrelationPoints = (games: Game[]): CpScorePoint[] =>
             gameId: game.id,
             scheduledDate: game.scheduledDate,
             scheduledTime: game.scheduledTime,
-            cpSpent: getPlayerCommandPointsSpent(game, player.id),
+            cpSpent: getEligibleCommandPointsSpent(game, player.id),
             totalScore: getPlayerTotalScore(game, player.id),
             primaryScore: getPlayerComparablePrimaryScore(game, player.id),
             secondaryScore: getPlayerComparableSecondaryScore(game, player.id)

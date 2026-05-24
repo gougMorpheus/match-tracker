@@ -100,6 +100,7 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   scheduledTime: game.scheduledTime,
   deployment: game.deployment,
   primaryMission: game.primaryMission,
+  statsEligibilityMode: game.statsEligibilityMode,
   defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : game.defenderPlayerId === game.players[1].id ? "player2" : "",
   startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : game.startingPlayerId === game.players[1].id ? "player2" : ""
 });
@@ -2080,7 +2081,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 disabled={writeDisabled || !undoActionLabel}
                 title={`${undoLabel}${redoActionLabel ? " | Halten fuer Redo" : ""}`}
               >
-                {undoLabel}
+                <span className="game-bottom-dock__primary-label">{undoLabel}</span>
+                <small className="game-bottom-dock__hint">(hold Redo)</small>
               </button>
             </div>
             <div className="game-bottom-dock__timer-wrap">
@@ -2143,7 +2145,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 }}
                 disabled={writeDisabled}
               >
-                {isTimerRunning ? "Timer aus" : "Timer an"}
+                <span className="game-bottom-dock__primary-label">{isTimerRunning ? "Timer aus" : "Timer an"}</span>
+                <small className="game-bottom-dock__hint">(hold Time-out)</small>
               </button>
             </div>
           </div>

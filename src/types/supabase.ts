@@ -28,6 +28,7 @@ export interface Database {
           defender_player: 1 | 2 | null;
           starting_player: 1 | 2 | null;
           winner_player: 1 | 2 | null;
+          stats_eligibility_mode: string | null;
           timer_corrections: Json | null;
           notes: string | null;
         };
@@ -49,6 +50,7 @@ export interface Database {
           defender_player?: 1 | 2 | null;
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
+          stats_eligibility_mode?: string | null;
           timer_corrections?: Json | null;
           notes?: string | null;
         };
@@ -70,6 +72,7 @@ export interface Database {
           defender_player?: 1 | 2 | null;
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
+          stats_eligibility_mode?: string | null;
           timer_corrections?: Json | null;
           notes?: string | null;
         };

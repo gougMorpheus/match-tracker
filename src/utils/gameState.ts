@@ -9,6 +9,7 @@ import type {
   Round,
   ScoreEvent,
   ScoreType,
+  StatsEligibilityMode,
   TimerCorrections,
   TimeEvent,
   TimeEventAction,
@@ -198,6 +199,9 @@ const createEmptyTimerCorrections = (): TimerCorrections => ({
   turns: {}
 });
 
+const normalizeStatsEligibilityMode = (value?: string | null): StatsEligibilityMode =>
+  value === "include" || value === "exclude" ? value : "auto";
+
 export const syncDerivedGameState = (game: Game): Game => {
   const orderedTimeEvents = [...game.timeEvents];
   const hasTimeEvents = orderedTimeEvents.length > 0;
@@ -226,6 +230,7 @@ export const syncDerivedGameState = (game: Game): Game => {
     status: endedAt ? "completed" : "active",
     finishReason: endedAt ? game.finishReason ?? "completed" : undefined,
     scoreDetailLevel: game.scoreDetailLevel ?? "full",
+    statsEligibilityMode: normalizeStatsEligibilityMode(game.statsEligibilityMode),
     players: syncPlayers(game.players, game.gamePoints),
     rounds,
     startedAt,
@@ -273,6 +278,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     status: "active",
     finishReason: undefined,
     scoreDetailLevel: "full",
+    statsEligibilityMode: normalizeStatsEligibilityMode(input.statsEligibilityMode),
     gamePoints: input.gamePoints,
     scheduledDate: input.scheduledDate,
     scheduledTime: input.scheduledTime,
@@ -312,6 +318,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
 export const updateLocalGameDetails = (game: Game, input: CreateGameInput): Game =>
   syncDerivedGameState({
     ...game,
+    statsEligibilityMode: normalizeStatsEligibilityMode(input.statsEligibilityMode),
     gamePoints: input.gamePoints,
     scheduledDate: input.scheduledDate,
     scheduledTime: input.scheduledTime,
@@ -525,6 +532,7 @@ export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game 
     ...baseGame,
     autoCommandPointOn: localGame.autoCommandPointOn,
     autoCommandPointAwards: localGame.autoCommandPointAwards,
+    statsEligibilityMode: localGame.statsEligibilityMode,
     gamePoints: localGame.gamePoints,
     scheduledDate: localGame.scheduledDate,
     scheduledTime: localGame.scheduledTime,
@@ -620,6 +628,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
     id: gameId,
     autoCommandPointOn: rawGame.autoCommandPointOn ?? true,
     autoCommandPointAwards: rawGame.autoCommandPointAwards ?? {},
+    statsEligibilityMode: normalizeStatsEligibilityMode(rawGame.statsEligibilityMode),
     defenderPlayerId: mapPlayerId(rawGame.defenderPlayerId) ?? playerOneId,
     startingPlayerId: mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
     currentPlayerId: mapPlayerId(rawGame.currentPlayerId) ?? playerOneId,

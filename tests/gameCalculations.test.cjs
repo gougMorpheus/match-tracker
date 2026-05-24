@@ -159,7 +159,6 @@ const runGameCalculationsTests = () => {
 
     game = appendLocalTimeEvents(game, [
       { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
-      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
       {
         action: "turn-start",
         playerId: playerOne.id,
@@ -209,11 +208,46 @@ const runGameCalculationsTests = () => {
     assert.equal(getCountedRounds(statsGame).length, 1);
     assert.equal(roundScores[0]?.averagePlayerOneScore, 3);
     assert.equal(roundScores[0]?.averagePlayerTwoScore, 0);
-    assert.equal(roundDurations.length, 1);
+    assert.equal(roundDurations.length, 0);
     assert.deepEqual(
       playerTurnDurations.map((entry) => [entry.playerName, entry.averageTurnDurationMs]),
       [["Bob", 14 * 1000]]
     );
+  }
+
+  {
+    let game = createBaseGame({ id: "game-eligibility-cp-only" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:04.000Z"
+      },
+      { action: "game-end", createdAt: "2026-04-20T18:00:10.000Z" }
+    ]);
+    game = appendLocalCommandPointEvent(game, {
+      playerId: playerOne.id,
+      cpType: "spent",
+      value: 2,
+      roundNumber: 1,
+      turnNumber: 1,
+      createdAt: "2026-04-20T18:00:02.000Z"
+    });
+
+    assert.equal(prepareGamesForStats([game]).length, 0);
+    assert.equal(getCountedRounds(game).length, 0);
   }
 
   {
@@ -284,6 +318,115 @@ const runGameCalculationsTests = () => {
     assert.equal(getPlayerPrimaryTotal(statsGame, playerTwo.id), 30);
     assert.equal(getCountedRounds(game).length, 2);
     assert.equal(createGameSummary(game).roundCount, 2);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-cp-validity" });
+    const [playerOne, playerTwo] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:04.000Z"
+      },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 1,
+        turnNumber: 2,
+        createdAt: "2026-04-20T18:00:04.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerTwo.id,
+        roundNumber: 1,
+        turnNumber: 2,
+        createdAt: "2026-04-20T18:00:20.000Z"
+      },
+      { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T18:00:20.000Z" },
+      { action: "game-end", createdAt: "2026-04-20T18:00:30.000Z" }
+    ]);
+    game = appendLocalCommandPointEvent(game, {
+      playerId: playerOne.id,
+      cpType: "spent",
+      value: 7,
+      roundNumber: 1,
+      turnNumber: 1,
+      createdAt: "2026-04-20T18:00:02.000Z"
+    });
+    game = appendLocalCommandPointEvent(game, {
+      playerId: playerTwo.id,
+      cpType: "spent",
+      value: 2,
+      roundNumber: 1,
+      turnNumber: 2,
+      createdAt: "2026-04-20T18:00:06.000Z"
+    });
+
+    const preparedGames = prepareGamesForStats([game]);
+    const playerAggregates = createPlayerAggregates(preparedGames);
+
+    assert.equal(preparedGames.length, 1);
+    assert.deepEqual(
+      playerAggregates.map((player) => [player.name, player.averageSpentCp]),
+      [
+        ["Alice", null],
+        ["Bob", 2]
+      ]
+    );
+  }
+
+  {
+    let game = createBaseGame({ id: "game-eligibility-include", statsEligibilityMode: "include" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:04.000Z"
+      }
+    ]);
+    game = {
+      ...game,
+      finishReason: "interrupted"
+    };
+
+    const preparedGames = prepareGamesForStats([game]);
+    const overview = createStatsOverview(preparedGames);
+
+    assert.equal(preparedGames.length, 1);
+    assert.equal(overview.games, 1);
+  }
+
+  {
+    const game = createBaseGame({ id: "game-eligibility-exclude", statsEligibilityMode: "exclude" });
+    const preparedGames = prepareGamesForStats([game]);
+
+    assert.equal(preparedGames.length, 0);
   }
 
   {

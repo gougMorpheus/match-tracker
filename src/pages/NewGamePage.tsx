@@ -24,6 +24,7 @@ const createDefaultFormState = (): CreateGameInput => ({
   scheduledTime: toLocalTimeInput(),
   deployment: "",
   primaryMission: "",
+  statsEligibilityMode: "auto",
   defenderSlot: "",
   startingSlot: ""
 });

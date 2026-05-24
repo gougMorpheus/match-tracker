@@ -10,6 +10,7 @@ export type GameFinishReason =
 export type ScoreType = "primary" | "secondary" | "challenge" | "legacy-total";
 export type CommandPointType = "gained" | "spent";
 export type ScoreDetailLevel = "full" | "total-only" | "none";
+export type StatsEligibilityMode = "auto" | "include" | "exclude";
 export type TimeEventAction =
   | "game-start"
   | "game-end"
@@ -120,6 +121,7 @@ export interface Game {
   status: GameStatus;
   finishReason?: GameFinishReason;
   scoreDetailLevel: ScoreDetailLevel;
+  statsEligibilityMode: StatsEligibilityMode;
   gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;
@@ -177,6 +179,7 @@ export interface CreateGameInput {
   scheduledTime: string;
   deployment: string;
   primaryMission: string;
+  statsEligibilityMode: StatsEligibilityMode;
   defenderSlot: "" | "player1" | "player2";
   startingSlot: "" | "player1" | "player2";
 }

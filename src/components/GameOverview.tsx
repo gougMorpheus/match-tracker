@@ -126,9 +126,9 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   const [selectedRoundDuration, setSelectedRoundDuration] = useState<string | null>(null);
   const [scoreTableOpen, setScoreTableOpen] = useState(false);
   const [openCharts, setOpenCharts] = useState<Record<string, boolean>>({
-    score: true,
-    time: true,
-    rounds: true
+    score: false,
+    time: false,
+    rounds: false
   });
   const formatScoreValue = (value: number | null) => (value === null ? "-" : value);
   const orderedPlayers =
@@ -145,9 +145,9 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     setSelectedRoundDuration(null);
     setScoreTableOpen(false);
     setOpenCharts({
-      score: true,
-      time: true,
-      rounds: true
+      score: false,
+      time: false,
+      rounds: false
     });
   }, [game.id]);
 
@@ -1622,8 +1622,8 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
         ))}
       </div>
 
-      {renderRoundScoreChart()}
       {renderScoreTable()}
+      {renderRoundScoreChart()}
       {renderRoundTimeChart()}
       {renderRoundDurationChart()}
     </section>

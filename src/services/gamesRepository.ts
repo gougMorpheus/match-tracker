@@ -17,7 +17,7 @@ import type { Json } from "../types/supabase";
 import { createId } from "../utils/id";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
-import type { ScoreDetailLevel, TimerCorrections } from "../types/game";
+import type { ScoreDetailLevel, StatsEligibilityMode, TimerCorrections } from "../types/game";
 
 export type SupabaseGameRecord = Database["public"]["Tables"]["games"]["Row"];
 export type SupabaseEventRecord = Database["public"]["Tables"]["events"]["Row"];
@@ -148,6 +148,12 @@ const createDefaultScoreMeta = (): {
   scoreDetailLevel: "full",
   legacyScoreTotals: {}
 });
+
+const parseStatsEligibilityMode = (value: unknown): StatsEligibilityMode =>
+  value === "include" || value === "exclude" ? value : "auto";
+
+const serializeStatsEligibilityMode = (value: StatsEligibilityMode): string | null =>
+  value === "auto" ? null : value;
 
 const createDefaultPlayerDetachments = (): Record<string, string> => ({
   "player-1": "",
@@ -562,6 +568,7 @@ const getComparableGamePayload = (
   defender_player: payload.defender_player ?? null,
   starting_player: payload.starting_player ?? null,
   winner_player: payload.winner_player ?? null,
+  stats_eligibility_mode: payload.stats_eligibility_mode ?? null,
   notes: normalizeJsonString(payload.notes)
 });
 
@@ -951,6 +958,9 @@ export const mapSupabaseGameToAppGame = (
   const playerDetachments = parsePlayerMeta(row.notes);
   const scenarioMeta = parseScenarioMeta(row.notes);
   const finishMeta = parseFinishMeta(row.notes);
+  const statsEligibilityMode = parseStatsEligibilityMode(
+    (row as SupabaseGameRecord & { stats_eligibility_mode?: string | null }).stats_eligibility_mode
+  );
 
   return {
     id: row.id,
@@ -959,6 +969,7 @@ export const mapSupabaseGameToAppGame = (
     status: endedAt ? "completed" : "active",
     finishReason: endedAt ? finishMeta.finishReason ?? "completed" : undefined,
     scoreDetailLevel: scoreMeta.scoreDetailLevel,
+    statsEligibilityMode,
     gamePoints: row.player1_max_points,
     scheduledDate: date,
     scheduledTime: time,
@@ -1019,6 +1030,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
+  stats_eligibility_mode: serializeStatsEligibilityMode(payload.statsEligibilityMode),
   notes: serializeGameNotes(
     "full",
     {},
@@ -1043,7 +1055,8 @@ export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabas
   deployment: payload.deployment.trim() || null,
   primary_mission: payload.primaryMission.trim() || null,
   defender_player: payload.defenderSlot === "player1" ? 1 : payload.defenderSlot === "player2" ? 2 : null,
-  starting_player: payload.startingSlot === "player1" ? 1 : payload.startingSlot === "player2" ? 2 : null
+  starting_player: payload.startingSlot === "player1" ? 1 : payload.startingSlot === "player2" ? 2 : null,
+  stats_eligibility_mode: serializeStatsEligibilityMode(payload.statsEligibilityMode)
 });
 
 const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
@@ -1082,6 +1095,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: getWinnerPlayerSlot(game),
+  stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
   timer_corrections: serializeTimerCorrections(game.timerCorrections),
   notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
@@ -1191,6 +1205,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
+  stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
   notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
     autoCommandPointAwards: game.autoCommandPointAwards

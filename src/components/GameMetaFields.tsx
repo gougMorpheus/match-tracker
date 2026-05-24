@@ -96,6 +96,21 @@ export const GameMetaFields = ({
     ) : null}
 
     <div className="field">
+      <span>Statistik-Wertung</span>
+      <select
+        value={value.statsEligibilityMode}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange("statsEligibilityMode", event.target.value as CreateGameInput["statsEligibilityMode"])
+        }
+      >
+        <option value="auto">Auto</option>
+        <option value="include">Immer zählen</option>
+        <option value="exclude">Nicht zählen</option>
+      </select>
+    </div>
+
+    <div className="field">
       <span>Defender</span>
       <select
         value={value.defenderSlot}
