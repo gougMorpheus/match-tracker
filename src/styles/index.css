@@ -146,6 +146,13 @@ textarea {
   color: var(--muted);
 }
 
+.field__error {
+  margin: 0.35rem 0 0;
+  color: #fda4af;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 .eyebrow {
   margin: 0;
   font-size: 0.78rem;
@@ -3271,6 +3278,23 @@ button.stats-table__row.is-active {
 }
 
 .game-bottom-dock__redo-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.45rem);
+  z-index: 2;
+  width: max-content;
+  max-width: min(15rem, 78vw);
+  transform: translateX(-50%);
+  box-shadow: var(--shadow);
+  white-space: normal;
+}
+
+.game-bottom-dock__timer-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.game-bottom-dock__timeout-popover {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 0.45rem);

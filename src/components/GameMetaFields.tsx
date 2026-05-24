@@ -5,16 +5,22 @@ interface GameMetaFieldsProps {
   value: CreateGameInput;
   deploymentOptions: string[];
   primaryMissionOptions: string[];
+  autoCommandPointOn?: boolean;
+  defenderError?: string;
   disabled?: boolean;
   onChange: <K extends keyof CreateGameInput>(key: K, nextValue: CreateGameInput[K]) => void;
+  onToggleAutoCommandPoint?: (nextValue: boolean) => void;
 }
 
 export const GameMetaFields = ({
   value,
   deploymentOptions,
   primaryMissionOptions,
+  autoCommandPointOn,
+  defenderError,
   disabled = false,
-  onChange
+  onChange,
+  onToggleAutoCommandPoint
 }: GameMetaFieldsProps) => {
   const playerOneLabel = value.playerOneName.trim() || "Spieler 1";
   const playerTwoLabel = value.playerTwoName.trim() || "Spieler 2";
@@ -75,10 +81,26 @@ export const GameMetaFields = ({
       onChange={(nextValue) => onChange("primaryMission", nextValue)}
     />
 
+    {typeof autoCommandPointOn === "boolean" && onToggleAutoCommandPoint ? (
+      <div className="field">
+        <span>Auto CP</span>
+        <button
+          type="button"
+          className={`toggle-button ${autoCommandPointOn ? "is-active" : ""}`}
+          disabled={disabled}
+          onClick={() => onToggleAutoCommandPoint(!autoCommandPointOn)}
+        >
+          {autoCommandPointOn ? "An" : "Aus"}
+        </button>
+      </div>
+    ) : null}
+
     <div className="field">
       <span>Defender</span>
       <select
         value={value.defenderSlot}
+        required
+        aria-invalid={Boolean(defenderError)}
         disabled={disabled}
         onChange={(event) => onChange("defenderSlot", event.target.value as CreateGameInput["defenderSlot"])}
       >
@@ -86,6 +108,7 @@ export const GameMetaFields = ({
         <option value="player1">{playerOneLabel}</option>
         <option value="player2">{playerTwoLabel}</option>
       </select>
+      {defenderError ? <p className="field__error">{defenderError}</p> : null}
     </div>
 
     <div className="field">

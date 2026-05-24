@@ -236,10 +236,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [startingPlayerPromptOpen, setStartingPlayerPromptOpen] = useState(false);
   const [startingPlayerPromptSlot, setStartingPlayerPromptSlot] = useState<CreateGameInput["startingSlot"]>("");
   const [redoHoldOpen, setRedoHoldOpen] = useState(false);
+  const [timeoutHoldOpen, setTimeoutHoldOpen] = useState(false);
   const previousRoundRef = useRef<number | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const redoHoldTimerRef = useRef<number | null>(null);
   const redoHoldTriggeredRef = useRef(false);
+  const timeoutHoldTimerRef = useRef<number | null>(null);
+  const timeoutHoldTriggeredRef = useRef(false);
   const game = getGame(gameId);
   const accessMode = getGameAccessMode(gameId);
   const viewOnlyActive = game ? isGameViewOnly(game.id) : false;
@@ -365,6 +368,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
   };
 
+  const clearTimeoutHoldTimer = () => {
+    if (timeoutHoldTimerRef.current !== null) {
+      window.clearTimeout(timeoutHoldTimerRef.current);
+      timeoutHoldTimerRef.current = null;
+    }
+  };
+
   const startRedoHold = () => {
     if (writeDisabled || !redoActionLabel || isClosed) {
       return;
@@ -381,6 +391,24 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
   const cancelRedoHold = () => {
     clearRedoHoldTimer();
+  };
+
+  const startTimeoutHold = () => {
+    if (writeDisabled || !isTimerRunning || timeoutActive) {
+      return;
+    }
+
+    clearTimeoutHoldTimer();
+    timeoutHoldTriggeredRef.current = false;
+    timeoutHoldTimerRef.current = window.setTimeout(() => {
+      timeoutHoldTimerRef.current = null;
+      timeoutHoldTriggeredRef.current = true;
+      setTimeoutHoldOpen(true);
+    }, 520);
+  };
+
+  const cancelTimeoutHold = () => {
+    clearTimeoutHoldTimer();
   };
 
   useEffect(() => {
@@ -400,6 +428,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   useEffect(
     () => () => {
       clearRedoHoldTimer();
+      clearTimeoutHoldTimer();
     },
     []
   );
@@ -546,6 +575,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
   const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
+
+  useEffect(() => {
+    if (!isTimerRunning || timeoutActive || isMutating || viewOnlyActive || game?.status === "completed") {
+      setTimeoutHoldOpen(false);
+      clearTimeoutHoldTimer();
+    }
+  }, [game?.status, isMutating, isTimerRunning, timeoutActive, viewOnlyActive]);
+
   const displayTurn = timerFocusTurn ?? selectedTurn;
   const displayRound =
     timerFocusTurn ? game.rounds.find((round) => round.roundNumber === timerFocusTurn.roundNumber) ?? selectedRound : selectedRound;
@@ -898,6 +935,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     });
   };
 
+  const handleStartTimeoutFromHold = async () => {
+    setTimeoutHoldOpen(false);
+    await handleStartTimeout();
+  };
+
   const handleEndTimeout = async () => {
     if (isReadOnly || !selectedTurn || !timeoutActive) {
       return;
@@ -1078,31 +1120,17 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               {
                 label: "Optionen",
                 items: [
-                  { label: "Spieldetails", onClick: openGameDetails },
-                  {
-                    label: game.autoCommandPointOn ? "Auto CP: An" : "Auto CP: Aus",
-                    onClick: () => void setAutoCommandPointEnabled(game.id, !game.autoCommandPointOn),
-                    disabled: writeDisabled
-                  },
                   ...(!showOverview
                     ? [
                         {
-                          label: "Spieluebersicht",
+                          label: "Scoreboard",
                           onClick: openOverviewWindow
                         }
                       ]
                     : []),
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
-                  ...(!showOverview
-                    ? [
-                        {
-                          label: "Time-out starten",
-                          onClick: () => void handleStartTimeout(),
-                          disabled: writeDisabled || !isTimerRunning || timeoutActive
-                        }
-                      ]
-                    : []),
+                  { label: "Einstellungen", onClick: openGameDetails },
                   isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
@@ -1644,8 +1672,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     value={gameForm}
                     deploymentOptions={deploymentOptions}
                     primaryMissionOptions={primaryMissionOptions}
+                    autoCommandPointOn={game.autoCommandPointOn}
                     disabled={writeDisabled}
                     onChange={updateGameField}
+                    onToggleAutoCommandPoint={(nextValue) =>
+                      void setAutoCommandPointEnabled(game.id, nextValue)
+                    }
                   />
 
                   <div className="button-row button-row--compact">
@@ -2052,36 +2084,69 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                 {undoLabel}
               </button>
             </div>
-            <button
-              type="button"
-              className="secondary-button compact-button"
-              onClick={() =>
-                void (
-                  isTimerRunning
-                    ? pauseActiveTimer(
-                        game.id,
-                        selectedTurn
-                          ? {
-                              roundNumber: selectedTurn.roundNumber,
-                              turnNumber: selectedTurn.turnNumber
-                            }
-                          : undefined
-                      )
-                    : startGameTimer(
-                        game.id,
-                        selectedTurn
-                          ? {
-                              roundNumber: selectedTurn.roundNumber,
-                              turnNumber: selectedTurn.turnNumber
-                            }
-                          : undefined
+            <div className="game-bottom-dock__timer-wrap">
+              {timeoutHoldOpen ? (
+                <button
+                  type="button"
+                  className="danger-button compact-button game-bottom-dock__timeout-popover"
+                  onClick={() => void handleStartTimeoutFromHold()}
+                  disabled={writeDisabled || !isTimerRunning || timeoutActive}
+                  title="Time-out starten"
+                >
+                  Time-out starten
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="secondary-button compact-button"
+                onPointerDown={(event) => {
+                  if (!isTimerRunning || timeoutActive) {
+                    return;
+                  }
+                  if (event.pointerType === "mouse" && event.button !== 0) {
+                    return;
+                  }
+                  startTimeoutHold();
+                }}
+                onPointerUp={cancelTimeoutHold}
+                onPointerLeave={cancelTimeoutHold}
+                onPointerCancel={cancelTimeoutHold}
+                onContextMenu={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  if (timeoutHoldTriggeredRef.current) {
+                    event.preventDefault();
+                    timeoutHoldTriggeredRef.current = false;
+                    return;
+                  }
+
+                  setTimeoutHoldOpen(false);
+                  void (
+                    isTimerRunning
+                      ? pauseActiveTimer(
+                          game.id,
+                          selectedTurn
+                            ? {
+                                roundNumber: selectedTurn.roundNumber,
+                                turnNumber: selectedTurn.turnNumber
+                              }
+                            : undefined
                         )
-                )
-              }
-              disabled={writeDisabled}
-            >
-              {isTimerRunning ? "Timer aus" : "Timer an"}
-            </button>
+                      : startGameTimer(
+                          game.id,
+                          selectedTurn
+                            ? {
+                                roundNumber: selectedTurn.roundNumber,
+                                turnNumber: selectedTurn.turnNumber
+                              }
+                            : undefined
+                        )
+                  );
+                }}
+                disabled={writeDisabled}
+              >
+                {isTimerRunning ? "Timer aus" : "Timer an"}
+              </button>
+            </div>
           </div>
         </>
       ) : null}

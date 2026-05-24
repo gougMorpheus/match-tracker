@@ -95,6 +95,8 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
       return;
     }
 
+    setFormError("");
+
     try {
       const game = await createGame(formState);
       onCreated(game.id);
@@ -109,7 +111,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
       subtitle="Spieler waehlen, Armeen auswaehlen, Punkte einmal setzen"
       onBack={onBack}
     >
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" onSubmit={handleSubmit} noValidate>
         {errorMessage ? (
           <article className="notice-card notice-card--error">
             <div className="stack">
@@ -164,6 +166,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
           deploymentOptions={deploymentOptions}
           primaryMissionOptions={primaryMissionOptions}
           disabled={isMutating}
+          defenderError={formError}
           onChange={updateField}
         />
 
