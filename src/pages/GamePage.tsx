@@ -569,7 +569,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const isReadOnly = viewOnlyActive;
   const writeDisabled = isMutating || isReadOnly;
   const canNavigateTurns = !isMutating;
-  const showOverview = isClosed || forceOverview;
+  const showOverview = isClosed || isReadOnly || forceOverview;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
@@ -1232,7 +1232,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
             <div className="stack">
               <div className="list-row">
                 <div>
-                  <h2>Spieluebersicht</h2>
+                  <h2>Scoreboard</h2>
                   <p className="muted-copy">Zwischenstand waehrend des laufenden Spiels</p>
                 </div>
                 <button
