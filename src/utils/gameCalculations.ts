@@ -7,6 +7,8 @@ import type {
   PlayerId,
   Round,
   ScoreEvent,
+  StatsEligibilityArea,
+  StatsEligibilityMode,
   Turn
 } from "../types/game";
 import { getDurationMs } from "./time";
@@ -55,8 +57,25 @@ const hasRelevantStatsEventsInTurn = (game: Game, turn: Turn): boolean =>
 const getStatsEligibilityMode = (game: Game): Game["statsEligibilityMode"] =>
   game.statsEligibilityMode ?? "auto";
 
+const STATS_AREAS: StatsEligibilityArea[] = ["result", "scoring", "cp", "time"];
+const STATS_TURN_AREAS: Exclude<StatsEligibilityArea, "result">[] = ["scoring", "cp", "time"];
+
+const getAreaMode = (game: Game, area: StatsEligibilityArea): StatsEligibilityMode =>
+  game.statsEligibilityOverrides?.areas?.[area] ?? getStatsEligibilityMode(game);
+
+const getTurnOverrideMode = (
+  game: Game,
+  area: Exclude<StatsEligibilityArea, "result">,
+  turn: Turn
+): StatsEligibilityMode => game.statsEligibilityOverrides?.turns?.[`${turn.roundNumber}:${turn.turnNumber}`]?.[area] ?? "auto";
+
+const isBaseStatsEligibleGame = (game: Game): boolean =>
+  game.finishReason !== "interrupted" && game.finishReason !== "abandoned";
+
 const isStatsEligibleTurn = (game: Game, turn: Turn): boolean => {
-  const durationMs = getCompletedTurnDurationMs(turn, game);
+  const durationMs = turn.timing.startedAt && (turn.timing.endedAt || game.endedAt)
+    ? getTurnDurationMs(turn, game)
+    : null;
   return (
     (durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS) ||
     hasRelevantStatsEventsInTurn(game, turn)
@@ -64,8 +83,102 @@ const isStatsEligibleTurn = (game: Game, turn: Turn): boolean => {
 };
 
 const isStatsDurationEligibleTurn = (game: Game, turn: Turn): boolean => {
-  const durationMs = getCompletedTurnDurationMs(turn, game);
+  const durationMs = turn.timing.startedAt && (turn.timing.endedAt || game.endedAt)
+    ? getTurnDurationMs(turn, game)
+    : null;
   return durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
+};
+
+const getTurnAutoReasons = (game: Game, turn: Turn, area: Exclude<StatsEligibilityArea, "result">): string[] => {
+  const durationMs = turn.timing.startedAt && (turn.timing.endedAt || game.endedAt)
+    ? getTurnDurationMs(turn, game)
+    : null;
+  const hasDuration = durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
+  const hasScore = hasTurnScoreEvents(game, turn);
+  const hasNote = hasTurnNoteEvents(game, turn);
+
+  if (area === "time") {
+    return hasDuration ? ["verwertbare Dauer"] : ["keine verwertbare Dauer"];
+  }
+
+  if (area === "cp") {
+    return hasDuration ? ["verwertbare Dauer"] : ["CP allein erzeugt keine Wertung"];
+  }
+
+  const reasons = [
+    ...(hasDuration ? ["verwertbare Dauer"] : []),
+    ...(hasScore ? ["Score-Event"] : []),
+    ...(hasNote ? ["Notiz"] : [])
+  ];
+  return reasons.length ? reasons : ["keine verwertbare Dauer und keine Score-/Notiz-Events"];
+};
+
+const getAutoTurnDecision = (
+  game: Game,
+  turn: Turn,
+  area: Exclude<StatsEligibilityArea, "result">
+): boolean => area === "cp" || area === "time"
+  ? isStatsDurationEligibleTurn(game, turn)
+  : isStatsEligibleTurn(game, turn);
+
+const getEffectiveTurnDecision = (
+  game: Game,
+  turn: Turn,
+  area: Exclude<StatsEligibilityArea, "result">
+): boolean => {
+  const areaMode = getAreaMode(game, area);
+  if (areaMode === "exclude") {
+    return false;
+  }
+  if (areaMode === "auto" && !isBaseStatsEligibleGame(game)) {
+    return false;
+  }
+
+  const turnMode = getTurnOverrideMode(game, area, turn);
+  if (turnMode === "include") {
+    return true;
+  }
+  if (turnMode === "exclude") {
+    return false;
+  }
+
+  return getAutoTurnDecision(game, turn, area);
+};
+
+const getEffectiveTurnKeys = (
+  game: Game,
+  area: Exclude<StatsEligibilityArea, "result">
+): Set<string> =>
+  new Set(
+    game.rounds.flatMap((round) =>
+      round.turns
+        .filter((turn) => getEffectiveTurnDecision(game, turn, area))
+        .map((turn) => `${turn.roundNumber}:${turn.turnNumber}`)
+    )
+  );
+
+const hasEffectiveArea = (game: Game, area: StatsEligibilityArea): boolean => {
+  const areaMode = getAreaMode(game, area);
+  if (areaMode === "exclude") {
+    return false;
+  }
+  if (areaMode === "include") {
+    return true;
+  }
+  if (!isBaseStatsEligibleGame(game)) {
+    return false;
+  }
+
+  if (area === "result") {
+    return hasComparableTotalScoreData(game);
+  }
+
+  const keys = getEffectiveTurnKeys(game, area);
+  if (keys.size) {
+    return true;
+  }
+
+  return area === "scoring" && game.scoreDetailLevel !== "full" && hasComparableTotalScoreData(game);
 };
 
 const getEligibleCommandPointTurnEvents = (
@@ -74,7 +187,7 @@ const getEligibleCommandPointTurnEvents = (
 ): CommandPointEvent[] =>
   game.rounds.flatMap((round) =>
     round.turns.flatMap((turn) => {
-      if (turn.playerId !== playerId || !isStatsDurationEligibleTurn(game, turn)) {
+      if (turn.playerId !== playerId || !getEffectiveTurnDecision(game, turn, "cp")) {
         return [];
       }
 
@@ -91,7 +204,134 @@ const getEligibleCommandPointsSpent = (game: Game, playerId: PlayerId): number =
   sumValues(getEligibleCommandPointTurnEvents(game, playerId).filter((event) => event.cpType === "spent"));
 
 const hasEligibleCommandPointData = (game: Game, playerId: PlayerId): boolean =>
-  getEligibleCommandPointTurnEvents(game, playerId).length > 0;
+  game.rounds.some((round) =>
+    round.turns.some((turn) => turn.playerId === playerId && getEffectiveTurnDecision(game, turn, "cp"))
+  );
+
+export interface StatsEligibilityTurnDecision {
+  key: string;
+  label: string;
+  roundNumber: number;
+  turnNumber: number;
+  playerName: string;
+  areas: Record<Exclude<StatsEligibilityArea, "result">, {
+    mode: StatsEligibilityMode;
+    auto: boolean;
+    effective: boolean;
+    reasons: string[];
+  }>;
+}
+
+export interface StatsEligibilityAreaDecision {
+  area: StatsEligibilityArea;
+  label: string;
+  mode: StatsEligibilityMode;
+  auto: "included" | "excluded" | "partial";
+  effective: "included" | "excluded" | "partial";
+  countedTurns: string[];
+  excludedTurns: string[];
+  reasons: string[];
+}
+
+export interface StatsEligibilityReport {
+  areas: Record<StatsEligibilityArea, StatsEligibilityAreaDecision>;
+  turns: StatsEligibilityTurnDecision[];
+}
+
+const getAreaLabel = (area: StatsEligibilityArea): string =>
+  area === "result"
+    ? "Ergebniswertung"
+    : area === "scoring"
+      ? "Scoring-Wertung"
+      : area === "cp"
+        ? "CP-Wertung"
+        : "Zeitwertung";
+
+const getStatusFromTurns = (turns: StatsEligibilityTurnDecision[], area: Exclude<StatsEligibilityArea, "result">, key: "auto" | "effective") => {
+  if (!turns.length) {
+    return "excluded" as const;
+  }
+  const counted = turns.filter((turn) => turn.areas[area][key]).length;
+  return counted === 0 ? "excluded" as const : counted === turns.length ? "included" as const : "partial" as const;
+};
+
+export const createStatsEligibilityReport = (game: Game): StatsEligibilityReport => {
+  const turns: StatsEligibilityTurnDecision[] = game.rounds.flatMap((round) =>
+    round.turns.map((turn) => {
+      const playerName = game.players.find((player) => player.id === turn.playerId)?.name ?? "-";
+      const areas = Object.fromEntries(
+        STATS_TURN_AREAS.map((area) => {
+          const mode = getTurnOverrideMode(game, area, turn);
+          return [
+            area,
+            {
+              mode,
+              auto: getAutoTurnDecision(game, turn, area),
+              effective: getEffectiveTurnDecision(game, turn, area),
+              reasons: getTurnAutoReasons(game, turn, area)
+            }
+          ];
+        })
+      ) as StatsEligibilityTurnDecision["areas"];
+
+      return {
+        key: `${turn.roundNumber}:${turn.turnNumber}`,
+        label: `R${turn.roundNumber} Z${turn.turnNumber}`,
+        roundNumber: turn.roundNumber,
+        turnNumber: turn.turnNumber,
+        playerName,
+        areas
+      };
+    })
+  );
+
+  const areas = Object.fromEntries(
+    STATS_AREAS.map((area) => {
+      const mode = getAreaMode(game, area);
+      if (area === "result") {
+        const autoIncluded = isBaseStatsEligibleGame(game) && hasComparableTotalScoreData(game);
+        const effective = mode === "exclude" ? false : mode === "include" || autoIncluded;
+        return [
+          area,
+          {
+            area,
+            label: getAreaLabel(area),
+            mode,
+            auto: autoIncluded ? "included" : "excluded",
+            effective: effective ? "included" : "excluded",
+            countedTurns: [],
+            excludedTurns: [],
+            reasons: autoIncluded
+              ? ["Spiel ist nicht abgebrochen/unterbrochen und hat vergleichbare Score-Daten"]
+              : ["Spiel ist abgebrochen/unterbrochen oder hat keine vergleichbaren Score-Daten"]
+          }
+        ];
+      }
+
+      const countedTurns = turns.filter((turn) => turn.areas[area].effective).map((turn) => turn.label);
+      const excludedTurns = turns.filter((turn) => !turn.areas[area].effective).map((turn) => turn.label);
+      return [
+        area,
+        {
+          area,
+          label: getAreaLabel(area),
+          mode,
+          auto: getStatusFromTurns(turns, area, "auto"),
+          effective: mode === "exclude" ? "excluded" : getStatusFromTurns(turns, area, "effective"),
+          countedTurns,
+          excludedTurns,
+          reasons: area === "cp"
+            ? ["CP-Events zaehlen nur in zeitlich validen oder manuell eingeschlossenen Zuegen"]
+            : area === "time"
+              ? ["Zeitwertung nutzt die Mindestdauer je Zug"]
+              : ["Score-/Notiz-Events oder verwertbare Dauer machen Zuege wertbar"]
+        }
+      ];
+    })
+  ) as StatsEligibilityReport["areas"];
+
+  return { areas, turns };
+};
 
 export const getCountedRounds = (game: Game): Round[] => {
   if (game.scoreDetailLevel !== "full") {
@@ -99,7 +339,7 @@ export const getCountedRounds = (game: Game): Round[] => {
   }
 
   return game.rounds.filter(
-    (round) => round.turns.some((turn) => isStatsEligibleTurn(game, turn)) || hasRoundLevelStatsEvents(game, round)
+    (round) => round.turns.some((turn) => getEffectiveTurnDecision(game, turn, "scoring")) || hasRoundLevelStatsEvents(game, round)
   );
 };
 
@@ -112,17 +352,18 @@ const hasStatsTurnKey = (
 };
 
 export const isStatsEligibleGame = (game: Game): boolean =>
-  getStatsEligibilityMode(game) === "exclude"
-    ? false
-    : getStatsEligibilityMode(game) === "include" ||
-      (game.finishReason !== "interrupted" && game.finishReason !== "abandoned");
+  STATS_AREAS.some((area) => hasEffectiveArea(game, area));
 
 export const prepareGameForStats = (game: Game): Game | null => {
   if (!isStatsEligibleGame(game)) {
     return null;
   }
 
-  if (getStatsEligibilityMode(game) === "include") {
+  if (
+    getStatsEligibilityMode(game) === "include" &&
+    !Object.keys(game.statsEligibilityOverrides?.areas ?? {}).length &&
+    !Object.keys(game.statsEligibilityOverrides?.turns ?? {}).length
+  ) {
     return game;
   }
 
@@ -130,12 +371,10 @@ export const prepareGameForStats = (game: Game): Game | null => {
     return game;
   }
 
-  const validTurns = game.rounds.flatMap((round) =>
-    round.turns.filter((turn) => isStatsEligibleTurn(game, turn))
-  );
-  const validTurnKeys = new Set(
-    validTurns.map((turn) => `${turn.roundNumber}:${turn.turnNumber}`)
-  );
+  const scoringTurnKeys = getEffectiveTurnKeys(game, "scoring");
+  const cpTurnKeys = getEffectiveTurnKeys(game, "cp");
+  const timeTurnKeys = getEffectiveTurnKeys(game, "time");
+  const validTurnKeys = new Set([...scoringTurnKeys, ...cpTurnKeys, ...timeTurnKeys]);
 
   const rounds = game.rounds
     .map((round) => ({
@@ -157,12 +396,11 @@ export const prepareGameForStats = (game: Game): Game | null => {
     ...game,
     rounds,
     scoreEvents: game.scoreEvents.filter((event) =>
-      hasStatsTurnKey(validTurnKeys, event) ||
+      hasStatsTurnKey(scoringTurnKeys, event) ||
       (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)
     ),
     commandPointEvents: game.commandPointEvents.filter((event) =>
-      hasStatsTurnKey(validTurnKeys, event) ||
-      (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)
+      hasStatsTurnKey(cpTurnKeys, event)
     ),
     noteEvents: game.noteEvents.filter((event) =>
       hasStatsTurnKey(validTurnKeys, event) ||
@@ -249,7 +487,7 @@ export const getPlayerComparableTotalScore = (game: Game, playerId: PlayerId): n
   hasComparableTotalScoreData(game) ? getPlayerTotalScore(game, playerId) : null;
 
 export const hasComparableCommandPointData = (game: Game, playerId: PlayerId): boolean =>
-  game.commandPointEvents.some((event) => event.playerId === playerId);
+  hasEligibleCommandPointData(game, playerId);
 
 export const getPlayerRoundScoreTotal = (
   game: Game,
@@ -797,8 +1035,11 @@ const hasPlayerScoreData = (
     scoreType === "challenge") &&
   game.players.some((player) => player.id === playerId);
 
+const hasResultData = (game: Game): boolean =>
+  hasEffectiveArea(game, "result") && hasComparableTotalScoreData(game);
+
 const hasComparableScoreData = (game: Game): boolean =>
-  hasComparableTotalScoreData(game);
+  hasEffectiveArea(game, "scoring") && hasComparableTotalScoreData(game);
 
 const hasPlayerCommandPointData = (game: Game, playerId: PlayerId): boolean =>
   hasComparableCommandPointData(game, playerId);
@@ -810,7 +1051,7 @@ const hasDetailedTimingStats = (game: Game): boolean =>
   game.scoreDetailLevel === "full" && hasCompletedTimingData(game);
 
 const getStatsGameDurationMs = (game: Game): number | null => {
-  if (!game.endedAt || !hasDetailedTimingStats(game)) {
+  if (!game.endedAt || !hasEffectiveArea(game, "time") || !hasDetailedTimingStats(game)) {
     return null;
   }
 
@@ -833,7 +1074,7 @@ export const createPlayerAggregates = (games: Game[], durationSourceGames: Game[
         }))
         .filter((entry): entry is { game: Game; player: Game["players"][number] } => Boolean(entry.player));
       const gamesCount = playerGames.length;
-      const scoredGames = playerGames.filter(({ game }) => hasComparableScoreData(game));
+      const scoredGames = playerGames.filter(({ game }) => hasResultData(game));
       const goFirstGames = scoredGames.filter(({ game, player }) => game.rounds[0]?.turns[0]?.playerId === player.id);
       const startFirstGames = scoredGames.filter(({ game, player }) => game.startingPlayerId === player.id);
       const wins = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length;
@@ -1110,7 +1351,7 @@ export const createArmyAggregates = (games: Game[], durationSourceGames: Game[] 
         }))
         .filter((entry): entry is { game: Game; player: Game["players"][number] } => Boolean(entry.player));
       const gamesCount = armyGames.length;
-      const scoredGames = armyGames.filter(({ game }) => hasComparableScoreData(game));
+      const scoredGames = armyGames.filter(({ game }) => hasResultData(game));
       const wins = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length;
       const losses = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "loss").length;
       const ties = scoredGames.length - wins - losses;
@@ -1191,7 +1432,7 @@ export const createMatchupAggregates = (games: Game[], durationSourceGames: Game
     if (completedDuration !== null) {
       existing.durations.push(completedDuration);
     }
-    if (hasComparableScoreData(game)) {
+    if (hasResultData(game)) {
       if (scoreA > scoreB) {
         existing.winsA += 1;
       } else if (scoreB > scoreA) {
@@ -1248,7 +1489,7 @@ export const createRoundDurationAggregates = (games: Game[]): RoundDurationAggre
     game.rounds.forEach((round) => {
       const eligibleRound = {
         ...round,
-        turns: round.turns.filter((turn) => isStatsDurationEligibleTurn(game, turn))
+        turns: round.turns.filter((turn) => getEffectiveTurnDecision(game, turn, "time"))
       };
       if (!eligibleRound.turns.length) {
         return;
@@ -1284,7 +1525,10 @@ export const createRoundScoreAggregates = (games: Game[]): RoundScoreAggregate[]
     }
 
     game.rounds.forEach((round) => {
-      if (!game.scoreEvents.some((event) => event.roundNumber === round.roundNumber)) {
+      if (
+        !round.turns.some((turn) => getEffectiveTurnDecision(game, turn, "scoring")) &&
+        !game.scoreEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber)
+      ) {
         return;
       }
 
@@ -1326,7 +1570,7 @@ export const createPlayerTurnDurationAggregates = (games: Game[]): PlayerTurnDur
       round.turns.forEach((turn) => {
         const player = game.players.find((entry) => entry.id === turn.playerId);
         const duration = getCompletedTurnDurationMs(turn, game);
-        if (!player || duration === null || duration < MIN_STATS_TURN_DURATION_MS) {
+        if (!player || duration === null || !getEffectiveTurnDecision(game, turn, "time")) {
           return;
         }
 
@@ -1379,7 +1623,7 @@ export const getTurnRecords = (
             .map((turn) => {
               const player = game.players.find((entry) => entry.id === turn.playerId);
               const durationMs = getCompletedTurnDurationMs(turn, game);
-              if (!player || durationMs === null || durationMs < MIN_STATS_TURN_DURATION_MS) {
+              if (!player || durationMs === null || !getEffectiveTurnDecision(game, turn, "time")) {
                 return null;
               }
 

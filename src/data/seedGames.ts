@@ -11,6 +11,7 @@ export const seedGames: Game[] = [
     status: "completed",
     scoreDetailLevel: "full",
     statsEligibilityMode: "auto",
+    statsEligibilityOverrides: {},
     gamePoints: 1000,
     scheduledDate: "2026-04-20",
     scheduledTime: "19:00",

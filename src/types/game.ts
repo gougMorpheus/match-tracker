@@ -11,6 +11,12 @@ export type ScoreType = "primary" | "secondary" | "challenge" | "legacy-total";
 export type CommandPointType = "gained" | "spent";
 export type ScoreDetailLevel = "full" | "total-only" | "none";
 export type StatsEligibilityMode = "auto" | "include" | "exclude";
+export type StatsEligibilityArea = "result" | "scoring" | "cp" | "time";
+
+export interface StatsEligibilityOverrides {
+  areas?: Partial<Record<StatsEligibilityArea, StatsEligibilityMode>>;
+  turns?: Record<string, Partial<Record<Exclude<StatsEligibilityArea, "result">, StatsEligibilityMode>>>;
+}
 export type TimeEventAction =
   | "game-start"
   | "game-end"
@@ -122,6 +128,7 @@ export interface Game {
   finishReason?: GameFinishReason;
   scoreDetailLevel: ScoreDetailLevel;
   statsEligibilityMode: StatsEligibilityMode;
+  statsEligibilityOverrides: StatsEligibilityOverrides;
   gamePoints: number;
   scheduledDate: string;
   scheduledTime: string;

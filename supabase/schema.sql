@@ -19,6 +19,7 @@ create table if not exists public.games (
   starting_player smallint null check (starting_player in (1, 2)),
   winner_player smallint null check (winner_player in (1, 2)),
   stats_eligibility_mode text null check (stats_eligibility_mode in ('auto', 'include', 'exclude')),
+  stats_eligibility_overrides jsonb null,
   timer_corrections jsonb null,
   notes text null
 );
@@ -27,6 +28,7 @@ alter table public.games add column if not exists deployment text null;
 alter table public.games add column if not exists primary_mission text null;
 alter table public.games add column if not exists deleted_at timestamptz null;
 alter table public.games add column if not exists stats_eligibility_mode text null check (stats_eligibility_mode in ('auto', 'include', 'exclude'));
+alter table public.games add column if not exists stats_eligibility_overrides jsonb null;
 alter table public.games add column if not exists timer_corrections jsonb null;
 
 do $$

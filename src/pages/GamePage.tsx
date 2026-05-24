@@ -8,7 +8,17 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { PlayerScoreboard } from "../components/PlayerScoreboard";
 import { QuickAdjustControls } from "../components/QuickAdjustControls";
 import { useGameStore } from "../store/GameStore";
-import type { CreateGameInput, Game, GameFinishReason, PlayerId, ScoreType, TimeEventAction } from "../types/game";
+import type {
+  CreateGameInput,
+  Game,
+  GameFinishReason,
+  PlayerId,
+  ScoreType,
+  StatsEligibilityArea,
+  StatsEligibilityMode,
+  StatsEligibilityOverrides,
+  TimeEventAction
+} from "../types/game";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
 import {
   getCurrentRoundNumber,
@@ -24,7 +34,8 @@ import {
   isSetupPaused,
   isSetupRunning,
   isTimeoutActive,
-  isTurnPaused
+  isTurnPaused,
+  createStatsEligibilityReport
 } from "../utils/gameCalculations";
 import {
   getDisplayedRoundTurns,
@@ -86,6 +97,36 @@ const SETUP_TURN_KEY = "setup";
 const SETUP_TURN_REF = {
   roundNumber: 0,
   turnNumber: 0
+};
+const STATS_ELIGIBILITY_AREAS: StatsEligibilityArea[] = ["result", "scoring", "cp", "time"];
+const STATS_ELIGIBILITY_TURN_AREAS: Exclude<StatsEligibilityArea, "result">[] = ["scoring", "cp", "time"];
+
+const statsEligibilityStatusLabel = (status: "included" | "excluded" | "partial"): string =>
+  status === "included" ? "zaehlt" : status === "partial" ? "teilweise" : "zaehlt nicht";
+
+const normalizeStatsEligibilityDraft = (value: StatsEligibilityOverrides): StatsEligibilityOverrides => {
+  const areas = Object.fromEntries(
+    STATS_ELIGIBILITY_AREAS.flatMap((area) => {
+      const mode = value.areas?.[area];
+      return mode === "include" || mode === "exclude" ? [[area, mode]] : [];
+    })
+  ) as Partial<Record<StatsEligibilityArea, StatsEligibilityMode>>;
+  const turns = Object.fromEntries(
+    Object.entries(value.turns ?? {}).flatMap(([turnKey, turnModes]) => {
+      const modes = Object.fromEntries(
+        STATS_ELIGIBILITY_TURN_AREAS.flatMap((area) => {
+          const mode = turnModes?.[area];
+          return mode === "include" || mode === "exclude" ? [[area, mode]] : [];
+        })
+      ) as Partial<Record<Exclude<StatsEligibilityArea, "result">, StatsEligibilityMode>>;
+      return Object.keys(modes).length ? [[turnKey, modes]] : [];
+    })
+  );
+
+  return {
+    ...(Object.keys(areas).length ? { areas } : {}),
+    ...(Object.keys(turns).length ? { turns } : {})
+  };
 };
 
 const createGameFormState = (game: Game): CreateGameInput => ({
@@ -194,6 +235,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     updateGameEvent,
     deleteGameEvent,
     updateGameDetails,
+    updateStatsEligibilityOverrides,
     setAutoCommandPointEnabled,
     pauseActiveTimer,
     startGameTimer,
@@ -236,6 +278,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [deletePasswordError, setDeletePasswordError] = useState("");
   const [startingPlayerPromptOpen, setStartingPlayerPromptOpen] = useState(false);
   const [startingPlayerPromptSlot, setStartingPlayerPromptSlot] = useState<CreateGameInput["startingSlot"]>("");
+  const [statsEligibilityEditorOpen, setStatsEligibilityEditorOpen] = useState(false);
+  const [statsEligibilityDraft, setStatsEligibilityDraft] = useState<StatsEligibilityOverrides>({});
   const [redoHoldOpen, setRedoHoldOpen] = useState(false);
   const [timeoutHoldOpen, setTimeoutHoldOpen] = useState(false);
   const previousRoundRef = useRef<number | null>(null);
@@ -265,6 +309,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     [game]
   );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
+  const statsEligibilityReport = useMemo(
+    () => (game ? createStatsEligibilityReport(game) : null),
+    [game]
+  );
   const timeoutActive = game ? isTimeoutActive(game) : false;
   const setupActive = game ? isSetupActive(game) : false;
   const setupRunning = game ? isSetupRunning(game) : false;
@@ -785,6 +833,52 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     await updateGameDetails(game.id, gameForm);
     setDetailsOpen(false);
     setIsEditingGame(false);
+  };
+
+  const openStatsEligibilityEditor = () => {
+    setStatsEligibilityDraft(game.statsEligibilityOverrides ?? {});
+    setStatsEligibilityEditorOpen(true);
+  };
+
+  const updateStatsEligibilityAreaDraft = (area: StatsEligibilityArea, mode: StatsEligibilityMode) => {
+    setStatsEligibilityDraft((current) =>
+      normalizeStatsEligibilityDraft({
+        ...current,
+        areas: {
+          ...current.areas,
+          [area]: mode
+        }
+      })
+    );
+  };
+
+  const updateStatsEligibilityTurnDraft = (
+    turnKey: string,
+    area: Exclude<StatsEligibilityArea, "result">,
+    mode: StatsEligibilityMode
+  ) => {
+    setStatsEligibilityDraft((current) =>
+      normalizeStatsEligibilityDraft({
+        ...current,
+        turns: {
+          ...current.turns,
+          [turnKey]: {
+            ...current.turns?.[turnKey],
+            [area]: mode
+          }
+        }
+      })
+    );
+  };
+
+  const saveStatsEligibilityOverrides = async () => {
+    if (isReadOnly) {
+      setStatsEligibilityEditorOpen(false);
+      return;
+    }
+
+    await updateStatsEligibilityOverrides(game.id, normalizeStatsEligibilityDraft(statsEligibilityDraft));
+    setStatsEligibilityEditorOpen(false);
   };
 
   const handleRequestDeleteGame = () => {
@@ -1688,6 +1782,41 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                       void setAutoCommandPointEnabled(game.id, nextValue)
                     }
                   />
+                  {statsEligibilityReport ? (
+                    <section className="card stack stats-eligibility-card">
+                      <div className="list-row">
+                        <h2>Wertung Statistik</h2>
+                        <button
+                          type="button"
+                          className="ghost-button compact-button"
+                          disabled={writeDisabled}
+                          onClick={openStatsEligibilityEditor}
+                        >
+                          Wertung bearbeiten
+                        </button>
+                      </div>
+                      <div className="scoreboard__grid scoreboard__grid--details">
+                        {STATS_ELIGIBILITY_AREAS.map((area) => {
+                          const decision = statsEligibilityReport.areas[area];
+                          return (
+                            <div key={area}>
+                              <span>{decision.label}</span>
+                              <strong>{statsEligibilityStatusLabel(decision.effective)}</strong>
+                              <p>Modus: {decision.mode === "auto" ? "Auto" : "Manuell"}</p>
+                              <p>Auto: {statsEligibilityStatusLabel(decision.auto)}</p>
+                              {decision.countedTurns.length ? (
+                                <p>Gewertet: {decision.countedTurns.join(", ")}</p>
+                              ) : null}
+                              {decision.excludedTurns.length ? (
+                                <p>Nicht gewertet: {decision.excludedTurns.join(", ")}</p>
+                              ) : null}
+                              <p>{decision.reasons[0]}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ) : null}
 
                   <div className="button-row button-row--compact">
                     <button type="submit" className="primary-button compact-button" disabled={writeDisabled}>
@@ -1770,6 +1899,119 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {statsEligibilityEditorOpen && statsEligibilityReport ? (
+        <div className="modal-backdrop">
+          <div className="modal-card modal-card--wide">
+            <div className="stack">
+              <div className="list-row">
+                <div>
+                  <h2>Wertung Statistik bearbeiten</h2>
+                  <p className="muted-copy">Overrides veraendern nur die Statistikwertung, nicht die Rohdaten.</p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => setStatsEligibilityEditorOpen(false)}
+                >
+                  Schliessen
+                </button>
+              </div>
+
+              <section className="card stack">
+                <h3>Bereiche</h3>
+                <div className="scoreboard__grid scoreboard__grid--details">
+                  {STATS_ELIGIBILITY_AREAS.map((area) => {
+                    const decision = statsEligibilityReport.areas[area];
+                    return (
+                      <label key={area} className="field">
+                        <span>{decision.label}</span>
+                        <select
+                          value={statsEligibilityDraft.areas?.[area] ?? "auto"}
+                          disabled={writeDisabled}
+                          onChange={(event) =>
+                            updateStatsEligibilityAreaDraft(area, event.target.value as StatsEligibilityMode)
+                          }
+                        >
+                          <option value="auto">Auto</option>
+                          <option value="include">Include</option>
+                          <option value="exclude">Exclude</option>
+                        </select>
+                        <p className="muted-copy">
+                          Auto: {statsEligibilityStatusLabel(decision.auto)} · Effektiv: {statsEligibilityStatusLabel(decision.effective)}
+                        </p>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {statsEligibilityReport.turns.length ? (
+                <section className="card stack">
+                  <h3>Zuege</h3>
+                  <div className="event-list modal-list">
+                    {statsEligibilityReport.turns.map((turn) => (
+                      <div key={turn.key} className="event-list__item">
+                        <div>
+                          <strong>{turn.label}</strong>
+                          <p>{turn.playerName}</p>
+                        </div>
+                        <div className="scoreboard__grid scoreboard__grid--details">
+                          {STATS_ELIGIBILITY_TURN_AREAS.map((area) => {
+                            const decision = turn.areas[area];
+                            return (
+                              <label key={area} className="field">
+                                <span>{statsEligibilityReport.areas[area].label}</span>
+                                <select
+                                  value={statsEligibilityDraft.turns?.[turn.key]?.[area] ?? "auto"}
+                                  disabled={writeDisabled}
+                                  onChange={(event) =>
+                                    updateStatsEligibilityTurnDraft(
+                                      turn.key,
+                                      area,
+                                      event.target.value as StatsEligibilityMode
+                                    )
+                                  }
+                                >
+                                  <option value="auto">Auto</option>
+                                  <option value="include">Include</option>
+                                  <option value="exclude">Exclude</option>
+                                </select>
+                                <p className="muted-copy">
+                                  Auto: {decision.auto ? "zaehlt" : "zaehlt nicht"} · Effektiv: {decision.effective ? "zaehlt" : "zaehlt nicht"}
+                                </p>
+                                <p className="muted-copy">{decision.reasons.join(", ")}</p>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <div className="button-row button-row--compact">
+                <button
+                  type="button"
+                  className="primary-button compact-button"
+                  disabled={writeDisabled}
+                  onClick={() => void saveStatsEligibilityOverrides()}
+                >
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  onClick={() => setStatsEligibilityEditorOpen(false)}
+                >
+                  Abbrechen
+                </button>
+              </div>
             </div>
           </div>
         </div>

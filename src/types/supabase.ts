@@ -29,6 +29,7 @@ export interface Database {
           starting_player: 1 | 2 | null;
           winner_player: 1 | 2 | null;
           stats_eligibility_mode: string | null;
+          stats_eligibility_overrides: Json | null;
           timer_corrections: Json | null;
           notes: string | null;
         };
@@ -51,6 +52,7 @@ export interface Database {
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
           stats_eligibility_mode?: string | null;
+          stats_eligibility_overrides?: Json | null;
           timer_corrections?: Json | null;
           notes?: string | null;
         };
@@ -73,6 +75,7 @@ export interface Database {
           starting_player?: 1 | 2 | null;
           winner_player?: 1 | 2 | null;
           stats_eligibility_mode?: string | null;
+          stats_eligibility_overrides?: Json | null;
           timer_corrections?: Json | null;
           notes?: string | null;
         };

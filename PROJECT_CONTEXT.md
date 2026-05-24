@@ -68,6 +68,7 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Supabase ist Remote-Source-of-Truth, aber die App nutzt optimistische lokale Aenderungen mit Cache und Sync-Queue.
 - Spielverlauf ist eventbasiert. Neue Features sollten moeglichst neue/angepasste Events und abgeleitete Berechnungen nutzen statt abgeleitete Daten direkt zu pflegen.
 - Primary und Secondary Scores werden getrennt behandelt; Legacy-Total-Daten existieren fuer Import-/Altdaten.
+- Statistik-Wertung hat die Bereiche Ergebnis, Scoring, CP und Zeit. Standard ist `auto`; `include`/`exclude` sind manuelle Overrides und veraendern nur die Wertung, nie Score-/CP-/Zeit-Rohdaten. Fehlende Override-Felder bedeuten `auto`. Wertbare Zuege/Runden ohne Score-/CP-Event zaehlen in diesem Bereich mit 0; CP-Events allein erzeugen keine Zug-/Runden-Relevanz.
 - Spielpunkte sind gemeinsame Match-Punkte (`gamePoints`) und werden auf beide Spieler-Armeen gespiegelt.
 - Runde und Zug werden ueber einen schnellen `Weiter`-Ablauf gesteuert; es gibt maximal 5 Runden in der Store-Logik.
 - Wichtige Regression vermeiden: Der In-Game-Button `Zurueck` muss von Runde 1 / Zug 1 immer zur Aufstellungsphase zurueckkommen. Das darf nicht davon abhaengen, ob der Timer gerade laeuft; auch bei pausiertem/gestopptem Timer muss `rewindLastTurn(..., keepTimerRunning: true)` die fachliche Phase wieder auf Aufstellung setzen.

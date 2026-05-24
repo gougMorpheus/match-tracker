@@ -17,7 +17,7 @@ import type { Json } from "../types/supabase";
 import { createId } from "../utils/id";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
-import type { ScoreDetailLevel, StatsEligibilityMode, TimerCorrections } from "../types/game";
+import type { ScoreDetailLevel, StatsEligibilityArea, StatsEligibilityMode, StatsEligibilityOverrides, TimerCorrections } from "../types/game";
 
 export type SupabaseGameRecord = Database["public"]["Tables"]["games"]["Row"];
 export type SupabaseEventRecord = Database["public"]["Tables"]["events"]["Row"];
@@ -154,6 +154,44 @@ const parseStatsEligibilityMode = (value: unknown): StatsEligibilityMode =>
 
 const serializeStatsEligibilityMode = (value: StatsEligibilityMode): string | null =>
   value === "auto" ? null : value;
+
+const statsEligibilityAreas: StatsEligibilityArea[] = ["result", "scoring", "cp", "time"];
+const statsEligibilityTurnAreas: Exclude<StatsEligibilityArea, "result">[] = ["scoring", "cp", "time"];
+
+const parseStatsEligibilityOverrides = (value: unknown): StatsEligibilityOverrides => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const raw = value as StatsEligibilityOverrides;
+  const areas = Object.fromEntries(
+    statsEligibilityAreas.flatMap((area) => {
+      const mode = raw.areas?.[area];
+      return mode === "include" || mode === "exclude" ? [[area, mode]] : [];
+    })
+  ) as Partial<Record<StatsEligibilityArea, StatsEligibilityMode>>;
+  const turns = Object.fromEntries(
+    Object.entries(raw.turns ?? {}).flatMap(([turnKey, modes]) => {
+      const normalizedModes = Object.fromEntries(
+        statsEligibilityTurnAreas.flatMap((area) => {
+          const mode = modes?.[area];
+          return mode === "include" || mode === "exclude" ? [[area, mode]] : [];
+        })
+      ) as Partial<Record<Exclude<StatsEligibilityArea, "result">, StatsEligibilityMode>>;
+      return Object.keys(normalizedModes).length ? [[turnKey, normalizedModes]] : [];
+    })
+  );
+
+  return {
+    ...(Object.keys(areas).length ? { areas } : {}),
+    ...(Object.keys(turns).length ? { turns } : {})
+  };
+};
+
+const serializeStatsEligibilityOverrides = (value: StatsEligibilityOverrides): Json | null =>
+  value.areas && Object.keys(value.areas).length || value.turns && Object.keys(value.turns).length
+    ? value as Json
+    : null;
 
 const createDefaultPlayerDetachments = (): Record<string, string> => ({
   "player-1": "",
@@ -472,7 +510,7 @@ const hasMissingTimerCorrectionsColumnError = (message: string): boolean => {
 
 const hasMissingStatsEligibilityColumnError = (message: string): boolean => {
   const normalizedMessage = message.toLowerCase();
-  return normalizedMessage.includes("stats_eligibility_mode");
+  return normalizedMessage.includes("stats_eligibility_mode") || normalizedMessage.includes("stats_eligibility_overrides");
 };
 
 const stripOptionalScenarioFields = <
@@ -504,15 +542,17 @@ const stripOptionalGameFields = <
     primary_mission?: string | null;
     timer_corrections?: Json | null;
     stats_eligibility_mode?: string | null;
+    stats_eligibility_overrides?: Json | null;
   }
 >(
   payload: T
-): Omit<T, "deployment" | "primary_mission" | "timer_corrections" | "stats_eligibility_mode"> => {
+): Omit<T, "deployment" | "primary_mission" | "timer_corrections" | "stats_eligibility_mode" | "stats_eligibility_overrides"> => {
   const {
     deployment: _deployment,
     primary_mission: _primaryMission,
     timer_corrections: _timerCorrections,
     stats_eligibility_mode: _statsEligibilityMode,
+    stats_eligibility_overrides: _statsEligibilityOverrides,
     ...rest
   } = payload;
   return rest;
@@ -576,6 +616,7 @@ const getComparableGamePayload = (
   starting_player: payload.starting_player ?? null,
   winner_player: payload.winner_player ?? null,
   stats_eligibility_mode: payload.stats_eligibility_mode ?? null,
+  stats_eligibility_overrides: payload.stats_eligibility_overrides ?? null,
   notes: normalizeJsonString(payload.notes)
 });
 
@@ -968,6 +1009,9 @@ export const mapSupabaseGameToAppGame = (
   const statsEligibilityMode = parseStatsEligibilityMode(
     (row as SupabaseGameRecord & { stats_eligibility_mode?: string | null }).stats_eligibility_mode
   );
+  const statsEligibilityOverrides = parseStatsEligibilityOverrides(
+    (row as SupabaseGameRecord & { stats_eligibility_overrides?: Json | null }).stats_eligibility_overrides
+  );
 
   return {
     id: row.id,
@@ -977,6 +1021,7 @@ export const mapSupabaseGameToAppGame = (
     finishReason: endedAt ? finishMeta.finishReason ?? "completed" : undefined,
     scoreDetailLevel: scoreMeta.scoreDetailLevel,
     statsEligibilityMode,
+    statsEligibilityOverrides,
     gamePoints: row.player1_max_points,
     scheduledDate: date,
     scheduledTime: time,
@@ -1038,6 +1083,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   ended_at: null,
   winner_player: null,
   stats_eligibility_mode: serializeStatsEligibilityMode(payload.statsEligibilityMode),
+  stats_eligibility_overrides: null,
   notes: serializeGameNotes(
     "full",
     {},
@@ -1103,6 +1149,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: getWinnerPlayerSlot(game),
   stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
+  stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
   timer_corrections: serializeTimerCorrections(game.timerCorrections),
   notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
@@ -1213,6 +1260,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
   starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
   winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
   stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
+  stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
   notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
     autoCommandPointOn: game.autoCommandPointOn,
     autoCommandPointAwards: game.autoCommandPointAwards

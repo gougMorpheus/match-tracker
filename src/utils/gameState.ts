@@ -9,7 +9,9 @@ import type {
   Round,
   ScoreEvent,
   ScoreType,
+  StatsEligibilityArea,
   StatsEligibilityMode,
+  StatsEligibilityOverrides,
   TimerCorrections,
   TimeEvent,
   TimeEventAction,
@@ -202,6 +204,43 @@ const createEmptyTimerCorrections = (): TimerCorrections => ({
 const normalizeStatsEligibilityMode = (value?: string | null): StatsEligibilityMode =>
   value === "include" || value === "exclude" ? value : "auto";
 
+const STATS_ELIGIBILITY_AREAS: StatsEligibilityArea[] = ["result", "scoring", "cp", "time"];
+const STATS_ELIGIBILITY_TURN_AREAS: Exclude<StatsEligibilityArea, "result">[] = ["scoring", "cp", "time"];
+
+const normalizeStatsEligibilityOverrides = (value?: StatsEligibilityOverrides | null): StatsEligibilityOverrides => {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const areas = Object.fromEntries(
+    STATS_ELIGIBILITY_AREAS.flatMap((area) => {
+      const mode = value.areas?.[area];
+      return mode === "include" || mode === "exclude" ? [[area, mode]] : [];
+    })
+  ) as Partial<Record<StatsEligibilityArea, StatsEligibilityMode>>;
+  const turns = Object.fromEntries(
+    Object.entries(value.turns ?? {}).flatMap(([turnKey, modes]) => {
+      if (!modes || typeof modes !== "object") {
+        return [];
+      }
+
+      const normalizedModes = Object.fromEntries(
+        STATS_ELIGIBILITY_TURN_AREAS.flatMap((area) => {
+          const mode = modes[area];
+          return mode === "include" || mode === "exclude" ? [[area, mode]] : [];
+        })
+      ) as Partial<Record<Exclude<StatsEligibilityArea, "result">, StatsEligibilityMode>>;
+
+      return Object.keys(normalizedModes).length ? [[turnKey, normalizedModes]] : [];
+    })
+  );
+
+  return {
+    ...(Object.keys(areas).length ? { areas } : {}),
+    ...(Object.keys(turns).length ? { turns } : {})
+  };
+};
+
 export const syncDerivedGameState = (game: Game): Game => {
   const orderedTimeEvents = [...game.timeEvents];
   const hasTimeEvents = orderedTimeEvents.length > 0;
@@ -231,6 +270,7 @@ export const syncDerivedGameState = (game: Game): Game => {
     finishReason: endedAt ? game.finishReason ?? "completed" : undefined,
     scoreDetailLevel: game.scoreDetailLevel ?? "full",
     statsEligibilityMode: normalizeStatsEligibilityMode(game.statsEligibilityMode),
+    statsEligibilityOverrides: normalizeStatsEligibilityOverrides(game.statsEligibilityOverrides),
     players: syncPlayers(game.players, game.gamePoints),
     rounds,
     startedAt,
@@ -279,6 +319,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     finishReason: undefined,
     scoreDetailLevel: "full",
     statsEligibilityMode: normalizeStatsEligibilityMode(input.statsEligibilityMode),
+    statsEligibilityOverrides: {},
     gamePoints: input.gamePoints,
     scheduledDate: input.scheduledDate,
     scheduledTime: input.scheduledTime,
@@ -533,6 +574,7 @@ export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game 
     autoCommandPointOn: localGame.autoCommandPointOn,
     autoCommandPointAwards: localGame.autoCommandPointAwards,
     statsEligibilityMode: localGame.statsEligibilityMode,
+    statsEligibilityOverrides: localGame.statsEligibilityOverrides,
     gamePoints: localGame.gamePoints,
     scheduledDate: localGame.scheduledDate,
     scheduledTime: localGame.scheduledTime,
@@ -629,6 +671,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
     autoCommandPointOn: rawGame.autoCommandPointOn ?? true,
     autoCommandPointAwards: rawGame.autoCommandPointAwards ?? {},
     statsEligibilityMode: normalizeStatsEligibilityMode(rawGame.statsEligibilityMode),
+    statsEligibilityOverrides: normalizeStatsEligibilityOverrides(rawGame.statsEligibilityOverrides),
     defenderPlayerId: mapPlayerId(rawGame.defenderPlayerId) ?? playerOneId,
     startingPlayerId: mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
     currentPlayerId: mapPlayerId(rawGame.currentPlayerId) ?? playerOneId,

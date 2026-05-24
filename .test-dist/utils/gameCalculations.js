@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.isStatsEligibleGame = exports.getCountedRounds = void 0;
-exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = void 0;
+exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.isStatsEligibleGame = exports.getCountedRounds = exports.createStatsEligibilityReport = void 0;
+exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = void 0;
 exports.getTimeoutDurationMs = getTimeoutDurationMs;
 const time_1 = require("./time");
 const sumValues = (items) => items.reduce((total, item) => total + item.value, 0);
@@ -22,17 +22,89 @@ const hasRoundLevelStatsEvents = (game, round) => game.scoreEvents.some((event) 
 const hasRelevantStatsEventsInTurn = (game, turn) => hasTurnScoreEvents(game, turn) ||
     hasTurnNoteEvents(game, turn);
 const getStatsEligibilityMode = (game) => game.statsEligibilityMode ?? "auto";
+const STATS_AREAS = ["result", "scoring", "cp", "time"];
+const STATS_TURN_AREAS = ["scoring", "cp", "time"];
+const getAreaMode = (game, area) => game.statsEligibilityOverrides?.areas?.[area] ?? getStatsEligibilityMode(game);
+const getTurnOverrideMode = (game, area, turn) => game.statsEligibilityOverrides?.turns?.[`${turn.roundNumber}:${turn.turnNumber}`]?.[area] ?? "auto";
+const isBaseStatsEligibleGame = (game) => game.finishReason !== "interrupted" && game.finishReason !== "abandoned";
 const isStatsEligibleTurn = (game, turn) => {
-    const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
+    const durationMs = turn.timing.startedAt && (turn.timing.endedAt || game.endedAt)
+        ? (0, exports.getTurnDurationMs)(turn, game)
+        : null;
     return ((durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS) ||
         hasRelevantStatsEventsInTurn(game, turn));
 };
 const isStatsDurationEligibleTurn = (game, turn) => {
-    const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
+    const durationMs = turn.timing.startedAt && (turn.timing.endedAt || game.endedAt)
+        ? (0, exports.getTurnDurationMs)(turn, game)
+        : null;
     return durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
 };
+const getTurnAutoReasons = (game, turn, area) => {
+    const durationMs = turn.timing.startedAt && (turn.timing.endedAt || game.endedAt)
+        ? (0, exports.getTurnDurationMs)(turn, game)
+        : null;
+    const hasDuration = durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
+    const hasScore = hasTurnScoreEvents(game, turn);
+    const hasNote = hasTurnNoteEvents(game, turn);
+    if (area === "time") {
+        return hasDuration ? ["verwertbare Dauer"] : ["keine verwertbare Dauer"];
+    }
+    if (area === "cp") {
+        return hasDuration ? ["verwertbare Dauer"] : ["CP allein erzeugt keine Wertung"];
+    }
+    const reasons = [
+        ...(hasDuration ? ["verwertbare Dauer"] : []),
+        ...(hasScore ? ["Score-Event"] : []),
+        ...(hasNote ? ["Notiz"] : [])
+    ];
+    return reasons.length ? reasons : ["keine verwertbare Dauer und keine Score-/Notiz-Events"];
+};
+const getAutoTurnDecision = (game, turn, area) => area === "cp" || area === "time"
+    ? isStatsDurationEligibleTurn(game, turn)
+    : isStatsEligibleTurn(game, turn);
+const getEffectiveTurnDecision = (game, turn, area) => {
+    const areaMode = getAreaMode(game, area);
+    if (areaMode === "exclude") {
+        return false;
+    }
+    if (areaMode === "auto" && !isBaseStatsEligibleGame(game)) {
+        return false;
+    }
+    const turnMode = getTurnOverrideMode(game, area, turn);
+    if (turnMode === "include") {
+        return true;
+    }
+    if (turnMode === "exclude") {
+        return false;
+    }
+    return getAutoTurnDecision(game, turn, area);
+};
+const getEffectiveTurnKeys = (game, area) => new Set(game.rounds.flatMap((round) => round.turns
+    .filter((turn) => getEffectiveTurnDecision(game, turn, area))
+    .map((turn) => `${turn.roundNumber}:${turn.turnNumber}`)));
+const hasEffectiveArea = (game, area) => {
+    const areaMode = getAreaMode(game, area);
+    if (areaMode === "exclude") {
+        return false;
+    }
+    if (areaMode === "include") {
+        return true;
+    }
+    if (!isBaseStatsEligibleGame(game)) {
+        return false;
+    }
+    if (area === "result") {
+        return (0, exports.hasComparableTotalScoreData)(game);
+    }
+    const keys = getEffectiveTurnKeys(game, area);
+    if (keys.size) {
+        return true;
+    }
+    return area === "scoring" && game.scoreDetailLevel !== "full" && (0, exports.hasComparableTotalScoreData)(game);
+};
 const getEligibleCommandPointTurnEvents = (game, playerId) => game.rounds.flatMap((round) => round.turns.flatMap((turn) => {
-    if (turn.playerId !== playerId || !isStatsDurationEligibleTurn(game, turn)) {
+    if (turn.playerId !== playerId || !getEffectiveTurnDecision(game, turn, "cp")) {
         return [];
     }
     return game.commandPointEvents.filter((event) => event.playerId === playerId &&
@@ -40,35 +112,118 @@ const getEligibleCommandPointTurnEvents = (game, playerId) => game.rounds.flatMa
         event.turnNumber === turn.turnNumber);
 }));
 const getEligibleCommandPointsSpent = (game, playerId) => sumValues(getEligibleCommandPointTurnEvents(game, playerId).filter((event) => event.cpType === "spent"));
-const hasEligibleCommandPointData = (game, playerId) => getEligibleCommandPointTurnEvents(game, playerId).length > 0;
+const hasEligibleCommandPointData = (game, playerId) => game.rounds.some((round) => round.turns.some((turn) => turn.playerId === playerId && getEffectiveTurnDecision(game, turn, "cp")));
+const getAreaLabel = (area) => area === "result"
+    ? "Ergebniswertung"
+    : area === "scoring"
+        ? "Scoring-Wertung"
+        : area === "cp"
+            ? "CP-Wertung"
+            : "Zeitwertung";
+const getStatusFromTurns = (turns, area, key) => {
+    if (!turns.length) {
+        return "excluded";
+    }
+    const counted = turns.filter((turn) => turn.areas[area][key]).length;
+    return counted === 0 ? "excluded" : counted === turns.length ? "included" : "partial";
+};
+const createStatsEligibilityReport = (game) => {
+    const turns = game.rounds.flatMap((round) => round.turns.map((turn) => {
+        const playerName = game.players.find((player) => player.id === turn.playerId)?.name ?? "-";
+        const areas = Object.fromEntries(STATS_TURN_AREAS.map((area) => {
+            const mode = getTurnOverrideMode(game, area, turn);
+            return [
+                area,
+                {
+                    mode,
+                    auto: getAutoTurnDecision(game, turn, area),
+                    effective: getEffectiveTurnDecision(game, turn, area),
+                    reasons: getTurnAutoReasons(game, turn, area)
+                }
+            ];
+        }));
+        return {
+            key: `${turn.roundNumber}:${turn.turnNumber}`,
+            label: `R${turn.roundNumber} Z${turn.turnNumber}`,
+            roundNumber: turn.roundNumber,
+            turnNumber: turn.turnNumber,
+            playerName,
+            areas
+        };
+    }));
+    const areas = Object.fromEntries(STATS_AREAS.map((area) => {
+        const mode = getAreaMode(game, area);
+        if (area === "result") {
+            const autoIncluded = isBaseStatsEligibleGame(game) && (0, exports.hasComparableTotalScoreData)(game);
+            const effective = mode === "exclude" ? false : mode === "include" || autoIncluded;
+            return [
+                area,
+                {
+                    area,
+                    label: getAreaLabel(area),
+                    mode,
+                    auto: autoIncluded ? "included" : "excluded",
+                    effective: effective ? "included" : "excluded",
+                    countedTurns: [],
+                    excludedTurns: [],
+                    reasons: autoIncluded
+                        ? ["Spiel ist nicht abgebrochen/unterbrochen und hat vergleichbare Score-Daten"]
+                        : ["Spiel ist abgebrochen/unterbrochen oder hat keine vergleichbaren Score-Daten"]
+                }
+            ];
+        }
+        const countedTurns = turns.filter((turn) => turn.areas[area].effective).map((turn) => turn.label);
+        const excludedTurns = turns.filter((turn) => !turn.areas[area].effective).map((turn) => turn.label);
+        return [
+            area,
+            {
+                area,
+                label: getAreaLabel(area),
+                mode,
+                auto: getStatusFromTurns(turns, area, "auto"),
+                effective: mode === "exclude" ? "excluded" : getStatusFromTurns(turns, area, "effective"),
+                countedTurns,
+                excludedTurns,
+                reasons: area === "cp"
+                    ? ["CP-Events zaehlen nur in zeitlich validen oder manuell eingeschlossenen Zuegen"]
+                    : area === "time"
+                        ? ["Zeitwertung nutzt die Mindestdauer je Zug"]
+                        : ["Score-/Notiz-Events oder verwertbare Dauer machen Zuege wertbar"]
+            }
+        ];
+    }));
+    return { areas, turns };
+};
+exports.createStatsEligibilityReport = createStatsEligibilityReport;
 const getCountedRounds = (game) => {
     if (game.scoreDetailLevel !== "full") {
         return game.rounds;
     }
-    return game.rounds.filter((round) => round.turns.some((turn) => isStatsEligibleTurn(game, turn)) || hasRoundLevelStatsEvents(game, round));
+    return game.rounds.filter((round) => round.turns.some((turn) => getEffectiveTurnDecision(game, turn, "scoring")) || hasRoundLevelStatsEvents(game, round));
 };
 exports.getCountedRounds = getCountedRounds;
 const hasStatsTurnKey = (validTurnKeys, event) => {
     const turnKey = getTurnKey(event.roundNumber, event.turnNumber);
     return turnKey ? validTurnKeys.has(turnKey) : false;
 };
-const isStatsEligibleGame = (game) => getStatsEligibilityMode(game) === "exclude"
-    ? false
-    : getStatsEligibilityMode(game) === "include" ||
-        (game.finishReason !== "interrupted" && game.finishReason !== "abandoned");
+const isStatsEligibleGame = (game) => STATS_AREAS.some((area) => hasEffectiveArea(game, area));
 exports.isStatsEligibleGame = isStatsEligibleGame;
 const prepareGameForStats = (game) => {
     if (!(0, exports.isStatsEligibleGame)(game)) {
         return null;
     }
-    if (getStatsEligibilityMode(game) === "include") {
+    if (getStatsEligibilityMode(game) === "include" &&
+        !Object.keys(game.statsEligibilityOverrides?.areas ?? {}).length &&
+        !Object.keys(game.statsEligibilityOverrides?.turns ?? {}).length) {
         return game;
     }
     if (game.scoreDetailLevel !== "full") {
         return game;
     }
-    const validTurns = game.rounds.flatMap((round) => round.turns.filter((turn) => isStatsEligibleTurn(game, turn)));
-    const validTurnKeys = new Set(validTurns.map((turn) => `${turn.roundNumber}:${turn.turnNumber}`));
+    const scoringTurnKeys = getEffectiveTurnKeys(game, "scoring");
+    const cpTurnKeys = getEffectiveTurnKeys(game, "cp");
+    const timeTurnKeys = getEffectiveTurnKeys(game, "time");
+    const validTurnKeys = new Set([...scoringTurnKeys, ...cpTurnKeys, ...timeTurnKeys]);
     const rounds = game.rounds
         .map((round) => ({
         ...round,
@@ -82,10 +237,9 @@ const prepareGameForStats = (game) => {
     return {
         ...game,
         rounds,
-        scoreEvents: game.scoreEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event) ||
+        scoreEvents: game.scoreEvents.filter((event) => hasStatsTurnKey(scoringTurnKeys, event) ||
             (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)),
-        commandPointEvents: game.commandPointEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event) ||
-            (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)),
+        commandPointEvents: game.commandPointEvents.filter((event) => hasStatsTurnKey(cpTurnKeys, event)),
         noteEvents: game.noteEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event) ||
             (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)),
         timeEvents: game.timeEvents.filter((event) => {
@@ -139,7 +293,7 @@ const getPlayerComparableSecondaryScore = (game, playerId) => (0, exports.hasDet
 exports.getPlayerComparableSecondaryScore = getPlayerComparableSecondaryScore;
 const getPlayerComparableTotalScore = (game, playerId) => (0, exports.hasComparableTotalScoreData)(game) ? (0, exports.getPlayerTotalScore)(game, playerId) : null;
 exports.getPlayerComparableTotalScore = getPlayerComparableTotalScore;
-const hasComparableCommandPointData = (game, playerId) => game.commandPointEvents.some((event) => event.playerId === playerId);
+const hasComparableCommandPointData = (game, playerId) => hasEligibleCommandPointData(game, playerId);
 exports.hasComparableCommandPointData = hasComparableCommandPointData;
 const getPlayerRoundScoreTotal = (game, playerId, roundNumber, scoreType) => sumValues(game.scoreEvents.filter((event) => event.playerId === playerId &&
     event.roundNumber === roundNumber &&
@@ -422,12 +576,13 @@ const hasPlayerScoreData = (game, playerId, scoreType) => game.scoreDetailLevel 
         scoreType === "secondary" ||
         scoreType === "challenge") &&
     game.players.some((player) => player.id === playerId);
-const hasComparableScoreData = (game) => (0, exports.hasComparableTotalScoreData)(game);
+const hasResultData = (game) => hasEffectiveArea(game, "result") && (0, exports.hasComparableTotalScoreData)(game);
+const hasComparableScoreData = (game) => hasEffectiveArea(game, "scoring") && (0, exports.hasComparableTotalScoreData)(game);
 const hasPlayerCommandPointData = (game, playerId) => (0, exports.hasComparableCommandPointData)(game, playerId);
 const hasCompletedTimingData = (game) => (0, exports.getOfficialStatsGameDurationMs)(game) !== null;
 const hasDetailedTimingStats = (game) => game.scoreDetailLevel === "full" && hasCompletedTimingData(game);
 const getStatsGameDurationMs = (game) => {
-    if (!game.endedAt || !hasDetailedTimingStats(game)) {
+    if (!game.endedAt || !hasEffectiveArea(game, "time") || !hasDetailedTimingStats(game)) {
         return null;
     }
     return (0, exports.getOfficialStatsGameDurationMs)(game);
@@ -445,7 +600,7 @@ const createPlayerAggregates = (games, durationSourceGames = games) => {
         }))
             .filter((entry) => Boolean(entry.player));
         const gamesCount = playerGames.length;
-        const scoredGames = playerGames.filter(({ game }) => hasComparableScoreData(game));
+        const scoredGames = playerGames.filter(({ game }) => hasResultData(game));
         const goFirstGames = scoredGames.filter(({ game, player }) => game.rounds[0]?.turns[0]?.playerId === player.id);
         const startFirstGames = scoredGames.filter(({ game, player }) => game.startingPlayerId === player.id);
         const wins = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length;
@@ -677,7 +832,7 @@ const createArmyAggregates = (games, durationSourceGames = games) => {
         }))
             .filter((entry) => Boolean(entry.player));
         const gamesCount = armyGames.length;
-        const scoredGames = armyGames.filter(({ game }) => hasComparableScoreData(game));
+        const scoredGames = armyGames.filter(({ game }) => hasResultData(game));
         const wins = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "win").length;
         const losses = scoredGames.filter(({ game, player }) => getPlayerGameResult(game, player.id) === "loss").length;
         const ties = scoredGames.length - wins - losses;
@@ -741,7 +896,7 @@ const createMatchupAggregates = (games, durationSourceGames = games) => {
         if (completedDuration !== null) {
             existing.durations.push(completedDuration);
         }
-        if (hasComparableScoreData(game)) {
+        if (hasResultData(game)) {
             if (scoreA > scoreB) {
                 existing.winsA += 1;
             }
@@ -797,7 +952,7 @@ const createRoundDurationAggregates = (games) => {
         game.rounds.forEach((round) => {
             const eligibleRound = {
                 ...round,
-                turns: round.turns.filter((turn) => isStatsDurationEligibleTurn(game, turn))
+                turns: round.turns.filter((turn) => getEffectiveTurnDecision(game, turn, "time"))
             };
             if (!eligibleRound.turns.length) {
                 return;
@@ -829,7 +984,8 @@ const createRoundScoreAggregates = (games) => {
             return;
         }
         game.rounds.forEach((round) => {
-            if (!game.scoreEvents.some((event) => event.roundNumber === round.roundNumber)) {
+            if (!round.turns.some((turn) => getEffectiveTurnDecision(game, turn, "scoring")) &&
+                !game.scoreEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber)) {
                 return;
             }
             const playerOneScore = (0, exports.getPlayerRoundScoreTotal)(game, game.players[0].id, round.roundNumber);
@@ -866,7 +1022,7 @@ const createPlayerTurnDurationAggregates = (games) => {
             round.turns.forEach((turn) => {
                 const player = game.players.find((entry) => entry.id === turn.playerId);
                 const duration = (0, exports.getCompletedTurnDurationMs)(turn, game);
-                if (!player || duration === null || duration < MIN_STATS_TURN_DURATION_MS) {
+                if (!player || duration === null || !getEffectiveTurnDecision(game, turn, "time")) {
                     return;
                 }
                 const durations = grouped.get(player.name) ?? [];
@@ -907,7 +1063,7 @@ const getTurnRecords = (games) => {
             .map((turn) => {
             const player = game.players.find((entry) => entry.id === turn.playerId);
             const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
-            if (!player || durationMs === null || durationMs < MIN_STATS_TURN_DURATION_MS) {
+            if (!player || durationMs === null || !getEffectiveTurnDecision(game, turn, "time")) {
                 return null;
             }
             return {

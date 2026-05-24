@@ -23,6 +23,7 @@ import type {
   GameFinishReason,
   PlayerId,
   ScoreType,
+  StatsEligibilityOverrides,
   TimeEventAction,
   TurnRef
 } from "../types/game";
@@ -130,6 +131,7 @@ interface GameStoreValue {
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
   updateGameDetails: (gameId: string, input: CreateGameInput) => Promise<void>;
+  updateStatsEligibilityOverrides: (gameId: string, overrides: StatsEligibilityOverrides) => Promise<void>;
   setTimerCorrections: (input: TimerCorrectionInput) => Promise<void>;
   resetAllGameTimers: (gameId: string) => Promise<void>;
   addScoreEvent: (payload: EventPayload & { scoreType: ScoreType }) => Promise<void>;
@@ -1173,6 +1175,28 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           ...game,
           autoCommandPointOn: enabled
         });
+        void flushSyncQueue();
+      }),
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
+  );
+
+  const updateStatsEligibilityOverrides = useCallback(
+    async (gameId: string, overrides: StatsEligibilityOverrides) =>
+      runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "updateStatsEligibilityOverrides")) {
+          return;
+        }
+
+        const game = getGame(gameId);
+        if (!game) {
+          throw new Error("Spiel nicht gefunden.");
+        }
+
+        const nextGame = {
+          ...game,
+          statsEligibilityOverrides: overrides
+        };
+        commitGameSnapshot("Statistik-Wertung", game, nextGame);
         void flushSyncQueue();
       }),
     [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
@@ -2409,6 +2433,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       getGame,
       refreshGames,
       updateGameDetails,
+      updateStatsEligibilityOverrides,
       setAutoCommandPointEnabled,
       setTimerCorrections,
       resetAllGameTimers,
@@ -2469,6 +2494,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       startTimeout,
       startGameTimer,
       syncStatus,
+      updateStatsEligibilityOverrides,
       updateGameDetails,
       updateGameEvent,
       undoGameAction,
