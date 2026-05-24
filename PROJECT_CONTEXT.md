@@ -70,6 +70,7 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Primary und Secondary Scores werden getrennt behandelt; Legacy-Total-Daten existieren fuer Import-/Altdaten.
 - Spielpunkte sind gemeinsame Match-Punkte (`gamePoints`) und werden auf beide Spieler-Armeen gespiegelt.
 - Runde und Zug werden ueber einen schnellen `Weiter`-Ablauf gesteuert; es gibt maximal 5 Runden in der Store-Logik.
+- Wichtige Regression vermeiden: Der In-Game-Button `Zurueck` muss von Runde 1 / Zug 1 immer zur Aufstellungsphase zurueckkommen. Das darf nicht davon abhaengen, ob der Timer gerade laeuft; auch bei pausiertem/gestopptem Timer muss `rewindLastTurn(..., keepTimerRunning: true)` die fachliche Phase wieder auf Aufstellung setzen.
 - Supabase RLS ist im MVP offen fuer Select/Insert/Update/Delete (`using true` / `with check true`).
 
 ## Sicher neue Features oder Bugfixes angehen

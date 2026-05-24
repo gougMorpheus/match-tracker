@@ -1058,7 +1058,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
 
     if (selectedTurnIndex === 0 && hasSetupPhase) {
-      if (!isReadOnly && isTimerRunning) {
+      if (!isReadOnly) {
         await rewindLastTurn(
           game.id,
           selectedTurn
