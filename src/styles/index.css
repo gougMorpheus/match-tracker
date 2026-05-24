@@ -1826,6 +1826,17 @@ textarea {
   color: var(--text);
 }
 
+.games-filter-toggle {
+  align-self: center;
+  margin-top: 0.15rem;
+}
+
+.games-filter-toggle.is-active {
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--text);
+}
+
 .stats-filter-card {
   gap: 0.75rem;
 }
