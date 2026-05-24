@@ -11,16 +11,40 @@ const getTurnCorrectionKey = (roundNumber, turnNumber) => `${roundNumber}:${turn
 const averageOrNull = (values) => values.length ? sumValues(values.map((value) => ({ value }))) / values.length : null;
 const MIN_STATS_TURN_DURATION_MS = 10 * 1000;
 const getTurnKey = (roundNumber, turnNumber) => roundNumber && turnNumber ? `${roundNumber}:${turnNumber}` : null;
-const hasCommandPointEarnedInTurn = (game, turn) => game.commandPointEvents.some((event) => event.cpType === "gained" &&
-    event.playerId === turn.playerId &&
+const hasTurnScoreEvents = (game, turn) => game.scoreEvents.some((event) => event.playerId === turn.playerId &&
     event.roundNumber === turn.roundNumber &&
     event.turnNumber === turn.turnNumber);
-const isStatsEligibleTurn = (game, turn) => (0, exports.getTurnDurationMs)(turn, game) >= MIN_STATS_TURN_DURATION_MS && hasCommandPointEarnedInTurn(game, turn);
+const hasTurnCommandPointEvents = (game, turn) => game.commandPointEvents.some((event) => event.playerId === turn.playerId &&
+    event.roundNumber === turn.roundNumber &&
+    event.turnNumber === turn.turnNumber);
+const hasTurnNoteEvents = (game, turn) => game.noteEvents.some((event) => event.playerId === turn.playerId &&
+    event.roundNumber === turn.roundNumber &&
+    event.turnNumber === turn.turnNumber);
+const hasTurnTimeEvents = (game, turn) => game.timeEvents.some((event) => event.playerId === turn.playerId &&
+    event.roundNumber === turn.roundNumber &&
+    event.turnNumber === turn.turnNumber);
+const hasRoundLevelStatsEvents = (game, round) => game.scoreEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber) ||
+    game.commandPointEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber) ||
+    game.noteEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber) ||
+    game.timeEvents.some((event) => event.roundNumber === round.roundNumber && !event.turnNumber);
+const hasRelevantStatsEventsInTurn = (game, turn) => hasTurnScoreEvents(game, turn) ||
+    hasTurnCommandPointEvents(game, turn) ||
+    hasTurnNoteEvents(game, turn) ||
+    hasTurnTimeEvents(game, turn);
+const isStatsEligibleTurn = (game, turn) => {
+    const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
+    return ((durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS) ||
+        hasRelevantStatsEventsInTurn(game, turn));
+};
+const isStatsDurationEligibleTurn = (game, turn) => {
+    const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
+    return durationMs !== null && durationMs >= MIN_STATS_TURN_DURATION_MS;
+};
 const getCountedRounds = (game) => {
     if (game.scoreDetailLevel !== "full") {
         return game.rounds;
     }
-    return game.rounds.filter((round) => round.turns.some((turn) => isStatsEligibleTurn(game, turn)));
+    return game.rounds.filter((round) => round.turns.some((turn) => isStatsEligibleTurn(game, turn)) || hasRoundLevelStatsEvents(game, round));
 };
 exports.getCountedRounds = getCountedRounds;
 const hasStatsTurnKey = (validTurnKeys, event) => {
@@ -38,22 +62,25 @@ const prepareGameForStats = (game) => {
     }
     const validTurns = game.rounds.flatMap((round) => round.turns.filter((turn) => isStatsEligibleTurn(game, turn)));
     const validTurnKeys = new Set(validTurns.map((turn) => `${turn.roundNumber}:${turn.turnNumber}`));
-    if (!validTurnKeys.size) {
-        return null;
-    }
     const rounds = game.rounds
         .map((round) => ({
         ...round,
         turns: round.turns.filter((turn) => validTurnKeys.has(`${turn.roundNumber}:${turn.turnNumber}`))
     }))
-        .filter((round) => round.turns.length > 0);
+        .filter((round) => round.turns.length > 0 || hasRoundLevelStatsEvents(game, round));
     const validRoundKeys = new Set(rounds.map((round) => String(round.roundNumber)));
+    if (!validTurnKeys.size && !validRoundKeys.size) {
+        return null;
+    }
     return {
         ...game,
         rounds,
-        scoreEvents: game.scoreEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event)),
-        commandPointEvents: game.commandPointEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event)),
-        noteEvents: game.noteEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event)),
+        scoreEvents: game.scoreEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event) ||
+            (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)),
+        commandPointEvents: game.commandPointEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event) ||
+            (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)),
+        noteEvents: game.noteEvents.filter((event) => hasStatsTurnKey(validTurnKeys, event) ||
+            (!event.turnNumber && event.roundNumber ? validRoundKeys.has(String(event.roundNumber)) : false)),
         timeEvents: game.timeEvents.filter((event) => {
             const turnKey = getTurnKey(event.roundNumber, event.turnNumber);
             if (turnKey) {
@@ -603,7 +630,7 @@ const createStatsOverview = (games, durationSourceGames = games) => {
     });
     const roundsValues = games
         .filter((game) => game.scoreDetailLevel === "full" && game.rounds.length > 0)
-        .map((game) => game.rounds.length);
+        .map((game) => (0, exports.getCountedRounds)(game).length);
     const comparableScoreGames = games.filter((game) => hasComparableScoreData(game));
     const combinedScoreValues = comparableScoreGames.map((game) => (0, exports.getPlayerTotalScore)(game, game.players[0].id) + (0, exports.getPlayerTotalScore)(game, game.players[1].id));
     const playerOneScoreValues = comparableScoreGames.map((game) => (0, exports.getPlayerTotalScore)(game, game.players[0].id));
@@ -761,7 +788,14 @@ const createRoundDurationAggregates = (games) => {
             return;
         }
         game.rounds.forEach((round) => {
-            const duration = (0, exports.getCompletedRoundDurationMs)(round, game);
+            const eligibleRound = {
+                ...round,
+                turns: round.turns.filter((turn) => isStatsDurationEligibleTurn(game, turn))
+            };
+            if (!eligibleRound.turns.length) {
+                return;
+            }
+            const duration = (0, exports.getCompletedRoundDurationMs)(eligibleRound, game);
             if (duration === null) {
                 return;
             }
@@ -788,6 +822,9 @@ const createRoundScoreAggregates = (games) => {
             return;
         }
         game.rounds.forEach((round) => {
+            if (!game.scoreEvents.some((event) => event.roundNumber === round.roundNumber)) {
+                return;
+            }
             const playerOneScore = (0, exports.getPlayerRoundScoreTotal)(game, game.players[0].id, round.roundNumber);
             const playerTwoScore = (0, exports.getPlayerRoundScoreTotal)(game, game.players[1].id, round.roundNumber);
             const existing = grouped.get(round.roundNumber) ?? {
@@ -822,7 +859,7 @@ const createPlayerTurnDurationAggregates = (games) => {
             round.turns.forEach((turn) => {
                 const player = game.players.find((entry) => entry.id === turn.playerId);
                 const duration = (0, exports.getCompletedTurnDurationMs)(turn, game);
-                if (!player || duration === null) {
+                if (!player || duration === null || duration < MIN_STATS_TURN_DURATION_MS) {
                     return;
                 }
                 const durations = grouped.get(player.name) ?? [];
@@ -863,7 +900,7 @@ const getTurnRecords = (games) => {
             .map((turn) => {
             const player = game.players.find((entry) => entry.id === turn.playerId);
             const durationMs = (0, exports.getCompletedTurnDurationMs)(turn, game);
-            if (!player || durationMs === null) {
+            if (!player || durationMs === null || durationMs < MIN_STATS_TURN_DURATION_MS) {
                 return null;
             }
             return {

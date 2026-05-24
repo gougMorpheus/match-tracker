@@ -6,6 +6,7 @@ const {
   createPlayerAggregates,
   createPlayerTurnDurationAggregates,
   createRoundScoreAggregates,
+  createRoundDurationAggregates,
   createStatsOverview,
   filterGames,
   getCurrentRoundNumber,
@@ -118,6 +119,7 @@ const runGameCalculationsTests = () => {
     const game = createCompletedGameFixture("game-stats-1");
     const roundScores = createRoundScoreAggregates([game]);
     const playerTurnDurations = createPlayerTurnDurationAggregates([game]);
+    const roundDurations = createRoundDurationAggregates([game]);
     const cpScorePoints = createCpScoreCorrelationPoints([game]);
     const turnRecords = getTurnRecords([game]);
 
@@ -148,6 +150,70 @@ const runGameCalculationsTests = () => {
     assert.equal(turnRecords.longestTurn?.durationMs, 15 * 60 * 1000);
     assert.equal(turnRecords.highestScoringTurn?.playerName, "Bob");
     assert.equal(turnRecords.highestScoringTurn?.totalScore, 16);
+    assert.equal(roundDurations.length, 1);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-eligibility-broad" });
+    const [playerOne, playerTwo] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:06.000Z"
+      },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 1,
+        turnNumber: 2,
+        createdAt: "2026-04-20T18:00:06.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerTwo.id,
+        roundNumber: 1,
+        turnNumber: 2,
+        createdAt: "2026-04-20T18:00:20.000Z"
+      },
+      { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T18:00:20.000Z" },
+      { action: "game-end", createdAt: "2026-04-20T18:01:00.000Z" }
+    ]);
+    game = appendLocalScoreEvent(game, {
+      playerId: playerOne.id,
+      scoreType: "primary",
+      value: 3,
+      roundNumber: 1,
+      turnNumber: 1,
+      createdAt: "2026-04-20T18:00:02.000Z"
+    });
+
+    const [statsGame] = prepareGamesForStats([game]);
+    const roundScores = createRoundScoreAggregates([statsGame]);
+    const roundDurations = createRoundDurationAggregates([statsGame]);
+    const playerTurnDurations = createPlayerTurnDurationAggregates([statsGame]);
+
+    assert.ok(statsGame);
+    assert.equal(getCountedRounds(statsGame).length, 1);
+    assert.equal(roundScores[0]?.averagePlayerOneScore, 3);
+    assert.equal(roundScores[0]?.averagePlayerTwoScore, 0);
+    assert.equal(roundDurations.length, 1);
+    assert.deepEqual(
+      playerTurnDurations.map((entry) => [entry.playerName, entry.averageTurnDurationMs]),
+      [["Bob", 14 * 1000]]
+    );
   }
 
   {
@@ -213,11 +279,11 @@ const runGameCalculationsTests = () => {
 
     const [statsGame] = prepareGamesForStats([game]);
     assert.ok(statsGame);
-    assert.equal(statsGame.rounds.length, 1);
-    assert.equal(getPlayerPrimaryTotal(statsGame, playerOne.id), 5);
-    assert.equal(getPlayerPrimaryTotal(statsGame, playerTwo.id), 10);
-    assert.equal(getCountedRounds(game).length, 1);
-    assert.equal(createGameSummary(game).roundCount, 1);
+    assert.equal(statsGame.rounds.length, 2);
+    assert.equal(getPlayerPrimaryTotal(statsGame, playerOne.id), 25);
+    assert.equal(getPlayerPrimaryTotal(statsGame, playerTwo.id), 30);
+    assert.equal(getCountedRounds(game).length, 2);
+    assert.equal(createGameSummary(game).roundCount, 2);
   }
 
   {
