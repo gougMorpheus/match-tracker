@@ -3389,6 +3389,7 @@ button.stats-table__row.is-active {
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
+  justify-content: center;
   text-align: center;
 }
 
@@ -3420,15 +3421,18 @@ button.stats-table__row.is-active {
 }
 
 .game-bottom-dock__primary-label {
+  display: block;
   font-size: 0.78rem;
   line-height: 1.05;
 }
 
 .game-bottom-dock__hint {
+  display: block;
   font-size: 0.62rem;
   line-height: 1;
   opacity: 0.72;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .game-bottom-dock__timeout-popover {
