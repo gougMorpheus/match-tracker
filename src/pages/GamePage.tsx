@@ -710,6 +710,15 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     setIsEditingGame(false);
   };
 
+  const openGameSettings = () => {
+    if (isClosed || isReadOnly) {
+      openGameDetails();
+      return;
+    }
+
+    void openGameEditor();
+  };
+
   const closeGameDetails = () => {
     setDetailsOpen(false);
     setIsEditingGame(false);
@@ -1131,7 +1140,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     : []),
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
-                  { label: "Einstellungen", onClick: openGameDetails },
+                  { label: "Einstellungen", onClick: openGameSettings },
                   isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
@@ -2099,7 +2108,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               ) : null}
               <button
                 type="button"
-                className="secondary-button compact-button"
+                className="secondary-button compact-button game-bottom-dock__timer"
                 onPointerDown={(event) => {
                   if (!isTimerRunning || timeoutActive) {
                     return;

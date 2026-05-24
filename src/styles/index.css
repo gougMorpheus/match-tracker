@@ -3331,6 +3331,8 @@ button.stats-table__row.is-active {
   z-index: 26;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 48px;
+  align-items: stretch;
   gap: 0.35rem;
   width: min(calc(100% - 1.2rem), 760px);
   transform: translateX(-50%);
@@ -3355,8 +3357,20 @@ button.stats-table__row.is-active {
   touch-action: manipulation;
 }
 
-.game-bottom-dock .compact-button {
-  min-height: 34px;
+.game-bottom-dock > .compact-button,
+.game-bottom-dock__undo-wrap,
+.game-bottom-dock__timer-wrap {
+  height: 48px;
+  min-height: 48px;
+}
+
+.game-bottom-dock > .compact-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0.25rem 0.35rem;
+  text-align: center;
 }
 
 .game-timeout-dock {
@@ -3379,7 +3393,11 @@ button.stats-table__row.is-active {
   min-height: 38px;
 }
 
-.game-bottom-dock__undo {
+.game-bottom-dock__undo,
+.game-bottom-dock__timer {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   font-size: 0.72rem;
   line-height: 1.1;
