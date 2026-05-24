@@ -3235,6 +3235,19 @@ button.stats-table__row.is-active {
   backdrop-filter: blur(14px);
 }
 
+.game-bottom-dock,
+.game-timeout-dock {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.game-bottom-dock button,
+.game-timeout-dock button {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
 .game-bottom-dock .compact-button {
   min-height: 34px;
 }
