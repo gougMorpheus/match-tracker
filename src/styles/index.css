@@ -1045,7 +1045,7 @@ textarea {
 
 .overview-player-card__stats {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.28rem;
 }
 
@@ -1065,7 +1065,7 @@ textarea {
 }
 
 .overview-player-stat:not(.overview-player-stat--score) {
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 .overview-player-stat--total {
@@ -1259,6 +1259,102 @@ textarea {
   height: 0.55rem;
   border-radius: 999px;
   flex: 0 0 auto;
+}
+
+.overview-score-table-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--border);
+}
+
+.overview-score-table__toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.overview-score-table__toggle > span:first-child {
+  font-weight: 700;
+}
+
+.overview-score-table__toggle strong {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.overview-score-table__toggle > span:last-child {
+  padding: 0.2rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.72);
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.overview-score-table__wrap {
+  overflow: hidden;
+}
+
+.overview-score-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 0.22rem;
+  table-layout: fixed;
+  font-size: 0.64rem;
+}
+
+.overview-score-table th,
+.overview-score-table td {
+  padding: 0.28rem 0.2rem;
+  vertical-align: top;
+  line-height: 1.1;
+}
+
+.overview-score-table th {
+  color: var(--muted);
+  font-weight: 600;
+  text-align: center;
+}
+
+.overview-score-table td {
+  text-align: center;
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.5);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.overview-score-table td:first-child,
+.overview-score-table th:first-child {
+  text-align: left;
+}
+
+.overview-score-table td:nth-child(2),
+.overview-score-table th:nth-child(2) {
+  text-align: left;
+  word-break: break-word;
+}
+
+.overview-score-table__col--turn {
+  width: 18%;
+}
+
+.overview-score-table__col--player {
+  width: 28%;
+}
+
+.overview-score-table__col--metric {
+  width: 10.8%;
 }
 
 .overview-chart__axis,

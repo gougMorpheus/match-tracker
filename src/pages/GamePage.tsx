@@ -1233,7 +1233,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
               <div className="list-row">
                 <div>
                   <h2>Scoreboard</h2>
-                  <p className="muted-copy">Zwischenstand waehrend des laufenden Spiels</p>
                 </div>
                 <button
                   type="button"

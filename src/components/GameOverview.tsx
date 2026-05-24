@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Game, PlayerId } from "../types/game";
 import {
+  getCurrentRoundNumber,
+  getCurrentTurnNumber,
   getPlayerComparablePrimaryScore,
   getPlayerComparableSecondaryScore,
   getPlayerComparableTotalScore,
   getPlayerCommandPointsGained,
   getPlayerCommandPointsSpent,
+  getPlayerChallengeTotal,
   getGameDurationMs,
   getCountedRounds,
   getPlayerTurnDurationTotalMs,
@@ -14,7 +17,8 @@ import {
   hasDetailedScoreData,
   hasLegacyRoundTotalScoreData,
   getRoundDurationMs,
-  getTurnDurationMs
+  getTurnDurationMs,
+  isTurnPaused
 } from "../utils/gameCalculations";
 import { formatDuration } from "../utils/time";
 
@@ -43,18 +47,20 @@ interface RoundTimeRow {
   values: Record<string, number>;
 }
 
-type EventMetric = "primary" | "secondary" | "total" | "cp-gained" | "cp-spent" | "turn" | "round";
-
-interface EventPlotPoint {
+interface ScoreTableRow {
   id: string;
+  roundNumber: number;
+  turnNumber: number;
   playerId: PlayerId;
-  metric: EventMetric;
-  label: string;
-  createdAt: string;
-  elapsedMs: number;
-  value: number;
-  count: number;
+  playerName: string;
+  primary: number;
+  secondary: number;
+  challenge: number;
+  cpGained: number;
+  cpSpent: number;
 }
+
+type EventMetric = "primary" | "secondary" | "total" | "cp-gained" | "cp-spent" | "turn" | "round";
 
 type ScoreSelection =
   | {
@@ -118,14 +124,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
   const [selectedScore, setSelectedScore] = useState<ScoreSelection | null>(null);
   const [selectedTime, setSelectedTime] = useState<TimeSelection | null>(null);
   const [selectedRoundDuration, setSelectedRoundDuration] = useState<string | null>(null);
-  const [selectedEventMetrics, setSelectedEventMetrics] = useState<EventMetric[]>(
-    EVENT_METRICS.map((metric) => metric.key)
-  );
-  const [selectedEventPointId, setSelectedEventPointId] = useState<string | null>(null);
+  const [scoreTableOpen, setScoreTableOpen] = useState(false);
   const [openCharts, setOpenCharts] = useState<Record<string, boolean>>({
     score: true,
     time: true,
-    events: true,
     rounds: true
   });
   const formatScoreValue = (value: number | null) => (value === null ? "-" : value);
@@ -141,12 +143,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     setSelectedScore(null);
     setSelectedTime(null);
     setSelectedRoundDuration(null);
-    setSelectedEventMetrics(EVENT_METRICS.map((metric) => metric.key));
-    setSelectedEventPointId(null);
+    setScoreTableOpen(false);
     setOpenCharts({
       score: true,
       time: true,
-      events: true,
       rounds: true
     });
   }, [game.id]);
@@ -248,92 +248,58 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     });
   });
 
-  const eventPlotPoints = useMemo<EventPlotPoint[]>(() => {
-    const allTimestamps = [
-      ...game.timeEvents.map((event) => event.createdAt),
-      ...game.scoreEvents.map((event) => event.createdAt),
-      ...game.commandPointEvents.map((event) => event.createdAt)
-    ].sort((left, right) => left.localeCompare(right));
-    const startTime = new Date(game.startedAt ?? allTimestamps[0] ?? game.createdAt).getTime();
-    const points: EventPlotPoint[] = [];
-    const pushPoint = (
-      playerId: PlayerId | undefined,
-      metric: EventMetric,
-      createdAt: string,
-      value: number,
-      label: string
-    ) => {
-      if (!playerId || !orderedPlayers.some((player) => player.id === playerId)) {
-        return;
-      }
-
-      points.push({
-        id: `${metric}-${playerId}-${createdAt}-${points.length}`,
-        playerId,
-        metric,
-        label,
-        createdAt,
-        elapsedMs: Math.max(new Date(createdAt).getTime() - startTime, 0),
-        value: Math.abs(value) || 1,
-        count: 1
-      });
-    };
-
-    game.scoreEvents.forEach((event) => {
-      const metric =
-        event.scoreType === "primary"
-          ? "primary"
-          : event.scoreType === "secondary"
-            ? "secondary"
-            : "total";
-      pushPoint(event.playerId, metric, event.createdAt, event.value, `${event.value > 0 ? "+" : ""}${event.value}`);
-    });
-
-    game.commandPointEvents.forEach((event) => {
-      pushPoint(
-        event.playerId,
-        event.cpType === "gained" ? "cp-gained" : "cp-spent",
-        event.createdAt,
-        event.value,
-        `${event.cpType === "gained" ? "+" : "-"}${event.value}`
-      );
-    });
-
-    game.timeEvents.forEach((event) => {
-      if (event.action === "turn-start") {
-        pushPoint(event.playerId, "turn", event.createdAt, 1, "Zug");
-      } else if (event.action === "round-start") {
-        pushPoint(event.playerId ?? game.startingPlayerId, "round", event.createdAt, 1, "Runde");
-      }
-    });
-
-    return points
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
-      .reduce<EventPlotPoint[]>((groups, point) => {
-        const previous = [...groups]
-          .reverse()
-          .find(
-            (group) =>
-              group.playerId === point.playerId &&
-              group.metric === point.metric &&
-              point.elapsedMs - group.elapsedMs <= EVENT_GROUP_MS
+  const scoreTableRows = useMemo<ScoreTableRow[]>(
+    () =>
+      game.rounds.flatMap((round) =>
+        round.turns.map((turn) => {
+          const player = orderedPlayers.find((entry) => entry.id === turn.playerId);
+          const scoreEvents = game.scoreEvents.filter(
+            (event) =>
+              event.playerId === turn.playerId &&
+              event.roundNumber === round.roundNumber &&
+              event.turnNumber === turn.turnNumber
           );
-        if (
-          previous
-        ) {
-          previous.value += point.value;
-          previous.count += point.count;
-          previous.label =
-            previous.metric === "turn" || previous.metric === "round"
-              ? `${EVENT_METRICS.find((metric) => metric.key === previous.metric)?.label ?? "Event"} ${previous.count}x`
-              : `${previous.metric === "cp-spent" ? "-" : "+"}${previous.value} (${previous.count})`;
-          return groups;
-        }
+          const commandPointEvents = game.commandPointEvents.filter(
+            (event) =>
+              event.playerId === turn.playerId &&
+              event.roundNumber === round.roundNumber &&
+              event.turnNumber === turn.turnNumber
+          );
 
-        groups.push({ ...point });
-        return groups;
-      }, []);
-  }, [game, orderedPlayers]);
+          return {
+            id: `${round.roundNumber}:${turn.turnNumber}:${turn.playerId}`,
+            roundNumber: round.roundNumber,
+            turnNumber: turn.turnNumber,
+            playerId: turn.playerId,
+            playerName: player?.name ?? "Spieler",
+            primary: scoreEvents
+              .filter((event) => event.scoreType === "primary")
+              .reduce((total, event) => total + event.value, 0),
+            secondary: scoreEvents
+              .filter((event) => event.scoreType === "secondary")
+              .reduce((total, event) => total + event.value, 0),
+            challenge: scoreEvents
+              .filter((event) => event.scoreType === "challenge")
+              .reduce((total, event) => total + event.value, 0),
+            cpGained: commandPointEvents
+              .filter((event) => event.cpType === "gained")
+              .reduce((total, event) => total + event.value, 0),
+            cpSpent: commandPointEvents
+              .filter((event) => event.cpType === "spent")
+              .reduce((total, event) => total + event.value, 0)
+          };
+        })
+      ),
+    [game.commandPointEvents, game.rounds, game.scoreEvents, orderedPlayers]
+  );
+
+  const currentRoundNumber = getCurrentRoundNumber(game);
+  const currentTurnNumber = getCurrentTurnNumber(game);
+  const currentTurn = game.rounds
+    .flatMap((round) => round.turns)
+    .find((turn) => turn.roundNumber === currentRoundNumber && turn.turnNumber === currentTurnNumber);
+  const currentTurnDuration = currentTurn ? formatDuration(getTurnDurationMs(currentTurn, game)) : null;
+  const showLiveRoundStats = game.status !== "completed";
 
   const getPlayerName = (playerId: string): string =>
     orderedPlayers.find((player) => player.id === playerId)?.name ?? "Spieler";
@@ -358,13 +324,6 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
 
     return null;
   })();
-
-  const selectedEventPoint = selectedEventPointId
-    ? eventPlotPoints.find((point) => point.id === selectedEventPointId)
-    : undefined;
-  const eventSelectionLabel = selectedEventPoint
-    ? `${getPlayerName(selectedEventPoint.playerId)} ${selectedEventPoint.label}`
-    : null;
 
   const isSameScoreSelection = (left: ScoreSelection | null, right: ScoreSelection) => {
     if (!left || left.kind !== right.kind || left.playerId !== right.playerId) {
@@ -408,23 +367,6 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
 
   const toggleTimeSelection = (next: TimeSelection) => {
     setSelectedTime((current) => (isSameTimeSelection(current, next) ? null : next));
-  };
-
-  const toggleEventMetric = (metric: EventMetric | "all") => {
-    setSelectedEventPointId(null);
-    setSelectedEventMetrics((current) => {
-      if (metric === "all") {
-        return current.length === EVENT_METRICS.length ? [] : EVENT_METRICS.map((entry) => entry.key);
-      }
-
-      return current.includes(metric)
-        ? current.filter((entry) => entry !== metric)
-        : [...current, metric];
-    });
-  };
-
-  const toggleEventPoint = (pointId: string) => {
-    setSelectedEventPointId((current) => (current === pointId ? null : pointId));
   };
 
   const toggleChartOpen = (chartKey: string) => {
@@ -1100,6 +1042,88 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     );
   };
 
+  const renderScoreTable = () => {
+    const formatMetric = (value: number): string => (value === 0 ? "0" : `${value > 0 ? "+" : ""}${value}`);
+
+    return (
+      <article className="overview-score-table-card">
+        <button
+          type="button"
+          className="overview-score-table__toggle"
+          onClick={() => setScoreTableOpen((current) => !current)}
+          aria-expanded={scoreTableOpen}
+        >
+          <span>Tabelle</span>
+          <strong>{scoreTableRows.length} Zuege</strong>
+          <span aria-hidden="true">{scoreTableOpen ? "Zu" : "Auf"}</span>
+        </button>
+        {scoreTableOpen ? (
+          scoreTableRows.length ? (
+            <div className="overview-score-table__wrap">
+              <table className="overview-score-table">
+                <colgroup>
+                  <col className="overview-score-table__col--turn" />
+                  <col className="overview-score-table__col--player" />
+                  <col className="overview-score-table__col--metric" />
+                  <col className="overview-score-table__col--metric" />
+                  <col className="overview-score-table__col--metric" />
+                  <col className="overview-score-table__col--metric" />
+                  <col className="overview-score-table__col--metric" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Zug</th>
+                    <th>Spieler</th>
+                    <th>Prim</th>
+                    <th>Sek</th>
+                    <th>Chal</th>
+                    <th>CP+</th>
+                    <th>CP-</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scoreTableRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{`R${row.roundNumber}/Z${row.turnNumber}`}</td>
+                      <td>{row.playerName}</td>
+                      <td>{formatMetric(row.primary)}</td>
+                      <td>{formatMetric(row.secondary)}</td>
+                      <td>{formatMetric(row.challenge)}</td>
+                      <td>{row.cpGained}</td>
+                      <td>{row.cpSpent}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted-copy">Noch keine Zuege vorhanden.</p>
+          )
+        ) : null}
+      </article>
+    );
+  };
+
+  const eventPlotPoints: Array<{
+    id: string;
+    playerId: PlayerId;
+    metric: EventMetric;
+    label: string;
+    createdAt: string;
+    elapsedMs: number;
+    value: number;
+    count: number;
+  }> = [];
+  const selectedEventMetrics: EventMetric[] = EVENT_METRICS.map((metric) => metric.key);
+  const selectedEventPointId: string | null = null;
+  const selectedEventPoint = undefined as
+    | {
+        playerId: PlayerId;
+        metric: EventMetric;
+        label: string;
+      }
+    | undefined;
+  const eventSelectionLabel: string | null = null;
   const eventTimelineBuckets: Array<{
     index: number;
     startMs: number;
@@ -1107,9 +1131,11 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     counts: Record<string, number>;
     count: number;
   }> = [];
-  const selectedEventCategory: any = "all";
+  const selectedEventCategory: "all" = "all";
   const selectedEventBucket: number | null = null;
-  const toggleEventCategory = (_category: any) => undefined;
+  const toggleEventMetric = (_metric: EventMetric | "all") => undefined;
+  const toggleEventPoint = (_pointId: string) => undefined;
+  const toggleEventCategory = (_category: string) => undefined;
   const toggleEventBucket = (_bucketIndex: number) => undefined;
 
   const renderEventScatterChart = () => {
@@ -1519,6 +1545,22 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
             <span>Punkte</span>
             <strong>{game.gamePoints}</strong>
           </div>
+          {showLiveRoundStats ? (
+            <>
+              <div className="overview-summary-item overview-summary-item--compact">
+                <span>Aktuelle Runde</span>
+                <strong>{currentRoundNumber > 0 ? currentRoundNumber : "-"}</strong>
+              </div>
+              <div className="overview-summary-item overview-summary-item--compact">
+                <span>Aktueller Zug</span>
+                <strong>{currentTurnNumber > 0 ? currentTurnNumber : "-"}</strong>
+              </div>
+              <div className="overview-summary-item overview-summary-item--compact">
+                <span>Zugdauer</span>
+                <strong>{currentTurnDuration ?? "-"}</strong>
+              </div>
+            </>
+          ) : null}
           {game.deployment ? (
             <div className="overview-summary-item overview-summary-item--compact">
               <span>Aufstellung</span>
@@ -1555,6 +1597,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
                 <span>Sek</span>
                 <strong>{formatScoreValue(getPlayerComparableSecondaryScore(game, player.id))}</strong>
               </div>
+              <div className="overview-player-stat overview-player-stat--score">
+                <span>Chal</span>
+                <strong>{formatScoreValue(getPlayerChallengeTotal(game, player.id))}</strong>
+              </div>
               <div className="overview-player-stat overview-player-stat--score overview-player-stat--total">
                 <span>Ges</span>
                 <strong>{formatScoreValue(getPlayerComparableTotalScore(game, player.id))}</strong>
@@ -1577,8 +1623,8 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
       </div>
 
       {renderRoundScoreChart()}
+      {renderScoreTable()}
       {renderRoundTimeChart()}
-      {renderEventScatterChart()}
       {renderRoundDurationChart()}
     </section>
   );
