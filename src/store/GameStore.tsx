@@ -2271,10 +2271,6 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const reopenGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
-        if (shouldBlockGameWrite(gameId, "reopenGame")) {
-          return;
-        }
-
         const game = getGame(gameId);
         if (!game || game.status !== "completed") {
           return;
@@ -2293,7 +2289,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Spiel wieder eroeffnet", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
+    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
   );
 
   const updateGameEvent = useCallback(
@@ -2430,15 +2426,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const deleteGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
-        if (shouldBlockGameWrite(gameId, "deleteGame")) {
-          return;
-        }
-
         removeGameLocally(gameId);
-        enqueueGameDelete(gameId);
+        updateSyncQueue((currentQueue) =>
+          enqueueSyncQueueItem(currentQueue, createGameSyncQueueItem("delete-game", gameId, getNowIso()))
+        );
         void flushSyncQueue();
       }),
-    [enqueueGameDelete, flushSyncQueue, removeGameLocally, runMutation, shouldBlockGameWrite]
+    [flushSyncQueue, removeGameLocally, runMutation, updateSyncQueue]
   );
 
   const importGames = useCallback(

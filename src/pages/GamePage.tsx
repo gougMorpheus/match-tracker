@@ -276,6 +276,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [deletePasswordOpen, setDeletePasswordOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePasswordError, setDeletePasswordError] = useState("");
+  const [finishDialogError, setFinishDialogError] = useState("");
   const [startingPlayerPromptOpen, setStartingPlayerPromptOpen] = useState(false);
   const [startingPlayerPromptSlot, setStartingPlayerPromptSlot] = useState<CreateGameInput["startingSlot"]>("");
   const [statsEligibilityEditorOpen, setStatsEligibilityEditorOpen] = useState(false);
@@ -897,10 +898,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleRequestDeleteGame = () => {
-    if (isReadOnly) {
-      return;
-    }
-
     setDeletePasswordOpen(true);
     setDeletePassword("");
     setDeletePasswordError("");
@@ -918,11 +915,13 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
-    closeDeleteDialog();
-    onBack();
-    window.setTimeout(() => {
-      void deleteGame(game.id);
-    }, 0);
+    try {
+      await deleteGame(game.id);
+      closeDeleteDialog();
+      onBack();
+    } catch (error) {
+      setDeletePasswordError(error instanceof Error ? error.message : "Spiel konnte nicht geloescht werden.");
+    }
   };
 
   const closeNoteDialog = () => {
@@ -941,16 +940,22 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
+    setFinishDialogError("");
     setFinishDialogOpen(true);
   };
 
   const closeFinishDialog = () => {
     setFinishDialogOpen(false);
+    setFinishDialogError("");
   };
 
   const handleFinishGame = async (finishReason: GameFinishReason) => {
-    await finishGame(game.id, finishReason);
-    closeFinishDialog();
+    try {
+      await finishGame(game.id, finishReason);
+      closeFinishDialog();
+    } catch (error) {
+      setFinishDialogError(error instanceof Error ? error.message : "Spiel konnte nicht beendet werden.");
+    }
   };
 
   const handleDeleteEvent = async (event: EditableEventItem) => {
@@ -989,10 +994,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleRequestReopenGame = () => {
-    if (isReadOnly) {
-      return;
-    }
-
     setReopenPasswordOpen(true);
     setReopenPassword("");
     setReopenPasswordError("");
@@ -1004,10 +1005,15 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       return;
     }
 
-    closeReopenDialog();
-    await reopenGame(game.id);
-    if (forceOverview) {
-      window.location.hash = `/game/${game.id}`;
+    try {
+      setGameAccessMode(game.id, "edit");
+      await reopenGame(game.id);
+      closeReopenDialog();
+      if (forceOverview) {
+        window.location.hash = `/game/${game.id}`;
+      }
+    } catch (error) {
+      setReopenPasswordError(error instanceof Error ? error.message : "Spiel konnte nicht wieder eroeffnet werden.");
     }
   };
 
@@ -1377,7 +1383,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           confirmLabel="Wieder eroeffnen"
           value={reopenPassword}
           error={reopenPasswordError}
-          disabled={writeDisabled}
+          disabled={isMutating}
           onChange={(value) => {
             setReopenPassword(value);
             if (reopenPasswordError) {
@@ -1396,7 +1402,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           error={deletePasswordError}
           hint="Alle Events dieses Spiels werden dabei entfernt."
           confirmTone="danger"
-          disabled={writeDisabled}
+          disabled={isMutating}
           onChange={(value) => {
             setDeletePassword(value);
             if (deletePasswordError) {
@@ -2122,6 +2128,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   Schliessen
                 </button>
               </div>
+              {finishDialogError ? <p className="muted-copy">{finishDialogError}</p> : null}
               <div className="button-row button-row--compact">
                 <button
                   type="button"
