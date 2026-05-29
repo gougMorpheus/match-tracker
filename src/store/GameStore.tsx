@@ -73,6 +73,7 @@ import { createId } from "../utils/id";
 import { getNowIso } from "../utils/time";
 import {
   getGameAccessMode,
+  isGameCompletedForDisplay,
   isGameViewOnlyInState,
   setGameAccessModeInState,
   type GameAccessMode,
@@ -708,6 +709,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const localGame = localGamesById.get(remoteGame.id);
         if (!localGame) {
           return remoteGame;
+        }
+
+        if (isGameCompletedForDisplay(remoteGame)) {
+          return remoteGame;
+        }
+
+        if (isGameCompletedForDisplay(localGame)) {
+          return localGame;
         }
 
         if (isSetupRunning(localGame) || isTurnActive(localGame)) {

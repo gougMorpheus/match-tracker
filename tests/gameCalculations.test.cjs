@@ -30,6 +30,7 @@ const {
   appendLocalCommandPointEvent,
   appendLocalScoreEvent,
   appendLocalTimeEvents,
+  syncDerivedGameState,
   updateLocalEvent
 } = require("../.test-dist/utils/gameState.js");
 const { overlayLocalGameMetadata } = require("../.test-dist/utils/gameState.js");
@@ -1016,6 +1017,50 @@ const runGameCalculationsTests = () => {
       "2:1": true
     });
   }
+
+  {
+    let game = createBaseGame({ id: "game-ended-at-without-game-end-event" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      }
+    ]);
+
+    game = syncDerivedGameState({
+      ...game,
+      endedAt: "2026-04-20T18:10:00.000Z"
+    });
+
+    assert.equal(game.status, "completed");
+    assert.equal(game.endedAt, "2026-04-20T18:10:00.000Z");
+    assert.equal(isTurnActive(game), false);
+    assert.equal(getGameDurationMs(game), 10 * 60 * 1000);
+  }
+
+  {
+    const remoteCompletedGame = createCompletedGameFixture("game-completed-wins-over-local-active");
+    const localActiveGame = syncDerivedGameState({
+      ...remoteCompletedGame,
+      status: "active",
+      endedAt: undefined,
+      finishReason: undefined,
+      timeEvents: remoteCompletedGame.timeEvents.filter((event) => event.action !== "game-end")
+    });
+
+    const mergedGame = overlayLocalGameMetadata(remoteCompletedGame, localActiveGame);
+
+    assert.equal(mergedGame.status, "completed");
+    assert.equal(mergedGame.endedAt, remoteCompletedGame.endedAt);
+  }
+
 };
 
 module.exports = {

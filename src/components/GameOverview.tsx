@@ -20,6 +20,7 @@ import {
   getTurnDurationMs,
   isTurnPaused
 } from "../utils/gameCalculations";
+import { isGameCompletedForDisplay } from "../utils/gameAccessMode";
 import { formatDuration } from "../utils/time";
 
 interface GameOverviewProps {
@@ -299,7 +300,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     .flatMap((round) => round.turns)
     .find((turn) => turn.roundNumber === currentRoundNumber && turn.turnNumber === currentTurnNumber);
   const currentTurnDuration = currentTurn ? formatDuration(getTurnDurationMs(currentTurn, game)) : null;
-  const showLiveRoundStats = game.status !== "completed";
+  const showLiveRoundStats = !isGameCompletedForDisplay(game);
 
   const getPlayerName = (playerId: string): string =>
     orderedPlayers.find((player) => player.id === playerId)?.name ?? "Spieler";

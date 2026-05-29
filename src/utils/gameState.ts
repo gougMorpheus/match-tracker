@@ -63,9 +63,9 @@ const getFirstGameEndAt = (timeEvents: TimeEvent[]): string | undefined =>
     .map((event) => event.createdAt)
     .sort((left, right) => left.localeCompare(right))[0];
 
-const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
+const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[], fallbackEndedAt?: string): Round[] => {
   const roundsByNumber = new Map<number, Round>();
-  const gameEndAt = getFirstGameEndAt(timeEvents);
+  const gameEndAt = getFirstGameEndAt(timeEvents) ?? fallbackEndedAt;
 
   [...timeEvents].sort((left, right) => left.createdAt.localeCompare(right.createdAt)).forEach((event) => {
     if (gameEndAt && event.createdAt > gameEndAt && event.action !== "game-end") {
@@ -146,6 +146,26 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
       turn.timing.endedAt = event.createdAt;
     }
   });
+
+  if (gameEndAt) {
+    roundsByNumber.forEach((round) => {
+      if (round.startedAt && !round.endedAt) {
+        round.endedAt = gameEndAt;
+      }
+
+      round.turns.forEach((turn) => {
+        if (!turn.timing.startedAt || turn.timing.endedAt) {
+          return;
+        }
+
+        const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
+        if (latestPause && !latestPause.endedAt) {
+          latestPause.endedAt = gameEndAt;
+        }
+        turn.timing.endedAt = gameEndAt;
+      });
+    });
+  }
 
   return Array.from(roundsByNumber.values())
     .sort((left, right) => left.roundNumber - right.roundNumber)
@@ -248,7 +268,8 @@ const normalizeStatsEligibilityOverrides = (value?: StatsEligibilityOverrides | 
 export const syncDerivedGameState = (game: Game): Game => {
   const orderedTimeEvents = [...game.timeEvents];
   const hasTimeEvents = orderedTimeEvents.length > 0;
-  const rounds = buildRoundsFromTimeEvents(orderedTimeEvents);
+  const endedAt = getFirstGameEndAt(orderedTimeEvents) ?? game.endedAt;
+  const rounds = buildRoundsFromTimeEvents(orderedTimeEvents, endedAt);
   const timestamps = [
     game.createdAt,
     ...game.scoreEvents.map((event) => event.createdAt),
@@ -275,10 +296,6 @@ export const syncDerivedGameState = (game: Game): Game => {
     .filter((value): value is string => Boolean(value))
     .sort((left, right) => left.localeCompare(right));
   const startedAt = startCandidates[0] ?? (hasTimeEvents ? undefined : game.startedAt);
-  const endedAt =
-    getFirstGameEndAt(orderedTimeEvents) ??
-    (hasTimeEvents ? undefined : game.endedAt);
-
   return {
     ...game,
     updatedAt: timestamps[timestamps.length - 1] ?? game.createdAt,
@@ -598,9 +615,9 @@ export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game 
     primaryMission: localGame.primaryMission,
     defenderPlayerId: localGame.defenderPlayerId,
     startingPlayerId: localGame.startingPlayerId,
-    currentPlayerId: localGame.currentPlayerId,
-    startedAt: localGame.startedAt,
-    endedAt: localGame.endedAt,
+    currentPlayerId: baseGame.endedAt ? baseGame.currentPlayerId : localGame.currentPlayerId,
+    startedAt: localGame.startedAt ?? baseGame.startedAt,
+    endedAt: localGame.endedAt ?? baseGame.endedAt,
     timerCorrections: localGame.timerCorrections,
     players: localGame.players
   });

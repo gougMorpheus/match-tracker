@@ -43,7 +43,7 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
-import { shouldAskGameAccessMode } from "../utils/gameAccessMode";
+import { isGameCompletedForDisplay, shouldAskGameAccessMode } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -630,7 +630,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         ? [game.players[1], game.players[0]]
         : game.players;
   const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
-  const isClosed = game.status === "completed";
+  const isClosed = isGameCompletedForDisplay(game);
   const isReadOnly = viewOnlyActive;
   const writeDisabled = isMutating || isReadOnly;
   const canNavigateTurns = !isMutating;
@@ -642,11 +642,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
 
   useEffect(() => {
-    if (!isTimerRunning || timeoutActive || isMutating || viewOnlyActive || game?.status === "completed") {
+    if (!isTimerRunning || timeoutActive || isMutating || viewOnlyActive || isGameCompletedForDisplay(game)) {
       setTimeoutHoldOpen(false);
       clearTimeoutHoldTimer();
     }
-  }, [game?.status, isMutating, isTimerRunning, timeoutActive, viewOnlyActive]);
+  }, [game, isMutating, isTimerRunning, timeoutActive, viewOnlyActive]);
 
   const displayTurn = timerFocusTurn ?? selectedTurn;
   const displayRound =

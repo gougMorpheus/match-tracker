@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { createBaseGame, createCompletedGameFixture } = require("./helpers/gameFixtures.cjs");
 const {
   getGameAccessMode,
+  isGameCompletedForDisplay,
   isGameViewOnlyInState,
   setGameAccessModeInState,
   shouldAskGameAccessMode,
@@ -21,6 +22,24 @@ const runGameAccessModeTests = () => {
   assert.equal(shouldAskGameAccessMode(runningGame, "view"), false);
   assert.equal(shouldAskGameAccessMode(completedGame, null), false);
   assert.equal(shouldOpenGameViewOnly(completedGame, null), true);
+
+  const inconsistentCompletedGame = {
+    ...runningGame,
+    status: "active",
+    endedAt: undefined,
+    timeEvents: [
+      ...runningGame.timeEvents,
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        type: "time",
+        action: "game-end",
+        createdAt: "2026-05-20T21:00:00.000Z"
+      }
+    ]
+  };
+  assert.equal(isGameCompletedForDisplay(inconsistentCompletedGame), true);
+  assert.equal(shouldAskGameAccessMode(inconsistentCompletedGame, null), false);
+  assert.equal(shouldOpenGameViewOnly(inconsistentCompletedGame, null), true);
 
   const viewOnlyModes = setGameAccessModeInState({}, runningGame.id, "view");
   assert.equal(getGameAccessMode(viewOnlyModes, runningGame.id), "view");

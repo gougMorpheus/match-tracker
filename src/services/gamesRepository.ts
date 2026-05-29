@@ -753,12 +753,12 @@ const ensureTurn = (
   return nextTurn;
 };
 
-const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Round[] => {
+const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[], fallbackEndedAt?: string): Round[] => {
   const roundsByNumber = new Map<number, Round>();
   const gameEndAt = timeEvents
     .filter((event) => event.action === "game-end")
     .map((event) => event.createdAt)
-    .sort((left, right) => left.localeCompare(right))[0];
+    .sort((left, right) => left.localeCompare(right))[0] ?? fallbackEndedAt;
 
   timeEvents
     .filter((event) => !gameEndAt || event.createdAt <= gameEndAt || event.action === "game-end")
@@ -851,6 +851,26 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
       turn.timing.endedAt = event.occurred_at;
     }
   });
+
+  if (gameEndAt) {
+    roundsByNumber.forEach((round) => {
+      if (round.startedAt && !round.endedAt) {
+        round.endedAt = gameEndAt;
+      }
+
+      round.turns.forEach((turn) => {
+        if (!turn.timing.startedAt || turn.timing.endedAt) {
+          return;
+        }
+
+        const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
+        if (latestPause && !latestPause.endedAt) {
+          latestPause.endedAt = gameEndAt;
+        }
+        turn.timing.endedAt = gameEndAt;
+      });
+    });
+  }
 
   return Array.from(roundsByNumber.values())
     .sort((left, right) => left.roundNumber - right.roundNumber)
@@ -1009,11 +1029,11 @@ export const mapSupabaseGameToAppGame = (
   const playerTwoId = createPlayerId(row.id, 2);
   const { date, time } = getScheduledDateParts(row.game_date);
   const mappedEvents = mapEventRows(row.id, events);
-  const rounds = buildRoundsFromTimeEvents(row.id, mappedEvents.timeEvents);
   const startingPlayerId = row.starting_player ? getPlayerIdFromSlot(row.id, row.starting_player) : "";
   const defenderPlayerId = row.defender_player ? getPlayerIdFromSlot(row.id, row.defender_player) : "";
   const startedAt = getDerivedStartedAt(row, mappedEvents.timeEvents);
   const endedAt = getDerivedEndedAt(row, mappedEvents.timeEvents);
+  const rounds = buildRoundsFromTimeEvents(row.id, mappedEvents.timeEvents, endedAt);
   const scoreMeta = parseScoreMeta(row.notes);
   const optionsMeta = parseOptionsMeta(row.notes);
   const playerDetachments = parsePlayerMeta(row.notes);
@@ -1144,37 +1164,48 @@ const getWinnerPlayerSlot = (game: Game): 1 | 2 | null => {
   return null;
 };
 
-export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload => ({
-  id: game.id,
-  created_at: normalizeRequiredTimestamp(game.createdAt, getNowIso()),
-  started_at: normalizeRequiredTimestamp(game.startedAt, normalizeRequiredTimestamp(game.createdAt, getNowIso())),
-  ended_at: normalizeOptionalTimestamp(game.endedAt),
-  game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
-  player1_name: game.players[0].name,
-  player1_army: game.players[0].army.name,
-  player1_max_points: game.gamePoints ?? game.players[0].army.maxPoints,
-  player2_name: game.players[1].name,
-  player2_army: game.players[1].army.name,
-  player2_max_points: game.gamePoints ?? game.players[1].army.maxPoints,
-  deployment: game.deployment || null,
-  primary_mission: game.primaryMission || null,
-  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
-  starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
-  winner_player: getWinnerPlayerSlot(game),
-  stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
-  stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
-  timer_corrections: serializeTimerCorrections(game.timerCorrections),
-  notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
-    autoCommandPointOn: game.autoCommandPointOn,
-    autoCommandPointAwards: game.autoCommandPointAwards
-  }, {
-    "player-1": game.players[0].army.detachment,
-    "player-2": game.players[1].army.detachment
-  }, {
-    deployment: game.deployment,
-    primaryMission: game.primaryMission
-  }, game.finishReason)
-});
+const getPersistedGameEndedAt = (game: Game): string | undefined =>
+  game.endedAt ??
+  game.timeEvents
+    .filter((event) => event.action === "game-end")
+    .map((event) => event.createdAt)
+    .sort((left, right) => left.localeCompare(right))[0];
+
+export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload => {
+  const endedAt = getPersistedGameEndedAt(game);
+
+  return {
+    id: game.id,
+    created_at: normalizeRequiredTimestamp(game.createdAt, getNowIso()),
+    started_at: normalizeRequiredTimestamp(game.startedAt, normalizeRequiredTimestamp(game.createdAt, getNowIso())),
+    ended_at: normalizeOptionalTimestamp(endedAt),
+    game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
+    player1_name: game.players[0].name,
+    player1_army: game.players[0].army.name,
+    player1_max_points: game.gamePoints ?? game.players[0].army.maxPoints,
+    player2_name: game.players[1].name,
+    player2_army: game.players[1].army.name,
+    player2_max_points: game.gamePoints ?? game.players[1].army.maxPoints,
+    deployment: game.deployment || null,
+    primary_mission: game.primaryMission || null,
+    defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
+    starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
+    winner_player: endedAt ? getWinnerPlayerSlot(game) : null,
+    stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
+    stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
+    timer_corrections: serializeTimerCorrections(game.timerCorrections),
+    notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
+      autoCommandPointOn: game.autoCommandPointOn,
+      autoCommandPointAwards: game.autoCommandPointAwards
+    }, {
+      "player-1": game.players[0].army.detachment,
+      "player-2": game.players[1].army.detachment
+    }, {
+      deployment: game.deployment,
+      primaryMission: game.primaryMission
+    }, game.finishReason)
+  };
+};
 
 export const createImportedEventPayloads = (persistedGame: Game, importedGame: Game): CreateSupabaseEventPayload[] => {
   const importedPlayerOneId = importedGame.players[0].id;
@@ -1255,36 +1286,40 @@ export const createImportedEventPayloads = (persistedGame: Game, importedGame: G
   return payloads;
 };
 
-export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload => ({
-  id: game.id,
-  created_at: normalizeRequiredTimestamp(game.createdAt, getNowIso()),
-  started_at: normalizeRequiredTimestamp(game.startedAt, normalizeRequiredTimestamp(game.createdAt, getNowIso())),
-  ended_at: normalizeOptionalTimestamp(game.endedAt),
-  game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
-  player1_name: game.players[0].name,
-  player1_army: game.players[0].army.name,
-  player1_max_points: game.gamePoints,
-  player2_name: game.players[1].name,
-  player2_army: game.players[1].army.name,
-  player2_max_points: game.gamePoints,
-  deployment: game.deployment || null,
-  primary_mission: game.primaryMission || null,
-  defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
-  starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
-  winner_player: game.endedAt ? getWinnerPlayerSlot(game) : null,
-  stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
-  stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
-  notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
-    autoCommandPointOn: game.autoCommandPointOn,
-    autoCommandPointAwards: game.autoCommandPointAwards
-  }, {
-    "player-1": game.players[0].army.detachment,
-    "player-2": game.players[1].army.detachment
-  }, {
-    deployment: game.deployment,
-    primaryMission: game.primaryMission
-  }, game.finishReason)
-});
+export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload => {
+  const endedAt = getPersistedGameEndedAt(game);
+
+  return {
+    id: game.id,
+    created_at: normalizeRequiredTimestamp(game.createdAt, getNowIso()),
+    started_at: normalizeRequiredTimestamp(game.startedAt, normalizeRequiredTimestamp(game.createdAt, getNowIso())),
+    ended_at: normalizeOptionalTimestamp(endedAt),
+    game_date: combineScheduledDateTime(game.scheduledDate, game.scheduledTime),
+    player1_name: game.players[0].name,
+    player1_army: game.players[0].army.name,
+    player1_max_points: game.gamePoints,
+    player2_name: game.players[1].name,
+    player2_army: game.players[1].army.name,
+    player2_max_points: game.gamePoints,
+    deployment: game.deployment || null,
+    primary_mission: game.primaryMission || null,
+    defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
+    starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
+    winner_player: endedAt ? getWinnerPlayerSlot(game) : null,
+    stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
+    stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
+    notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
+      autoCommandPointOn: game.autoCommandPointOn,
+      autoCommandPointAwards: game.autoCommandPointAwards
+    }, {
+      "player-1": game.players[0].army.detachment,
+      "player-2": game.players[1].army.detachment
+    }, {
+      deployment: game.deployment,
+      primaryMission: game.primaryMission
+    }, game.finishReason)
+  };
+};
 
 export const createSyncedEventPayloads = (game: Game): CreateSupabaseEventPayload[] => {
   const playerOneId = game.players[0].id;

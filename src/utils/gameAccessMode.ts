@@ -22,12 +22,20 @@ export const isGameViewOnlyInState = (
   gameId: string
 ): boolean => getGameAccessMode(modes, gameId) === "view";
 
+export const isGameCompletedForDisplay = (game: Game | undefined): boolean =>
+  Boolean(
+    game &&
+      (game.status === "completed" ||
+        game.endedAt ||
+        game.timeEvents.some((event) => event.action === "game-end"))
+  );
+
 export const shouldAskGameAccessMode = (
   game: Game | undefined,
   mode: GameAccessMode | null
-): boolean => Boolean(game && game.status === "active" && !mode);
+): boolean => Boolean(game && !isGameCompletedForDisplay(game) && !mode);
 
 export const shouldOpenGameViewOnly = (
   game: Game | undefined,
   mode: GameAccessMode | null
-): boolean => Boolean(game && (game.status === "completed" || mode === "view"));
+): boolean => Boolean(game && (isGameCompletedForDisplay(game) || mode === "view"));
