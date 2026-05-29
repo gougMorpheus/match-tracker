@@ -25,6 +25,8 @@ const averageOrNull = (values: number[]): number | null =>
 const MIN_STATS_TURN_DURATION_MS = 10 * 1000;
 const getTurnKey = (roundNumber?: number, turnNumber?: number): string | null =>
   roundNumber && turnNumber ? `${roundNumber}:${turnNumber}` : null;
+const isValidTurnShape = (turn: Turn): boolean =>
+  Number.isFinite(turn.roundNumber) && Number.isFinite(turn.turnNumber) && Boolean(turn.playerId);
 
 const hasTurnScoreEvents = (game: Game, turn: Turn): boolean =>
   game.scoreEvents.some(
@@ -251,13 +253,13 @@ const getStatusFromTurns = (turns: StatsEligibilityTurnDecision[], area: Exclude
   if (!turns.length) {
     return "excluded" as const;
   }
-  const counted = turns.filter((turn) => turn.areas[area][key]).length;
+  const counted = turns.filter((turn) => turn.areas[area]?.[key]).length;
   return counted === 0 ? "excluded" as const : counted === turns.length ? "included" as const : "partial" as const;
 };
 
 export const createStatsEligibilityReport = (game: Game): StatsEligibilityReport => {
-  const turns: StatsEligibilityTurnDecision[] = game.rounds.flatMap((round) =>
-    round.turns.map((turn) => {
+  const turns: StatsEligibilityTurnDecision[] = (game.rounds ?? []).flatMap((round) =>
+    (round.turns ?? []).filter(isValidTurnShape).map((turn) => {
       const playerName = game.players.find((player) => player.id === turn.playerId)?.name ?? "-";
       const areas = Object.fromEntries(
         STATS_TURN_AREAS.map((area) => {
@@ -308,8 +310,8 @@ export const createStatsEligibilityReport = (game: Game): StatsEligibilityReport
         ];
       }
 
-      const countedTurns = turns.filter((turn) => turn.areas[area].effective).map((turn) => turn.label);
-      const excludedTurns = turns.filter((turn) => !turn.areas[area].effective).map((turn) => turn.label);
+      const countedTurns = turns.filter((turn) => turn.areas[area]?.effective).map((turn) => turn.label);
+      const excludedTurns = turns.filter((turn) => !turn.areas[area]?.effective).map((turn) => turn.label);
       return [
         area,
         {

@@ -22,6 +22,7 @@ const {
   getSetupDurationMs,
   getTurnDurationMs,
   getTurnRecords,
+  isTurnActive,
   isTurnPaused,
   prepareGamesForStats
 } = require("../.test-dist/utils/gameCalculations.js");
@@ -843,6 +844,132 @@ const runGameCalculationsTests = () => {
     assert.equal(turn.timing.endedAt, "2026-04-20T18:10:00.000Z");
     assert.equal(turn.timing.pauses.length, 0);
     assert.equal(getTurnDurationMs(turn, game), 10 * 60 * 1000);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-corrupt-beta-pattern" });
+    const [playerOne, playerTwo] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "setup-end", createdAt: "2026-04-20T18:05:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:05:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:05:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:15:00.000Z"
+      },
+      { action: "game-start", createdAt: "2026-04-20T18:20:00.000Z" },
+      { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T18:35:00.000Z" },
+      { action: "round-start", roundNumber: 2, createdAt: "2026-04-20T18:35:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 2,
+        createdAt: "2026-04-20T18:50:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 2,
+        createdAt: "2026-04-20T19:00:00.000Z"
+      },
+      {
+        action: "turn-pause",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:05:00.000Z"
+      },
+      {
+        action: "turn-resume",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:10:00.000Z"
+      },
+      { action: "round-start", roundNumber: 3, createdAt: "2026-04-20T19:15:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 3,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:15:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 3,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:30:00.000Z"
+      },
+      { action: "round-start", roundNumber: 4, createdAt: "2026-04-20T19:40:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 4,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:40:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerTwo.id,
+        roundNumber: 4,
+        turnNumber: 1,
+        createdAt: "2026-04-20T19:55:00.000Z"
+      },
+      { action: "round-start", roundNumber: 5, createdAt: "2026-04-20T20:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 5,
+        turnNumber: 2,
+        createdAt: "2026-04-20T20:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerTwo.id,
+        roundNumber: 5,
+        turnNumber: 2,
+        createdAt: "2026-04-20T20:15:00.000Z"
+      },
+      { action: "round-end", roundNumber: 5, createdAt: "2026-04-20T20:15:00.000Z" },
+      { action: "game-end", createdAt: "2026-04-20T20:15:00.000Z" }
+    ]);
+    game = appendLocalScoreEvent(game, {
+      playerId: playerOne.id,
+      scoreType: "primary",
+      value: 5,
+      roundNumber: 3,
+      turnNumber: 1,
+      createdAt: "2026-04-20T19:20:00.000Z"
+    });
+    game = appendLocalCommandPointEvent(game, {
+      playerId: playerTwo.id,
+      cpType: "spent",
+      value: 1,
+      roundNumber: 4,
+      turnNumber: 1,
+      createdAt: "2026-04-20T19:45:00.000Z"
+    });
+
+    const report = createStatsEligibilityReport(game);
+    assert.equal(game.status, "completed");
+    assert.equal(game.startedAt, "2026-04-20T18:05:00.000Z");
+    assert.equal(isTurnActive(game), false);
+    assert.equal(report.areas.scoring.effective !== "excluded", true);
+    assert.equal(report.turns.some((turn) => turn.label === "R4 Z1"), true);
+    assert.equal(Number.isFinite(getGameDurationMs(game)), true);
   }
 
   {

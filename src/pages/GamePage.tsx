@@ -311,7 +311,21 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
   const statsEligibilityReport = useMemo(
-    () => (game ? createStatsEligibilityReport(game) : null),
+    () => {
+      if (!game) {
+        return null;
+      }
+
+      try {
+        return createStatsEligibilityReport(game);
+      } catch (error) {
+        console.error("[stats-eligibility] report failed", {
+          gameId: game.id,
+          error
+        });
+        return null;
+      }
+    },
     [game]
   );
   const timeoutActive = game ? isTimeoutActive(game) : false;
@@ -1822,7 +1836,16 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                         })}
                       </div>
                     </section>
-                  ) : null}
+                  ) : (
+                    <section className="card stack stats-eligibility-card">
+                      <div className="list-row">
+                        <h2>Wertung Statistik</h2>
+                      </div>
+                      <p className="muted-copy">
+                        Wertung konnte fuer dieses Spiel nicht vollstaendig berechnet werden. Game-ID: {game.id}
+                      </p>
+                    </section>
+                  )}
 
                   <div className="button-row button-row--compact">
                     <button type="submit" className="primary-button compact-button" disabled={writeDisabled}>

@@ -11,6 +11,7 @@ const getTurnCorrectionKey = (roundNumber, turnNumber) => `${roundNumber}:${turn
 const averageOrNull = (values) => values.length ? sumValues(values.map((value) => ({ value }))) / values.length : null;
 const MIN_STATS_TURN_DURATION_MS = 10 * 1000;
 const getTurnKey = (roundNumber, turnNumber) => roundNumber && turnNumber ? `${roundNumber}:${turnNumber}` : null;
+const isValidTurnShape = (turn) => Number.isFinite(turn.roundNumber) && Number.isFinite(turn.turnNumber) && Boolean(turn.playerId);
 const hasTurnScoreEvents = (game, turn) => game.scoreEvents.some((event) => event.playerId === turn.playerId &&
     event.roundNumber === turn.roundNumber &&
     event.turnNumber === turn.turnNumber);
@@ -124,11 +125,11 @@ const getStatusFromTurns = (turns, area, key) => {
     if (!turns.length) {
         return "excluded";
     }
-    const counted = turns.filter((turn) => turn.areas[area][key]).length;
+    const counted = turns.filter((turn) => turn.areas[area]?.[key]).length;
     return counted === 0 ? "excluded" : counted === turns.length ? "included" : "partial";
 };
 const createStatsEligibilityReport = (game) => {
-    const turns = game.rounds.flatMap((round) => round.turns.map((turn) => {
+    const turns = (game.rounds ?? []).flatMap((round) => (round.turns ?? []).filter(isValidTurnShape).map((turn) => {
         const playerName = game.players.find((player) => player.id === turn.playerId)?.name ?? "-";
         const areas = Object.fromEntries(STATS_TURN_AREAS.map((area) => {
             const mode = getTurnOverrideMode(game, area, turn);
@@ -172,8 +173,8 @@ const createStatsEligibilityReport = (game) => {
                 }
             ];
         }
-        const countedTurns = turns.filter((turn) => turn.areas[area].effective).map((turn) => turn.label);
-        const excludedTurns = turns.filter((turn) => !turn.areas[area].effective).map((turn) => turn.label);
+        const countedTurns = turns.filter((turn) => turn.areas[area]?.effective).map((turn) => turn.label);
+        const excludedTurns = turns.filter((turn) => !turn.areas[area]?.effective).map((turn) => turn.label);
         return [
             area,
             {
