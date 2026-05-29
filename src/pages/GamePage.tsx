@@ -288,6 +288,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const redoHoldTriggeredRef = useRef(false);
   const timeoutHoldTimerRef = useRef<number | null>(null);
   const timeoutHoldTriggeredRef = useRef(false);
+  const advanceInFlightRef = useRef(false);
   const game = getGame(gameId);
   const accessMode = getGameAccessMode(gameId);
   const viewOnlyActive = game ? isGameViewOnly(game.id) : false;
@@ -1070,62 +1071,67 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleAdvance = async () => {
-    if (isMutating) {
+    if (isMutating || advanceInFlightRef.current || isClosed) {
       return;
     }
 
-    if (needsStartingPlayerBeforeFirstTurn) {
-      setStartingPlayerPromptSlot("");
-      setStartingPlayerPromptOpen(true);
-      return;
-    }
-
-    if (isSetupSelected) {
-      const firstTurn = allTurns[0];
-      if (firstTurn) {
-        if (!isReadOnly && isTimerRunning) {
-          await advanceGame(game.id, SETUP_TURN_REF, true);
-        }
-        setSelectedTurnKey(firstTurn.key);
+    advanceInFlightRef.current = true;
+    try {
+      if (needsStartingPlayerBeforeFirstTurn) {
+        setStartingPlayerPromptSlot("");
+        setStartingPlayerPromptOpen(true);
+        return;
       }
-      return;
-    }
 
-    if (canGoForwardToExistingTurn) {
-      const nextTurn = allTurns[selectedTurnIndex + 1];
-      if (nextTurn) {
-        if (!isReadOnly && isTimerRunning) {
-          await advanceGame(
-            game.id,
-            selectedTurn
-              ? {
-                  roundNumber: selectedTurn.roundNumber,
-                  turnNumber: selectedTurn.turnNumber
-                }
-              : undefined,
-            true
-          );
-        }
-        setSelectedTurnKey(nextTurn.key);
-      }
-      return;
-    }
-
-    if (isReadOnly) {
-      return;
-    }
-
-    snapToLatestTurnRef.current = true;
-    await advanceGame(
-      game.id,
-      selectedTurn
-        ? {
-            roundNumber: selectedTurn.roundNumber,
-            turnNumber: selectedTurn.turnNumber
+      if (isSetupSelected) {
+        const firstTurn = allTurns[0];
+        if (firstTurn) {
+          if (!isReadOnly && isTimerRunning) {
+            await advanceGame(game.id, SETUP_TURN_REF, true);
           }
-        : undefined,
-      isTimerRunning
-    );
+          setSelectedTurnKey(firstTurn.key);
+        }
+        return;
+      }
+
+      if (canGoForwardToExistingTurn) {
+        const nextTurn = allTurns[selectedTurnIndex + 1];
+        if (nextTurn) {
+          if (!isReadOnly && isTimerRunning) {
+            await advanceGame(
+              game.id,
+              selectedTurn
+                ? {
+                    roundNumber: selectedTurn.roundNumber,
+                    turnNumber: selectedTurn.turnNumber
+                  }
+                : undefined,
+              true
+            );
+          }
+          setSelectedTurnKey(nextTurn.key);
+        }
+        return;
+      }
+
+      if (isReadOnly) {
+        return;
+      }
+
+      snapToLatestTurnRef.current = true;
+      await advanceGame(
+        game.id,
+        selectedTurn
+          ? {
+              roundNumber: selectedTurn.roundNumber,
+              turnNumber: selectedTurn.turnNumber
+            }
+          : undefined,
+        isTimerRunning
+      );
+    } finally {
+      advanceInFlightRef.current = false;
+    }
   };
 
   const handleGoBack = async () => {

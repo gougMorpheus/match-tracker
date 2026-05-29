@@ -304,6 +304,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const queueRef = useRef(syncQueue);
   const gameAccessModesRef = useRef<GameAccessModeState>({});
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
+  const mutationLocksRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<number | null>(null);
   const resumeSyncTimerRef = useRef<number | null>(null);
   const retrySyncTimerRef = useRef<number | null>(null);
@@ -1012,6 +1013,25 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     }
   }, []);
 
+  const runLockedMutation = useCallback(async <T,>(
+    lockKey: string,
+    operation: () => Promise<T>
+  ): Promise<T | undefined> => {
+    if (mutationLocksRef.current.has(lockKey)) {
+      if (import.meta.env.DEV) {
+        console.warn("[mutation-lock] skipped duplicate mutation", { lockKey });
+      }
+      return undefined;
+    }
+
+    mutationLocksRef.current.add(lockKey);
+    try {
+      return await runMutation(operation);
+    } finally {
+      mutationLocksRef.current.delete(lockKey);
+    }
+  }, [runMutation]);
+
   const getUndoActionLabel = useCallback(
     (gameId: string) => {
       const undoStack = historyStacksByGameId[gameId]?.undo;
@@ -1403,13 +1423,18 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const advanceGame = useCallback(
     async (gameId: string, turnRef?: TurnRef, keepTimerRunning = false, recordHistory = true) =>
-      runMutation(async () => {
+      runLockedMutation(`advance:${gameId}`, async () => {
         if (shouldBlockGameWrite(gameId, "advanceGame")) {
           return;
         }
 
         const game = getGame(gameId);
-        if (!game || game.status === "completed") {
+        if (
+          !game ||
+          game.status === "completed" ||
+          game.endedAt ||
+          game.timeEvents.some((event) => event.action === "game-end")
+        ) {
           return;
         }
 
@@ -1872,7 +1897,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           );
         void flushSyncQueue();
       }),
-    [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runMutation, shouldBlockGameWrite]
+    [enqueueTimeEvents, flushSyncQueue, getGame, getNextTurnByRef, getTurnByRef, runLockedMutation, shouldBlockGameWrite]
   );
 
   const rewindLastTurn = useCallback(
@@ -2320,7 +2345,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const finishGame = useCallback(
     async (gameId: string, finishReason: GameFinishReason = "completed") =>
-      runMutation(async () => {
+      runLockedMutation(`finish:${gameId}`, async () => {
         if (shouldBlockGameWrite(gameId, "finishGame")) {
           return;
         }
@@ -2328,6 +2353,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const game = getGame(gameId);
         if (!game) {
           throw new Error("Spiel nicht gefunden.");
+        }
+        if (game.status === "completed" || game.endedAt || game.timeEvents.some((event) => event.action === "game-end")) {
+          return;
         }
 
         const latestRound = getLatestRound(game);
@@ -2345,7 +2373,29 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           });
         }
 
-        if (latestTurn && latestTurn.timing.startedAt && !latestTurn.timing.endedAt) {
+        game.rounds
+          .flatMap((round) => round.turns)
+          .filter((turn) => turn.timing.startedAt && !turn.timing.endedAt)
+          .forEach((turn) => {
+            eventsToAdd.push({
+              playerId: turn.playerId,
+              roundNumber: turn.roundNumber,
+              turnNumber: turn.turnNumber,
+              action: "turn-end"
+            });
+          });
+
+        if (
+          latestTurn &&
+          latestTurn.timing.startedAt &&
+          !latestTurn.timing.endedAt &&
+          !eventsToAdd.some(
+            (event) =>
+              event.action === "turn-end" &&
+              event.roundNumber === latestTurn.roundNumber &&
+              event.turnNumber === latestTurn.turnNumber
+          )
+        ) {
           eventsToAdd.push({
             playerId: latestTurn.playerId,
             roundNumber: latestTurn.roundNumber,
@@ -2374,7 +2424,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         commitGameSnapshot("Spiel beenden", game, nextGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation, shouldBlockGameWrite]
+    [commitGameSnapshot, flushSyncQueue, getGame, runLockedMutation, shouldBlockGameWrite]
   );
 
   const deleteGame = useCallback(

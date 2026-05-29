@@ -712,6 +712,89 @@ const runGameCalculationsTests = () => {
   }
 
   {
+    let game = createBaseGame({ id: "game-events-after-end" });
+    const [playerOne, playerTwo] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:10:00.000Z"
+      },
+      { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T18:10:00.000Z" },
+      { action: "game-end", createdAt: "2026-04-20T18:10:00.000Z" },
+      { action: "round-start", roundNumber: 2, createdAt: "2026-04-20T18:11:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:11:00.000Z"
+      },
+      {
+        action: "turn-pause",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:12:00.000Z"
+      },
+      {
+        action: "turn-resume",
+        playerId: playerTwo.id,
+        roundNumber: 2,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:13:00.000Z"
+      }
+    ]);
+
+    assert.equal(game.status, "completed");
+    assert.equal(game.rounds.length, 1);
+    assert.equal(game.rounds[0].roundNumber, 1);
+    assert.equal(game.timeEvents.some((event) => event.roundNumber === 2), true);
+    assert.equal(getPlayerTurnDurationTotalMs(game, playerTwo.id), 0);
+    assert.equal(createStatsOverview([game]).averageDurationMs, 10 * 60 * 1000);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-inconsistent-timer-events" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-pause",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:02:00.000Z"
+      },
+      {
+        action: "turn-resume",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:03:00.000Z"
+      },
+      { action: "game-end", createdAt: "2026-04-20T18:04:00.000Z" }
+    ]);
+
+    assert.equal(game.status, "completed");
+    assert.equal(game.rounds.length, 1);
+    assert.equal(getPlayerTurnDurationTotalMs(game, playerOne.id), 0);
+  }
+
+  {
     const baseGame = createCompletedGameFixture("game-overlay-base");
     const localGame = {
       ...baseGame,

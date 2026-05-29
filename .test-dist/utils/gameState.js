@@ -34,9 +34,17 @@ const ensureTurn = (round, turnNumber, playerId) => {
     round.turns.push(nextTurn);
     return nextTurn;
 };
+const getFirstGameEndAt = (timeEvents) => timeEvents
+    .filter((event) => event.action === "game-end")
+    .map((event) => event.createdAt)
+    .sort((left, right) => left.localeCompare(right))[0];
 const buildRoundsFromTimeEvents = (timeEvents) => {
     const roundsByNumber = new Map();
+    const gameEndAt = getFirstGameEndAt(timeEvents);
     timeEvents.forEach((event) => {
+        if (gameEndAt && event.createdAt > gameEndAt && event.action !== "game-end") {
+            return;
+        }
         if (!event.roundNumber) {
             return;
         }
@@ -199,9 +207,7 @@ const syncDerivedGameState = (game) => {
         orderedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
         orderedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
         (hasTimeEvents ? undefined : game.startedAt);
-    const endedAt = [...orderedTimeEvents]
-        .reverse()
-        .find((event) => event.action === "game-end")?.createdAt ??
+    const endedAt = getFirstGameEndAt(orderedTimeEvents) ??
         (hasTimeEvents ? undefined : game.endedAt);
     return {
         ...game,

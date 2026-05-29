@@ -755,8 +755,13 @@ const ensureTurn = (
 
 const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Round[] => {
   const roundsByNumber = new Map<number, Round>();
+  const gameEndAt = timeEvents
+    .filter((event) => event.action === "game-end")
+    .map((event) => event.createdAt)
+    .sort((left, right) => left.localeCompare(right))[0];
 
   timeEvents
+    .filter((event) => !gameEndAt || event.createdAt <= gameEndAt || event.action === "game-end")
     .map((event) => ({
       id: event.id,
       created_at: event.createdAt,
@@ -875,7 +880,10 @@ const getDerivedStartedAt = (row: SupabaseGameRecord, timeEvents: TimeEvent[]): 
 };
 
 const getDerivedEndedAt = (row: SupabaseGameRecord, timeEvents: TimeEvent[]): string | undefined =>
-  timeEvents.find((event) => event.action === "game-end")?.createdAt ?? row.ended_at ?? undefined;
+  timeEvents
+    .filter((event) => event.action === "game-end")
+    .map((event) => event.createdAt)
+    .sort((left, right) => left.localeCompare(right))[0] ?? row.ended_at ?? undefined;
 
 const getUpdatedAt = (row: SupabaseGameRecord, events: SupabaseEventRecord[]): string => {
   const timestamps = [row.created_at, row.started_at, row.ended_at ?? undefined, ...events.map((event) => event.occurred_at)]
