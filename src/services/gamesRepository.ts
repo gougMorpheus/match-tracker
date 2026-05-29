@@ -762,6 +762,7 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
 
   timeEvents
     .filter((event) => !gameEndAt || event.createdAt <= gameEndAt || event.action === "game-end")
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .map((event) => ({
       id: event.id,
       created_at: event.createdAt,
@@ -798,15 +799,8 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
     const turn = ensureTurn(round, event.turn_number, playerId);
     if (event.event_type === "turn-start") {
       turn.playerId = playerId;
-      if (round.endedAt && round.endedAt <= event.occurred_at) {
-        round.endedAt = undefined;
-      }
-      if (turn.timing.endedAt && turn.timing.endedAt <= event.occurred_at) {
-        turn.timing.pauses.push({
-          startedAt: turn.timing.endedAt,
-          endedAt: event.occurred_at
-        });
-        turn.timing.endedAt = undefined;
+      if (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt) {
+        return;
       }
       if (!turn.timing.startedAt) {
         turn.timing.startedAt = event.occurred_at;
@@ -821,24 +815,21 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
 
     if (event.event_type === "turn-resume") {
       turn.playerId = playerId;
-      if (round.endedAt && round.endedAt <= event.occurred_at) {
-        round.endedAt = undefined;
+      if (!turn.timing.startedAt || (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt)) {
+        return;
       }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-      if (latestPause && !latestPause.endedAt) {
+      if (latestPause && !latestPause.endedAt && event.occurred_at >= latestPause.startedAt) {
         latestPause.endedAt = event.occurred_at;
-      } else if (turn.timing.endedAt && turn.timing.endedAt <= event.occurred_at) {
-        turn.timing.pauses.push({
-          startedAt: turn.timing.endedAt,
-          endedAt: event.occurred_at
-        });
-        turn.timing.endedAt = undefined;
       }
       return;
     }
 
     if (event.event_type === "turn-pause") {
       turn.playerId = playerId;
+      if (!turn.timing.startedAt || (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt)) {
+        return;
+      }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
       if (!latestPause || latestPause.endedAt) {
         turn.timing.pauses.push({
@@ -850,6 +841,9 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
 
     if (event.event_type === "turn-end") {
       turn.playerId = playerId;
+      if (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt) {
+        return;
+      }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
       if (latestPause && !latestPause.endedAt) {
         latestPause.endedAt = event.occurred_at;
@@ -867,10 +861,21 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[]): Rou
 };
 
 const getDerivedStartedAt = (row: SupabaseGameRecord, timeEvents: TimeEvent[]): string | undefined => {
-  const explicitStart =
-    timeEvents.find((event) => event.action === "game-start")?.createdAt ??
-    timeEvents.find((event) => event.action === "setup-start")?.createdAt ??
-    timeEvents.find((event) => event.action === "round-start")?.createdAt;
+  const explicitStart = [
+    row.started_at,
+    ...timeEvents
+      .filter(
+        (event) =>
+          event.action === "game-start" ||
+          event.action === "setup-start" ||
+          event.action === "setup-end" ||
+          event.action === "round-start" ||
+          event.action === "turn-start"
+      )
+      .map((event) => event.createdAt)
+  ]
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => left.localeCompare(right))[0];
 
   if (explicitStart) {
     return explicitStart;

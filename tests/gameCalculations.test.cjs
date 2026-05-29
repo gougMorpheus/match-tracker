@@ -12,6 +12,7 @@ const {
   filterGames,
   getCurrentRoundNumber,
   getCountedRounds,
+  getGameDurationMs,
   getPlayerCommandPoints,
   getPlayerCommandPointsSpent,
   getPlayerPrimaryTotal,
@@ -764,6 +765,84 @@ const runGameCalculationsTests = () => {
     assert.equal(game.timeEvents.some((event) => event.roundNumber === 2), true);
     assert.equal(getPlayerTurnDurationTotalMs(game, playerTwo.id), 0);
     assert.equal(createStatsOverview([game]).averageDurationMs, 10 * 60 * 1000);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-late-game-start" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "setup-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "setup-end", createdAt: "2026-04-20T18:05:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:05:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:05:00.000Z"
+      },
+      { action: "game-start", createdAt: "2026-04-20T18:07:00.000Z" },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:15:00.000Z"
+      },
+      { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T18:15:00.000Z" },
+      { action: "game-end", createdAt: "2026-04-20T18:15:00.000Z" }
+    ]);
+
+    assert.equal(game.status, "completed");
+    assert.equal(game.startedAt, "2026-04-20T18:00:00.000Z");
+    assert.equal(getGameDurationMs(game), 15 * 60 * 1000);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-pause-resume-after-turn-end" });
+    const [playerOne] = game.players;
+
+    game = appendLocalTimeEvents(game, [
+      { action: "game-start", createdAt: "2026-04-20T18:00:00.000Z" },
+      { action: "round-start", roundNumber: 1, createdAt: "2026-04-20T18:00:00.000Z" },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:00:00.000Z"
+      },
+      {
+        action: "turn-end",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:10:00.000Z"
+      },
+      {
+        action: "turn-pause",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:12:00.000Z"
+      },
+      {
+        action: "turn-resume",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:20:00.000Z"
+      },
+      { action: "round-end", roundNumber: 1, createdAt: "2026-04-20T18:10:00.000Z" },
+      { action: "game-end", createdAt: "2026-04-20T18:20:00.000Z" }
+    ]);
+
+    const turn = game.rounds[0]?.turns[0];
+    assert.ok(turn);
+    assert.equal(turn.timing.endedAt, "2026-04-20T18:10:00.000Z");
+    assert.equal(turn.timing.pauses.length, 0);
+    assert.equal(getTurnDurationMs(turn, game), 10 * 60 * 1000);
   }
 
   {

@@ -67,7 +67,7 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
   const roundsByNumber = new Map<number, Round>();
   const gameEndAt = getFirstGameEndAt(timeEvents);
 
-  timeEvents.forEach((event) => {
+  [...timeEvents].sort((left, right) => left.createdAt.localeCompare(right.createdAt)).forEach((event) => {
     if (gameEndAt && event.createdAt > gameEndAt && event.action !== "game-end") {
       return;
     }
@@ -94,15 +94,8 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
     const turn = ensureTurn(round, event.turnNumber, event.playerId);
     if (event.action === "turn-start") {
       turn.playerId = event.playerId;
-      if (round.endedAt && round.endedAt <= event.createdAt) {
-        round.endedAt = undefined;
-      }
-      if (turn.timing.endedAt && turn.timing.endedAt <= event.createdAt) {
-        turn.timing.pauses.push({
-          startedAt: turn.timing.endedAt,
-          endedAt: event.createdAt
-        });
-        turn.timing.endedAt = undefined;
+      if (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt) {
+        return;
       }
       if (!turn.timing.startedAt) {
         turn.timing.startedAt = event.createdAt;
@@ -117,24 +110,21 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
 
     if (event.action === "turn-resume") {
       turn.playerId = event.playerId;
-      if (round.endedAt && round.endedAt <= event.createdAt) {
-        round.endedAt = undefined;
+      if (!turn.timing.startedAt || (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt)) {
+        return;
       }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-      if (latestPause && !latestPause.endedAt) {
+      if (latestPause && !latestPause.endedAt && event.createdAt >= latestPause.startedAt) {
         latestPause.endedAt = event.createdAt;
-      } else if (turn.timing.endedAt && turn.timing.endedAt <= event.createdAt) {
-        turn.timing.pauses.push({
-          startedAt: turn.timing.endedAt,
-          endedAt: event.createdAt
-        });
-        turn.timing.endedAt = undefined;
       }
       return;
     }
 
     if (event.action === "turn-pause") {
       turn.playerId = event.playerId;
+      if (!turn.timing.startedAt || (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt)) {
+        return;
+      }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
       if (!latestPause || latestPause.endedAt) {
         turn.timing.pauses.push({
@@ -146,6 +136,9 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[]): Round[] => {
 
     if (event.action === "turn-end") {
       turn.playerId = event.playerId;
+      if (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt) {
+        return;
+      }
       const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
       if (latestPause && !latestPause.endedAt) {
         latestPause.endedAt = event.createdAt;
@@ -263,11 +256,25 @@ export const syncDerivedGameState = (game: Game): Game => {
     ...game.noteEvents.map((event) => event.createdAt),
     ...orderedTimeEvents.map((event) => event.createdAt)
   ].sort((left, right) => left.localeCompare(right));
-  const startedAt =
-    orderedTimeEvents.find((event) => event.action === "game-start")?.createdAt ??
-    orderedTimeEvents.find((event) => event.action === "setup-start")?.createdAt ??
-    orderedTimeEvents.find((event) => event.action === "round-start")?.createdAt ??
-    (hasTimeEvents ? undefined : game.startedAt);
+  const startCandidates = [
+    game.startedAt,
+    ...game.scoreEvents.map((event) => event.createdAt),
+    ...game.commandPointEvents.map((event) => event.createdAt),
+    ...game.noteEvents.map((event) => event.createdAt),
+    ...orderedTimeEvents
+      .filter(
+        (event) =>
+          event.action === "game-start" ||
+          event.action === "setup-start" ||
+          event.action === "setup-end" ||
+          event.action === "round-start" ||
+          event.action === "turn-start"
+      )
+      .map((event) => event.createdAt)
+  ]
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => left.localeCompare(right));
+  const startedAt = startCandidates[0] ?? (hasTimeEvents ? undefined : game.startedAt);
   const endedAt =
     getFirstGameEndAt(orderedTimeEvents) ??
     (hasTimeEvents ? undefined : game.endedAt);
