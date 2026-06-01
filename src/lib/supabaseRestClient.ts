@@ -64,6 +64,8 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
   private includeRepresentation = false;
   private expectSingle = false;
   private upsertOptions: UpsertOptions | null = null;
+  private rangeFrom: number | null = null;
+  private rangeTo: number | null = null;
 
   constructor(
     private readonly baseUrl: string,
@@ -116,6 +118,12 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
     return this;
   }
 
+  range(from: number, to: number) {
+    this.rangeFrom = from;
+    this.rangeTo = to;
+    return this;
+  }
+
   single() {
     this.expectSingle = true;
     return this;
@@ -157,6 +165,11 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
       url.searchParams.set("order", `${existing},${orderValue}`);
     });
 
+    if (this.rangeFrom !== null && this.rangeTo !== null) {
+      url.searchParams.set("offset", String(this.rangeFrom));
+      url.searchParams.set("limit", String(Math.max(this.rangeTo - this.rangeFrom + 1, 0)));
+    }
+
     const preferValues: string[] = [];
     if (this.includeRepresentation) {
       preferValues.push("return=representation");
@@ -172,6 +185,10 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
 
     if (this.body !== null) {
       headers.set("Content-Type", "application/json");
+    }
+    if (this.rangeFrom !== null && this.rangeTo !== null) {
+      headers.set("Range-Unit", "items");
+      headers.set("Range", `${this.rangeFrom}-${this.rangeTo}`);
     }
     if (preferValues.length) {
       headers.set("Prefer", preferValues.join(","));

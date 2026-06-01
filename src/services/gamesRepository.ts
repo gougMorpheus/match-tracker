@@ -1402,18 +1402,42 @@ const fetchEventsForGameIds = async (gameIds: string[]): Promise<SupabaseEventRe
   }
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("events")
-    .select("*")
-    .in("game_id", gameIds)
-    .order("occurred_at", { ascending: true })
-    .order("created_at", { ascending: true });
+  const pageSize = 100;
+  const events: SupabaseEventRecord[] = [];
 
-  if (error) {
-    throw new Error(`Events konnten nicht geladen werden: ${error.message}`);
+  for (let page = 0; ; page += 1) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .in("game_id", gameIds)
+      .order("occurred_at", { ascending: true })
+      .order("created_at", { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Events konnten nicht geladen werden: ${error.message}`);
+    }
+
+    const pageEvents = (data ?? []) as SupabaseEventRecord[];
+    events.push(...pageEvents);
+
+    if (import.meta.env.DEV) {
+      console.debug("[supabase-events] fetched page", {
+        gameCount: gameIds.length,
+        page,
+        pageSize: pageEvents.length,
+        total: events.length
+      });
+    }
+
+    if (pageEvents.length < pageSize) {
+      break;
+    }
   }
 
-  return (data ?? []) as SupabaseEventRecord[];
+  return events;
 };
 
 export const gamesRepository = {
