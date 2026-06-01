@@ -5,6 +5,12 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-06-01
 
+### Bugfix: Wiedereroeffnen gegen Sync-Rueckschritt abgesichert
+
+- Fehlerbild: Geschlossene Spiele liessen sich teils wiedereroeffnen, wurden danach aber durch Sync-Fehler oder einen Remote-Pull wieder als geschlossen angezeigt.
+- Ursache: Wiedereroeffnen bestand aus mehreren indirekten Queue-Aenderungen (`game-end` loeschen und Game-Snapshot auf active setzen). Solange remote noch `game-end`/`ended_at` sichtbar war, konnte der Completed-Zustand beim Pull wieder gewinnen.
+- Fix: Wiedereroeffnen ist jetzt eine explizite Sync-Queue-Operation `reopen-game`. Pending Reopen gewinnt beim lokalen Remote-Merge, loescht remote zuerst das `game-end` Event und schreibt danach den aktiven Game-Snapshot.
+
 ### Stabilisierung: Fehlendes `game-start` defensiv nachtragen
 
 - Fehlerbild: In Bestandsdaten konnte `game-start` deutlich spaeter als bereits vorhandene Zeit-/Score-/CP-Events liegen.

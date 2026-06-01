@@ -20,6 +20,10 @@ export type SyncQueueItem =
       type: "delete-game";
     })
   | (SyncQueueItemBase & {
+      type: "reopen-game";
+      gameEndEventId?: string;
+    })
+  | (SyncQueueItemBase & {
       type: "upsert-event";
       eventId: string;
     })
@@ -82,6 +86,10 @@ const isSyncQueueItem = (item: unknown): item is SyncQueueItem => {
     return true;
   }
 
+  if (candidate.type === "reopen-game") {
+    return !("gameEndEventId" in candidate) || typeof candidate.gameEndEventId === "string";
+  }
+
   if (
     (candidate.type === "upsert-event" || candidate.type === "delete-event") &&
     typeof candidate.eventId === "string"
@@ -115,6 +123,25 @@ export const enqueueSyncQueueItem = (
 ): SyncQueueItem[] => {
   if (item.type === "delete-game") {
     return [...queue.filter((candidate) => candidate.gameId !== item.gameId), item];
+  }
+
+  if (item.type === "reopen-game") {
+    return [
+      item,
+      ...queue.filter(
+        (candidate) =>
+          candidate.gameId !== item.gameId ||
+          (
+            candidate.type !== "upsert-game" &&
+            candidate.type !== "reopen-game" &&
+            !(
+              candidate.type === "delete-event" &&
+              item.gameEndEventId &&
+              candidate.eventId === item.gameEndEventId
+            )
+          )
+      )
+    ];
   }
 
   if (item.type === "upsert-game") {
@@ -182,6 +209,18 @@ export const createGameSyncQueueItem = (
   type,
   gameId,
   createdAt
+});
+
+export const createReopenGameSyncQueueItem = (
+  gameId: string,
+  createdAt: string,
+  gameEndEventId?: string
+): SyncQueueItem => ({
+  id: createId("reopen-game"),
+  type: "reopen-game",
+  gameId,
+  createdAt,
+  gameEndEventId
 });
 
 export const createEventSyncQueueItem = (

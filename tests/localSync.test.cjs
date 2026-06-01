@@ -23,6 +23,7 @@ const runLocalSyncTests = () => {
   const {
     createEventSyncQueueItem,
     createGameSyncQueueItem,
+    createReopenGameSyncQueueItem,
     enqueueSyncQueueItem,
     loadCachedGames,
     loadSyncQueue,
@@ -70,6 +71,22 @@ const runLocalSyncTests = () => {
   );
   assert.equal(duplicateEventQueue.length, 1);
   assert.equal(duplicateEventQueue[0].id, firstEventWrite.id);
+
+  const pendingGameUpsert = createGameSyncQueueItem("upsert-game", game.id, "2026-05-20T12:00:02.000Z");
+  const pendingGameEndDelete = createEventSyncQueueItem(
+    "delete-event",
+    game.id,
+    "game-end-event",
+    "2026-05-20T12:00:03.000Z"
+  );
+  const reopenQueue = enqueueSyncQueueItem(
+    [pendingGameUpsert, pendingGameEndDelete],
+    createReopenGameSyncQueueItem(game.id, "2026-05-20T12:00:04.000Z", "game-end-event")
+  );
+
+  assert.equal(reopenQueue.length, 1);
+  assert.equal(reopenQueue[0].type, "reopen-game");
+  assert.equal(reopenQueue[0].gameEndEventId, "game-end-event");
 
   const reloadedLocalSync = loadLocalSync();
   reloadedLocalSync.saveCachedGames([game]);

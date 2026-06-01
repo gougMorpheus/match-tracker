@@ -59,6 +59,7 @@ import {
 import {
   createEventSyncQueueItem,
   createGameSyncQueueItem,
+  createReopenGameSyncQueueItem,
   enqueueSyncQueueItem,
   getSyncErrorMessage,
   isTransientSyncError,
@@ -276,6 +277,11 @@ const mergeRemoteWithPending = (
     }
 
     const baseGame = mergedById.get(queueItem.gameId) ?? localGame;
+    if (queueItem.type === "reopen-game") {
+      mergedById.set(queueItem.gameId, localGame);
+      return;
+    }
+
     if (queueItem.type === "upsert-game") {
       mergedById.set(queueItem.gameId, overlayLocalGameMetadata(baseGame, localGame));
       return;
@@ -712,6 +718,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return remoteGame;
         }
 
+        if (queueRef.current.some((item) => item.type === "reopen-game" && item.gameId === remoteGame.id)) {
+          return localGame;
+        }
+
         if (isGameCompletedForDisplay(remoteGame)) {
           return remoteGame;
         }
@@ -795,6 +805,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
           const currentGame = gamesRef.current.find((game) => game.id === nextItem.gameId);
           if (!currentGame) {
+            removeQueueItem(nextItem.id);
+            continue;
+          }
+
+          if (nextItem.type === "reopen-game") {
+            if (nextItem.gameEndEventId) {
+              await gamesRepository.deleteEvent(nextItem.gameEndEventId);
+            }
+            await gamesRepository.upsertGameSnapshot(currentGame);
             removeQueueItem(nextItem.id);
             continue;
           }
@@ -2305,10 +2324,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
               finishReason: undefined
             });
 
-        commitGameSnapshot("Spiel wieder eroeffnet", game, nextGame);
+        const syncedGame = replaceGame(nextGame);
+        updateSyncQueue((currentQueue) =>
+          enqueueSyncQueueItem(
+            currentQueue,
+            createReopenGameSyncQueueItem(gameId, getNowIso(), latestGameEndEvent?.id)
+          )
+        );
+        recordHistoryAction("Spiel wieder eroeffnet", game, syncedGame);
         void flushSyncQueue();
       }),
-    [commitGameSnapshot, flushSyncQueue, getGame, runMutation]
+    [flushSyncQueue, getGame, recordHistoryAction, replaceGame, runMutation, updateSyncQueue]
   );
 
   const updateGameEvent = useCallback(

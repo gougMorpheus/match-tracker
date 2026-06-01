@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
+exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
 const id_1 = require("./id");
 const gameState_1 = require("./gameState");
 const supabaseErrors_1 = require("./supabaseErrors");
@@ -51,6 +51,9 @@ const isSyncQueueItem = (item) => {
     if (candidate.type === "upsert-game" || candidate.type === "delete-game") {
         return true;
     }
+    if (candidate.type === "reopen-game") {
+        return !("gameEndEventId" in candidate) || typeof candidate.gameEndEventId === "string";
+    }
     if ((candidate.type === "upsert-event" || candidate.type === "delete-event") &&
         typeof candidate.eventId === "string") {
         return true;
@@ -75,6 +78,17 @@ exports.saveSyncQueue = saveSyncQueue;
 const enqueueSyncQueueItem = (queue, item) => {
     if (item.type === "delete-game") {
         return [...queue.filter((candidate) => candidate.gameId !== item.gameId), item];
+    }
+    if (item.type === "reopen-game") {
+        return [
+            item,
+            ...queue.filter((candidate) => candidate.gameId !== item.gameId ||
+                (candidate.type !== "upsert-game" &&
+                    candidate.type !== "reopen-game" &&
+                    !(candidate.type === "delete-event" &&
+                        item.gameEndEventId &&
+                        candidate.eventId === item.gameEndEventId)))
+        ];
     }
     if (item.type === "upsert-game") {
         const filteredQueue = queue.filter((candidate) => !(candidate.type === "delete-game" && candidate.gameId === item.gameId));
@@ -111,6 +125,14 @@ const createGameSyncQueueItem = (type, gameId, createdAt) => ({
     createdAt
 });
 exports.createGameSyncQueueItem = createGameSyncQueueItem;
+const createReopenGameSyncQueueItem = (gameId, createdAt, gameEndEventId) => ({
+    id: (0, id_1.createId)("reopen-game"),
+    type: "reopen-game",
+    gameId,
+    createdAt,
+    gameEndEventId
+});
+exports.createReopenGameSyncQueueItem = createReopenGameSyncQueueItem;
 const createEventSyncQueueItem = (type, gameId, eventId, createdAt) => ({
     id: (0, id_1.createId)(type),
     type,
