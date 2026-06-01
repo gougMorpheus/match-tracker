@@ -2281,7 +2281,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     async (gameId: string) =>
       runMutation(async () => {
         const game = getGame(gameId);
-        if (!game || game.status !== "completed") {
+        if (
+          !game ||
+          (
+            game.status !== "completed" &&
+            !game.endedAt &&
+            !game.timeEvents.some((event) => event.action === "game-end")
+          )
+        ) {
           return;
         }
 
@@ -2289,11 +2296,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           .filter((event) => event.action === "game-end")
           .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
 
-        if (!latestGameEndEvent) {
-          return;
-        }
-
-        const nextGame = removeLocalEvent(game, latestGameEndEvent.id);
+        const nextGame = latestGameEndEvent
+          ? removeLocalEvent(game, latestGameEndEvent.id)
+          : syncDerivedGameState({
+              ...game,
+              status: "active",
+              endedAt: undefined,
+              finishReason: undefined
+            });
 
         commitGameSnapshot("Spiel wieder eroeffnet", game, nextGame);
         void flushSyncQueue();

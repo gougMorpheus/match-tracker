@@ -423,13 +423,21 @@ const appendLocalTimeEvents = (game, timeEvents) => (0, exports.syncDerivedGameS
     ]
 });
 exports.appendLocalTimeEvents = appendLocalTimeEvents;
-const removeLocalEvent = (game, eventId) => (0, exports.syncDerivedGameState)({
-    ...game,
-    scoreEvents: game.scoreEvents.filter((event) => event.id !== eventId),
-    commandPointEvents: game.commandPointEvents.filter((event) => event.id !== eventId),
-    noteEvents: game.noteEvents.filter((event) => event.id !== eventId),
-    timeEvents: game.timeEvents.filter((event) => event.id !== eventId)
-});
+const removeLocalEvent = (game, eventId) => {
+    const removedTimeEvent = game.timeEvents.find((event) => event.id === eventId);
+    const clearsGameEnd = removedTimeEvent?.action === "game-end" &&
+        !game.timeEvents.some((event) => event.id !== eventId && event.action === "game-end");
+    return (0, exports.syncDerivedGameState)({
+        ...game,
+        status: clearsGameEnd ? "active" : game.status,
+        endedAt: clearsGameEnd ? undefined : game.endedAt,
+        finishReason: clearsGameEnd ? undefined : game.finishReason,
+        scoreEvents: game.scoreEvents.filter((event) => event.id !== eventId),
+        commandPointEvents: game.commandPointEvents.filter((event) => event.id !== eventId),
+        noteEvents: game.noteEvents.filter((event) => event.id !== eventId),
+        timeEvents: game.timeEvents.filter((event) => event.id !== eventId)
+    });
+};
 exports.removeLocalEvent = removeLocalEvent;
 const updateLocalEvent = (game, eventId, patch) => {
     const nextNote = patch.note?.trim() || undefined;

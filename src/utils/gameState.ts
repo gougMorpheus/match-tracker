@@ -538,14 +538,23 @@ export const appendLocalTimeEvents = (
     ]
   });
 
-export const removeLocalEvent = (game: Game, eventId: string): Game =>
-  syncDerivedGameState({
+export const removeLocalEvent = (game: Game, eventId: string): Game => {
+  const removedTimeEvent = game.timeEvents.find((event) => event.id === eventId);
+  const clearsGameEnd =
+    removedTimeEvent?.action === "game-end" &&
+    !game.timeEvents.some((event) => event.id !== eventId && event.action === "game-end");
+
+  return syncDerivedGameState({
     ...game,
+    status: clearsGameEnd ? "active" : game.status,
+    endedAt: clearsGameEnd ? undefined : game.endedAt,
+    finishReason: clearsGameEnd ? undefined : game.finishReason,
     scoreEvents: game.scoreEvents.filter((event) => event.id !== eventId),
     commandPointEvents: game.commandPointEvents.filter((event) => event.id !== eventId),
     noteEvents: game.noteEvents.filter((event) => event.id !== eventId),
     timeEvents: game.timeEvents.filter((event) => event.id !== eventId)
   });
+};
 
 export const updateLocalEvent = (
   game: Game,

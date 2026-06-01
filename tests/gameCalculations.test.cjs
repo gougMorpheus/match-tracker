@@ -30,6 +30,7 @@ const {
   appendLocalCommandPointEvent,
   appendLocalScoreEvent,
   appendLocalTimeEvents,
+  removeLocalEvent,
   syncDerivedGameState,
   updateLocalEvent
 } = require("../.test-dist/utils/gameState.js");
@@ -1059,6 +1060,20 @@ const runGameCalculationsTests = () => {
 
     assert.equal(mergedGame.status, "completed");
     assert.equal(mergedGame.endedAt, remoteCompletedGame.endedAt);
+  }
+
+  {
+    const completedGame = createCompletedGameFixture("game-reopen-clears-ended-at");
+    const gameEndEvent = completedGame.timeEvents.find((event) => event.action === "game-end");
+
+    assert.ok(gameEndEvent);
+
+    const reopenedGame = removeLocalEvent(completedGame, gameEndEvent.id);
+
+    assert.equal(reopenedGame.status, "active");
+    assert.equal(reopenedGame.endedAt, undefined);
+    assert.equal(reopenedGame.finishReason, undefined);
+    assert.equal(reopenedGame.timeEvents.some((event) => event.action === "game-end"), false);
   }
 
 };
