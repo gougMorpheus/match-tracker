@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapPersistedGame = exports.upsertLocalEventFromSource = exports.overlayLocalGameMetadata = exports.updateLocalEvent = exports.removeLocalEvent = exports.appendLocalTimeEvents = exports.appendLocalNoteEvent = exports.appendLocalCommandPointEvent = exports.appendLocalScoreEvent = exports.updateLocalGameDetails = exports.createLocalGame = exports.syncDerivedGameState = void 0;
+exports.mapPersistedGame = exports.upsertLocalEventFromSource = exports.overlayLocalGameMetadata = exports.updateLocalEvent = exports.removeLocalEvent = exports.appendLocalTimeEvents = exports.appendLocalNoteEvent = exports.appendLocalCommandPointEvent = exports.appendLocalScoreEvent = exports.updateLocalGameDetails = exports.createLocalGame = exports.syncDerivedGameState = exports.getMissingGameStartCreatedAt = void 0;
 const id_1 = require("./id");
 const time_1 = require("./time");
 const sortByCreatedAt = (items) => [...items].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
@@ -38,6 +38,24 @@ const getFirstGameEndAt = (timeEvents) => timeEvents
     .filter((event) => event.action === "game-end")
     .map((event) => event.createdAt)
     .sort((left, right) => left.localeCompare(right))[0];
+const getMissingGameStartCreatedAt = (game, fallbackCreatedAt) => {
+    const candidates = [
+        game.startedAt,
+        ...game.scoreEvents.map((event) => event.createdAt),
+        ...game.commandPointEvents.map((event) => event.createdAt),
+        ...game.noteEvents.map((event) => event.createdAt),
+        ...game.timeEvents
+            .filter((event) => event.action === "setup-start" ||
+            event.action === "setup-end" ||
+            event.action === "round-start" ||
+            event.action === "turn-start")
+            .map((event) => event.createdAt)
+    ]
+        .filter((value) => Boolean(value))
+        .sort((left, right) => left.localeCompare(right));
+    return candidates[0] ?? fallbackCreatedAt;
+};
+exports.getMissingGameStartCreatedAt = getMissingGameStartCreatedAt;
 const buildRoundsFromTimeEvents = (timeEvents, fallbackEndedAt) => {
     const roundsByNumber = new Map();
     const gameEndAt = getFirstGameEndAt(timeEvents) ?? fallbackEndedAt;

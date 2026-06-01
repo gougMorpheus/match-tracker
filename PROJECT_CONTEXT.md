@@ -63,6 +63,7 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 ## Bekannte Prinzipien und Entscheidungen
 
 - Mobile-first und schnelle Bedienung waehrend des Spiels haben Vorrang.
+- Jede Code- oder Projektbearbeitung wird in `CHANGELOG.md` dokumentiert. Bei Bugfixes gehoeren Fehlerbild und Ursache in den Eintrag. Abschlussantworten enthalten immer eine passende Git-Commit-Beschreibung.
 - Keine Router-Abhaengigkeit: Navigation erfolgt ueber Hash-Routes.
 - Kein UI-Framework: Styling bleibt lokal und ueberschaubar.
 - Supabase ist Remote-Source-of-Truth, aber die App nutzt optimistische lokale Aenderungen mit Cache und Sync-Queue.

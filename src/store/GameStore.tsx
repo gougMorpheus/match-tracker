@@ -33,6 +33,7 @@ import {
   appendLocalScoreEvent,
   appendLocalTimeEvents,
   createLocalGame,
+  getMissingGameStartCreatedAt,
   mapPersistedGame,
   overlayLocalGameMetadata,
   removeLocalEvent,
@@ -1507,6 +1508,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             }
           };
         };
+        const pushGameStartIfMissing = () => {
+          if (game.timeEvents.some((event) => event.action === "game-start")) {
+            return;
+          }
+
+          eventsToAdd.push({
+            playerId: game.startingPlayerId,
+            action: "game-start",
+            createdAt: getMissingGameStartCreatedAt(game, now)
+          });
+        };
         const pushPauseForRunningTurns = (excludeKey?: string | null) => {
           runningTurns.forEach((turn) => {
             if (getTurnKey(turn) === excludeKey) {
@@ -1529,13 +1541,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           const targetRound = game.rounds.find(
             (round) => round.roundNumber === targetTurn.roundNumber
           );
-          if (!game.timeEvents.some((event) => event.action === "game-start")) {
-            eventsToAdd.push({
-              playerId: game.startingPlayerId,
-              action: "game-start",
-              createdAt: now
-            });
-          }
+          pushGameStartIfMissing();
 
           if (targetRound && !targetRound.startedAt) {
             eventsToAdd.push({
@@ -1583,13 +1589,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
 
-          if (!game.timeEvents.some((event) => event.action === "game-start")) {
-            eventsToAdd.push({
-              playerId: game.startingPlayerId,
-              action: "game-start",
-              createdAt: now
-            });
-          }
+          pushGameStartIfMissing();
 
           if (setupRound && !setupRound.startedAt) {
             eventsToAdd.push({
@@ -1734,7 +1734,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             {
               playerId: game.startingPlayerId,
               action: "game-start",
-              createdAt: now
+              createdAt: getMissingGameStartCreatedAt(game, now)
             },
             {
               playerId: game.startingPlayerId,
@@ -2102,7 +2102,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           eventsToAdd.push({
             playerId: game.startingPlayerId,
             action: "game-start",
-            createdAt: now
+            createdAt: getMissingGameStartCreatedAt(game, now)
           });
         }
 

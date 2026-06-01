@@ -63,6 +63,28 @@ const getFirstGameEndAt = (timeEvents: TimeEvent[]): string | undefined =>
     .map((event) => event.createdAt)
     .sort((left, right) => left.localeCompare(right))[0];
 
+export const getMissingGameStartCreatedAt = (game: Game, fallbackCreatedAt: string): string => {
+  const candidates = [
+    game.startedAt,
+    ...game.scoreEvents.map((event) => event.createdAt),
+    ...game.commandPointEvents.map((event) => event.createdAt),
+    ...game.noteEvents.map((event) => event.createdAt),
+    ...game.timeEvents
+      .filter(
+        (event) =>
+          event.action === "setup-start" ||
+          event.action === "setup-end" ||
+          event.action === "round-start" ||
+          event.action === "turn-start"
+      )
+      .map((event) => event.createdAt)
+  ]
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => left.localeCompare(right));
+
+  return candidates[0] ?? fallbackCreatedAt;
+};
+
 const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[], fallbackEndedAt?: string): Round[] => {
   const roundsByNumber = new Map<number, Round>();
   const gameEndAt = getFirstGameEndAt(timeEvents) ?? fallbackEndedAt;

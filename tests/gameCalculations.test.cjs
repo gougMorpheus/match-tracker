@@ -30,6 +30,7 @@ const {
   appendLocalCommandPointEvent,
   appendLocalScoreEvent,
   appendLocalTimeEvents,
+  getMissingGameStartCreatedAt,
   removeLocalEvent,
   syncDerivedGameState,
   updateLocalEvent
@@ -1074,6 +1075,46 @@ const runGameCalculationsTests = () => {
     assert.equal(reopenedGame.endedAt, undefined);
     assert.equal(reopenedGame.finishReason, undefined);
     assert.equal(reopenedGame.timeEvents.some((event) => event.action === "game-end"), false);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-missing-game-start-created-at" });
+    const [playerOne] = game.players;
+    game = syncDerivedGameState({
+      ...game,
+      startedAt: undefined,
+      timeEvents: [
+        {
+          id: "setup-end-event",
+          type: "time",
+          action: "setup-end",
+          createdAt: "2026-04-20T18:00:00.000Z"
+        },
+        {
+          id: "turn-start-event",
+          type: "time",
+          action: "turn-start",
+          playerId: playerOne.id,
+          roundNumber: 1,
+          turnNumber: 1,
+          createdAt: "2026-04-20T18:00:00.000Z"
+        }
+      ]
+    });
+
+    assert.equal(
+      getMissingGameStartCreatedAt(game, "2026-04-20T18:30:00.000Z"),
+      "2026-04-20T18:00:00.000Z"
+    );
+  }
+
+  {
+    const game = createBaseGame({ id: "game-missing-game-start-fallback" });
+
+    assert.equal(
+      getMissingGameStartCreatedAt(game, "2026-04-20T18:30:00.000Z"),
+      "2026-04-20T18:30:00.000Z"
+    );
   }
 
 };
