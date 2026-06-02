@@ -605,18 +605,33 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
   const setupEvents = [...game.timeEvents]
     .filter(
       (event) =>
+        event.action === "game-start" ||
         event.action === "setup-start" ||
         event.action === "setup-end" ||
         event.action === "setup-pause" ||
-        event.action === "setup-resume"
+        event.action === "setup-resume" ||
+        event.action === "round-start" ||
+        event.action === "turn-start"
     )
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   let startedAt: string | null = null;
   let pauseStartedAt: string | null = null;
   let pausedDuration = 0;
   let total = 0;
+  let setupClosed = false;
 
   setupEvents.forEach((event) => {
+    if (setupClosed) {
+      return;
+    }
+
+    if (event.action === "game-start" && !startedAt) {
+      startedAt = event.createdAt;
+      pauseStartedAt = null;
+      pausedDuration = 0;
+      return;
+    }
+
     if (event.action === "setup-start") {
       startedAt = event.createdAt;
       pauseStartedAt = null;
@@ -639,7 +654,7 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
       return;
     }
 
-    if (event.action === "setup-end") {
+    if (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start") {
       const endedAt = event.createdAt;
       if (pauseStartedAt) {
         pausedDuration += getDurationMs(pauseStartedAt, endedAt);
@@ -648,6 +663,7 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
       total += Math.max(getDurationMs(startedAt, endedAt) - pausedDuration, 0);
       startedAt = null;
       pausedDuration = 0;
+      setupClosed = true;
     }
   });
 

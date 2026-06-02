@@ -73,6 +73,7 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Spielpunkte sind gemeinsame Match-Punkte (`gamePoints`) und werden auf beide Spieler-Armeen gespiegelt.
 - Runde und Zug werden ueber einen schnellen `Weiter`-Ablauf gesteuert; es gibt maximal 5 Runden in der Store-Logik.
 - Wichtige Regression vermeiden: Der In-Game-Button `Zurueck` muss von Runde 1 / Zug 1 immer zur Aufstellungsphase zurueckkommen. Das darf nicht davon abhaengen, ob der Timer gerade laeuft; auch bei pausiertem/gestopptem Timer muss `rewindLastTurn(..., keepTimerRunning: true)` die fachliche Phase wieder auf Aufstellung setzen.
+- Wichtige Regression vermeiden: Das Oeffnen von Einstellungen/Spieldetails in einem aktiven Spiel darf den Timer nicht pausieren, keine `setup-pause`-/`turn-pause`-Events erzeugen und den UI-Ticker nicht einfrieren. Bearbeiten von Spieldetails ist keine Timer-Aktion.
 - Supabase RLS ist im MVP offen fuer Select/Insert/Update/Delete (`using true` / `with check true`).
 
 ## Sicher neue Features oder Bugfixes angehen

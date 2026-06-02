@@ -352,16 +352,29 @@ const getCompletedTurnDurationMs = (turn, game) => turn.timing.startedAt && turn
 exports.getCompletedTurnDurationMs = getCompletedTurnDurationMs;
 const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
     const setupEvents = [...game.timeEvents]
-        .filter((event) => event.action === "setup-start" ||
+        .filter((event) => event.action === "game-start" ||
+        event.action === "setup-start" ||
         event.action === "setup-end" ||
         event.action === "setup-pause" ||
-        event.action === "setup-resume")
+        event.action === "setup-resume" ||
+        event.action === "round-start" ||
+        event.action === "turn-start")
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     let startedAt = null;
     let pauseStartedAt = null;
     let pausedDuration = 0;
     let total = 0;
+    let setupClosed = false;
     setupEvents.forEach((event) => {
+        if (setupClosed) {
+            return;
+        }
+        if (event.action === "game-start" && !startedAt) {
+            startedAt = event.createdAt;
+            pauseStartedAt = null;
+            pausedDuration = 0;
+            return;
+        }
         if (event.action === "setup-start") {
             startedAt = event.createdAt;
             pauseStartedAt = null;
@@ -380,7 +393,7 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
             pauseStartedAt = null;
             return;
         }
-        if (event.action === "setup-end") {
+        if (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start") {
             const endedAt = event.createdAt;
             if (pauseStartedAt) {
                 pausedDuration += (0, time_1.getDurationMs)(pauseStartedAt, endedAt);
@@ -389,6 +402,7 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
             total += Math.max((0, time_1.getDurationMs)(startedAt, endedAt) - pausedDuration, 0);
             startedAt = null;
             pausedDuration = 0;
+            setupClosed = true;
         }
     });
     if (startedAt && includeOpenSetup) {

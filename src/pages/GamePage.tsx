@@ -283,7 +283,9 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const [statsEligibilityDraft, setStatsEligibilityDraft] = useState<StatsEligibilityOverrides>({});
   const [redoHoldOpen, setRedoHoldOpen] = useState(false);
   const [timeoutHoldOpen, setTimeoutHoldOpen] = useState(false);
+  const [timerStateNotice, setTimerStateNotice] = useState<{ title: string; message: string } | null>(null);
   const previousRoundRef = useRef<number | null>(null);
+  const previousTimerStateRef = useRef<string | null>(null);
   const snapToLatestTurnRef = useRef(false);
   const redoHoldTimerRef = useRef<number | null>(null);
   const redoHoldTriggeredRef = useRef(false);
@@ -640,6 +642,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
   const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
+  const timerStateKey = isClosed ? "closed" : timeoutActive ? "timeout" : isTimerRunning ? "running" : "stopped";
 
   useEffect(() => {
     if (!isTimerRunning || timeoutActive || isMutating || viewOnlyActive || isGameCompletedForDisplay(game)) {
@@ -647,6 +650,33 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       clearTimeoutHoldTimer();
     }
   }, [game, isMutating, isTimerRunning, timeoutActive, viewOnlyActive]);
+
+  useEffect(() => {
+    const previousState = previousTimerStateRef.current;
+    previousTimerStateRef.current = timerStateKey;
+
+    if (!previousState || previousState === timerStateKey || isClosed) {
+      return;
+    }
+
+    const nextNotice =
+      timerStateKey === "running"
+        ? {
+            title: "Timer laeuft",
+            message: "Der Timer wurde gestartet und zaehlt weiter."
+          }
+        : timerStateKey === "timeout"
+          ? {
+              title: "Time-out aktiv",
+              message: "Die Spielzeit laeuft weiter, die Spielerzeit ist pausiert."
+            }
+          : {
+              title: "Timer gestoppt",
+              message: "Der Timer wurde angehalten."
+            };
+
+    setTimerStateNotice(nextNotice);
+  }, [isClosed, timerStateKey]);
 
   const displayTurn = timerFocusTurn ?? selectedTurn;
   const displayRound =
@@ -670,15 +700,12 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     currentRoundNumber > 0 && currentRoundNumber % 2 === 0
       ? "game-header--round-even"
       : "game-header--round-odd";
+  const gameHeaderClassName = `${headerRoundClassName}${isTimerRunning ? " game-header--timer-running" : ""}`;
   const selectedNotePlayer = noteDialogPlayerId
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
 
   useEffect(() => {
-    if (detailsOpen || isEditingGame) {
-      return;
-    }
-
     const focusTurn = timerFocusTurn;
     if (setupActive || shouldRunTimerRenderTicker(focusTurn, timeoutActive, isClosed)) {
       const interval = window.setInterval(() => {
@@ -687,7 +714,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
 
       return () => window.clearInterval(interval);
     }
-  }, [detailsOpen, isEditingGame, isClosed, setupActive, timeoutActive, timerFocusTurn]);
+  }, [isClosed, setupActive, timeoutActive, timerFocusTurn]);
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
@@ -750,18 +777,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const openGameEditor = async () => {
     if (isClosed || isReadOnly) {
       return;
-    }
-
-    if (isTimerRunning) {
-      await pauseActiveTimer(
-        game.id,
-        selectedTurn
-          ? {
-              roundNumber: selectedTurn.roundNumber,
-              turnNumber: selectedTurn.turnNumber
-            }
-          : undefined
-      );
     }
 
     setGameForm(createGameFormState(getGame(game.id) ?? game));
@@ -1217,7 +1232,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         )
       }
       stickyHeader
-      headerClassName={headerRoundClassName}
+      headerClassName={gameHeaderClassName}
       actions={
         <>
           <div className="game-header-meta">
@@ -1354,6 +1369,25 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
         <div className="timeout-banner" role="status">
           <strong>Time-out aktiv</strong>
           <span>Spielzeit laeuft, Spielerzeit ist pausiert.</span>
+        </div>
+      ) : null}
+      {timerStateNotice ? (
+        <div className="modal-backdrop">
+          <div className="modal-card timer-state-modal">
+            <div className="stack">
+              <div>
+                <h2>{timerStateNotice.title}</h2>
+                <p className="muted-copy">{timerStateNotice.message}</p>
+              </div>
+              <button
+                type="button"
+                className="primary-button compact-button"
+                onClick={() => setTimerStateNotice(null)}
+              >
+                Verstanden
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
       {overviewOpen && !showOverview ? (

@@ -5,17 +5,30 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-06-01
 
+### Bugfix: `game-start` wirkt bei fehlendem `setup-start` auf Spielzeit
+
+- Fehlerbild: Nach Bearbeiten von `game-start` aenderte sich die angezeigte Spielzeit nicht.
+- Ursache: Die Gesamtzeit wurde aus `setup-start/setup-end` plus Zugzeiten berechnet. Wenn `setup-start` fehlte, hatte `game-start` keinen Einfluss auf die Aufstellungs- und Gesamtzeit.
+- Fix: Die Aufstellungszeit nutzt jetzt `game-start` als Fallback-Start, wenn `setup-start` fehlt. Wenn `setup-end` fehlt, endet die Aufstellung defensiv beim ersten `round-start` oder `turn-start`. Dadurch beeinflusst ein bearbeitetes `game-start` die Gesamtzeit bei inkonsistenten Bestandsdaten korrekt.
+
+### Timer-Status im Spiel deutlicher gemacht
+
+- Fehlerbild: Beim Oeffnen der Einstellungen wirkte der Timer unterbrochen, und der laufende/gestoppte Zustand war nicht prominent genug.
+- Ursache: Der Render-Ticker wurde waehrend geoeffneter Einstellungen gestoppt; ausserdem gab es nur die kleine Status-Pille im Header.
+- Fix: Einstellungen pausieren den Timer nicht mehr und stoppen auch den UI-Ticker nicht. Bei laufendem Timer bekommt der Header einen dicken roten Rand. Timer-Zustandswechsel zeigen ein quittierbares Hinweisfenster fuer `Timer laeuft`, `Timer gestoppt` oder `Time-out aktiv`.
+- Projektkontext ergaenzt: Spieldetails/Einstellungen sind keine Timer-Aktion und duerfen keine Pause-Events erzeugen.
+
+### Stabilisierung: Fehlendes `game-start` nutzt Spieltermin
+
+- Fehlerbild: Nachgetragene `game-start` Events konnten fachlich falsch liegen, wenn sie aus spaeteren Bedienaktionen oder vorhandenen Events abgeleitet wurden.
+- Ursache: Die Nachtragslogik verwendete zunaechst `now` und danach heuristisch fruehere Events. Fachlich soll `game-start` aber der Start der Aufstellungsphase sein und beim Fehlen aus dem eingestellten Spieltermin kommen.
+- Fix: Fehlende `game-start` Events verwenden jetzt Datum und Uhrzeit aus den Spieleinstellungen. Nur wenn diese Werte fehlen oder ungueltig sind, wird der aktuelle technische Fallback verwendet. Neue Spiele schreiben weiterhin `game-start` und `setup-start` direkt zusammen beim Start der Aufstellungsphase.
+
 ### Bugfix: Wiedereroeffnen gegen Sync-Rueckschritt abgesichert
 
 - Fehlerbild: Geschlossene Spiele liessen sich teils wiedereroeffnen, wurden danach aber durch Sync-Fehler oder einen Remote-Pull wieder als geschlossen angezeigt.
 - Ursache: Wiedereroeffnen bestand aus mehreren indirekten Queue-Aenderungen (`game-end` loeschen und Game-Snapshot auf active setzen). Solange remote noch `game-end`/`ended_at` sichtbar war, konnte der Completed-Zustand beim Pull wieder gewinnen.
 - Fix: Wiedereroeffnen ist jetzt eine explizite Sync-Queue-Operation `reopen-game`. Pending Reopen gewinnt beim lokalen Remote-Merge, loescht remote zuerst das `game-end` Event und schreibt danach den aktiven Game-Snapshot.
-
-### Stabilisierung: Fehlendes `game-start` defensiv nachtragen
-
-- Fehlerbild: In Bestandsdaten konnte `game-start` deutlich spaeter als bereits vorhandene Zeit-/Score-/CP-Events liegen.
-- Ursache: Mehrere Store-Aktionen trugen ein fehlendes `game-start` mit dem aktuellen Zeitpunkt (`now`) nach, auch wenn bereits fruehere plausible Spielereignisse existierten.
-- Fix: Fehlende `game-start` Events verwenden jetzt den fruehesten plausiblen Zeitpunkt aus vorhandenen Setup-, Turn-, Score-, CP- oder Notiz-Events. Nur wenn es keine solchen Ereignisse gibt, wird `now` verwendet.
 
 ### Projektprozess
 
