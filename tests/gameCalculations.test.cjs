@@ -214,7 +214,8 @@ const runGameCalculationsTests = () => {
     assert.equal(getCountedRounds(statsGame).length, 1);
     assert.equal(roundScores[0]?.averagePlayerOneScore, 3);
     assert.equal(roundScores[0]?.averagePlayerTwoScore, 0);
-    assert.equal(roundDurations.length, 0);
+    assert.equal(roundDurations.length, 1);
+    assert.equal(roundDurations[0]?.averageDurationMs, 14 * 1000);
     assert.deepEqual(
       playerTurnDurations.map((entry) => [entry.playerName, entry.averageTurnDurationMs]),
       [["Bob", 14 * 1000]]
@@ -1189,6 +1190,101 @@ const runGameCalculationsTests = () => {
       getMissingGameStartCreatedAt(game, "2026-04-20T18:30:00.000Z"),
       "2026-04-20T18:30:00.000Z"
     );
+  }
+
+  {
+    let game = createBaseGame({
+      id: "game-normalizes-setup-end",
+      scheduledTime: "20:00"
+    });
+    game = appendLocalTimeEvents(game, [
+      {
+        action: "setup-end",
+        createdAt: "2026-04-20T18:30:00.000Z"
+      }
+    ]);
+
+    assert.equal(game.timeEvents[0].action, "game-start");
+    assert.equal(game.timeEvents[1].action, "setup-end");
+    assert.equal(getSetupDurationMs(game), 30 * 60 * 1000);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-normalizes-turn-start" });
+    const [playerOne] = game.players;
+    game = appendLocalTimeEvents(game, [
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:30:00.000Z"
+      },
+      {
+        action: "turn-start",
+        playerId: playerOne.id,
+        roundNumber: 1,
+        turnNumber: 1,
+        createdAt: "2026-04-20T18:30:00.000Z"
+      }
+    ]);
+
+    assert.deepEqual(
+      game.timeEvents.map((event) => event.action),
+      ["game-start", "round-start", "turn-start"]
+    );
+    assert.equal(game.rounds[0]?.startedAt, "2026-04-20T18:30:00.000Z");
+    assert.equal(game.rounds[0]?.turns.length, 1);
+  }
+
+  {
+    let game = createBaseGame({ id: "game-infers-round-end" });
+    const [playerOne, playerTwo] = game.players;
+    game = syncDerivedGameState({
+      ...game,
+      timeEvents: [
+        {
+          id: "turn-1-start",
+          type: "time",
+          action: "turn-start",
+          playerId: playerOne.id,
+          roundNumber: 1,
+          turnNumber: 1,
+          createdAt: "2026-04-20T18:00:00.000Z"
+        },
+        {
+          id: "turn-1-end",
+          type: "time",
+          action: "turn-end",
+          playerId: playerOne.id,
+          roundNumber: 1,
+          turnNumber: 1,
+          createdAt: "2026-04-20T18:10:00.000Z"
+        },
+        {
+          id: "turn-2-start",
+          type: "time",
+          action: "turn-start",
+          playerId: playerTwo.id,
+          roundNumber: 1,
+          turnNumber: 2,
+          createdAt: "2026-04-20T18:10:00.000Z"
+        },
+        {
+          id: "turn-2-end",
+          type: "time",
+          action: "turn-end",
+          playerId: playerTwo.id,
+          roundNumber: 1,
+          turnNumber: 2,
+          createdAt: "2026-04-20T18:25:00.000Z"
+        }
+      ]
+    });
+
+    assert.equal(game.rounds[0]?.startedAt, "2026-04-20T18:00:00.000Z");
+    assert.equal(game.rounds[0]?.endedAt, "2026-04-20T18:25:00.000Z");
+    assert.equal(getRoundDurationMs(game.rounds[0], game), 25 * 60 * 1000);
   }
 
 };

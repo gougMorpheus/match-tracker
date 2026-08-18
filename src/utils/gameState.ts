@@ -63,6 +63,128 @@ const getFirstGameEndAt = (timeEvents: TimeEvent[]): string | undefined =>
     .map((event) => event.createdAt)
     .sort((left, right) => left.localeCompare(right))[0];
 
+type TimeEventDraft = {
+  action: TimeEventAction;
+  playerId?: PlayerId;
+  roundNumber?: number;
+  turnNumber?: number;
+  createdAt?: string;
+};
+
+const getTimeEventIdentity = (event: TimeEventDraft): string =>
+  [
+    event.action,
+    event.playerId ?? "",
+    event.roundNumber ?? "",
+    event.turnNumber ?? "",
+    event.createdAt ?? ""
+  ].join("|");
+
+const hasEquivalentTimeEvent = (events: TimeEventDraft[], event: TimeEventDraft): boolean => {
+  const identity = getTimeEventIdentity(event);
+  return events.some((existingEvent) => getTimeEventIdentity(existingEvent) === identity);
+};
+
+const getFirstCreatedAt = (events: TimeEventDraft[]): string | undefined =>
+  events
+    .map((event) => event.createdAt)
+    .filter((createdAt): createdAt is string => Boolean(createdAt))
+    .sort((left, right) => left.localeCompare(right))[0];
+
+const getRoundStartFallbackAt = (events: TimeEventDraft[], roundNumber: number): string | undefined =>
+  getFirstCreatedAt(
+    events.filter(
+      (event) =>
+        event.roundNumber === roundNumber &&
+        (event.action === "round-start" || event.action === "turn-start")
+    )
+  );
+
+const normalizeTimeEventsForAppend = (game: Game, timeEvents: TimeEventDraft[]): TimeEventDraft[] => {
+  if (!timeEvents.length) {
+    return [];
+  }
+
+  const batchCreatedAt = getNowIso();
+  const existingEvents: TimeEventDraft[] = game.timeEvents;
+  const normalizedEvents: TimeEventDraft[] = [];
+  const batchContainsGameStart = timeEvents.some((event) => event.action === "game-start");
+  const allEvents = (): TimeEventDraft[] => [...existingEvents, ...normalizedEvents];
+  const appendOnce = (event: TimeEventDraft) => {
+    if (hasEquivalentTimeEvent(allEvents(), event)) {
+      return;
+    }
+
+    normalizedEvents.push(event);
+  };
+  const hasAction = (action: TimeEventAction): boolean =>
+    allEvents().some((event) => event.action === action);
+  const hasRoundStart = (roundNumber?: number): boolean =>
+    typeof roundNumber === "number" &&
+    allEvents().some((event) => event.action === "round-start" && event.roundNumber === roundNumber);
+  const ensureGameStart = (createdAt: string, playerId?: PlayerId) => {
+    if (hasAction("game-start") || batchContainsGameStart) {
+      return;
+    }
+
+    appendOnce({
+      action: "game-start",
+      playerId: playerId ?? game.startingPlayerId,
+      createdAt: getMissingGameStartCreatedAt(game, createdAt)
+    });
+  };
+  const ensureRoundStart = (roundNumber: number | undefined, createdAt: string, playerId?: PlayerId) => {
+    if (typeof roundNumber !== "number" || hasRoundStart(roundNumber)) {
+      return;
+    }
+
+    appendOnce({
+      action: "round-start",
+      playerId: playerId ?? game.startingPlayerId,
+      roundNumber,
+      createdAt: getRoundStartFallbackAt(allEvents(), roundNumber) ?? createdAt
+    });
+  };
+
+  timeEvents.forEach((timeEvent) => {
+    const event = {
+      ...timeEvent,
+      createdAt: timeEvent.createdAt ?? batchCreatedAt
+    };
+
+    if (event.action === "setup-start") {
+      ensureGameStart(event.createdAt, event.playerId);
+    }
+
+    if (event.action === "setup-end") {
+      ensureGameStart(event.createdAt, event.playerId);
+    }
+
+    if (
+      event.action === "turn-start" ||
+      event.action === "turn-resume" ||
+      event.action === "turn-pause" ||
+      event.action === "turn-end"
+    ) {
+      ensureGameStart(event.createdAt, event.playerId);
+      ensureRoundStart(event.roundNumber, event.createdAt, event.playerId);
+    }
+
+    if (event.action === "round-end") {
+      ensureGameStart(event.createdAt, event.playerId);
+      ensureRoundStart(event.roundNumber, event.createdAt, event.playerId);
+    }
+
+    if (event.action === "game-end") {
+      ensureGameStart(event.createdAt, event.playerId);
+    }
+
+    appendOnce(event);
+  });
+
+  return normalizedEvents;
+};
+
 export const getMissingGameStartCreatedAt = (game: Game, fallbackCreatedAt: string): string => {
   if (game.scheduledDate && game.scheduledTime) {
     const scheduledStart = new Date(`${game.scheduledDate}T${game.scheduledTime}:00`);
@@ -182,6 +304,17 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[], fallbackEndedAt?: st
     .sort((left, right) => left.roundNumber - right.roundNumber)
     .map((round) => ({
       ...round,
+      startedAt:
+        round.startedAt ??
+        getFirstCreatedAt(round.turns.map((turn) => ({ action: "turn-start", createdAt: turn.timing.startedAt }))),
+      endedAt:
+        round.endedAt ??
+        (round.turns.length >= 2 && round.turns.every((turn) => turn.timing.startedAt && turn.timing.endedAt)
+          ? round.turns
+              .map((turn) => turn.timing.endedAt)
+              .filter((createdAt): createdAt is string => Boolean(createdAt))
+              .sort((left, right) => right.localeCompare(left))[0]
+          : undefined),
       turns: [...round.turns].sort((left, right) => left.turnNumber - right.turnNumber)
     }));
 };
@@ -523,19 +656,15 @@ export const appendLocalNoteEvent = (
 
 export const appendLocalTimeEvents = (
   game: Game,
-  timeEvents: Array<{
-    action: TimeEventAction;
-    playerId?: PlayerId;
-    roundNumber?: number;
-    turnNumber?: number;
-    createdAt?: string;
-  }>
-): Game =>
-  syncDerivedGameState({
+  timeEvents: TimeEventDraft[]
+): Game => {
+  const normalizedTimeEvents = normalizeTimeEventsForAppend(game, timeEvents);
+
+  return syncDerivedGameState({
     ...game,
     timeEvents: [
       ...game.timeEvents,
-      ...timeEvents.map(
+      ...normalizedTimeEvents.map(
         (timeEvent): TimeEvent => ({
           id: createUuid(),
           type: "time",
@@ -548,6 +677,7 @@ export const appendLocalTimeEvents = (
       )
     ]
   });
+};
 
 export const removeLocalEvent = (game: Game, eventId: string): Game => {
   const removedTimeEvent = game.timeEvents.find((event) => event.id === eventId);

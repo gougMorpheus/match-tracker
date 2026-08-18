@@ -1,0 +1,50 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    name: Read one Supabase row
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - name: Query public.games
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "::error::Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY repository secret."
+            exit 1
+          fi
+
+          endpoint="${SUPABASE_URL%/}/rest/v1/games?select=id&limit=1"
+          http_status="$(
+            curl --silent --show-error --output response.json --write-out "%{http_code}" \
+              --request GET \
+              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+              --header "Authorization: Bearer ${SUPABASE_PUBLISHABLE_KEY}" \
+              --header "Accept: application/json" \
+              "${endpoint}"
+          )"
+
+          if [[ ! "${http_status}" =~ ^2 ]]; then
+            echo "::error::Supabase keepalive failed with HTTP ${http_status}."
+            if [[ -s response.json ]]; then
+              echo "Response body:"
+              head -c 2000 response.json
+              echo
+            fi
+            exit 1
+          fi
+
+          echo "Supabase keepalive succeeded with HTTP ${http_status}."
