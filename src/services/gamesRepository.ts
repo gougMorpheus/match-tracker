@@ -543,19 +543,30 @@ const stripOptionalGameFields = <
     timer_corrections?: Json | null;
     stats_eligibility_mode?: string | null;
     stats_eligibility_overrides?: Json | null;
+    notes?: string | null;
   }
 >(
-  payload: T
-): Omit<T, "deployment" | "primary_mission" | "timer_corrections" | "stats_eligibility_mode" | "stats_eligibility_overrides"> => {
+  payload: T,
+  missingTimerCorrections: boolean
+) => {
   const {
     deployment: _deployment,
     primary_mission: _primaryMission,
-    timer_corrections: _timerCorrections,
+    timer_corrections: timerCorrections,
     stats_eligibility_mode: _statsEligibilityMode,
     stats_eligibility_overrides: _statsEligibilityOverrides,
     ...rest
   } = payload;
-  return rest;
+  if (!missingTimerCorrections) {
+    // A different optional column is absent: keep corrections in their column.
+    return { ...rest, ...(timerCorrections !== undefined ? { timer_corrections: timerCorrections } : {}) };
+  }
+  if (timerCorrections == null) return rest;
+  const notes = normalizeJsonString(payload.notes);
+  const metadata = notes && typeof notes === "object" && !Array.isArray(notes)
+    ? notes : payload.notes ? { legacyNotes: payload.notes } : {};
+  // Only legacy schemas without the column need the old notes representation.
+  return { ...rest, notes: JSON.stringify({ ...metadata, timerCorrections: normalizeTimerCorrections(timerCorrections) }) };
 };
 
 const normalizeJsonString = (value: string | null | undefined): unknown => {
@@ -617,6 +628,7 @@ const getComparableGamePayload = (
   winner_player: payload.winner_player ?? null,
   stats_eligibility_mode: payload.stats_eligibility_mode ?? null,
   stats_eligibility_overrides: payload.stats_eligibility_overrides ?? null,
+  timer_corrections: parseTimerCorrections(payload.timer_corrections, payload.notes),
   notes: normalizeJsonString(payload.notes)
 });
 
@@ -1308,6 +1320,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
     winner_player: endedAt ? getWinnerPlayerSlot(game) : null,
     stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
     stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
+    timer_corrections: serializeTimerCorrections(game.timerCorrections),
     notes: serializeGameNotes(game.scoreDetailLevel, game.legacyScoreTotals, {
       autoCommandPointOn: game.autoCommandPointOn,
       autoCommandPointAwards: game.autoCommandPointAwards
@@ -1511,9 +1524,13 @@ export const gamesRepository = {
     ) {
       ({ data, error } = await supabase
         .from("games")
-        .insert(stripOptionalGameFields(insertPayload))
+        .insert(stripOptionalGameFields(insertPayload, hasMissingTimerCorrectionsColumnError(error.message)))
         .select("*")
         .single());
+    }
+
+    if (error && hasMissingTimerCorrectionsColumnError(error.message)) {
+      ({ data, error } = await supabase.from("games").insert(stripOptionalGameFields(insertPayload, true)).select("*").single());
     }
 
     if (error) {
@@ -1543,10 +1560,14 @@ export const gamesRepository = {
     ) {
       ({ data, error } = await supabase
         .from("games")
-        .update(stripOptionalGameFields(updatePayload))
+        .update(stripOptionalGameFields(updatePayload, hasMissingTimerCorrectionsColumnError(error.message)))
         .eq("id", gameId)
         .select("*")
         .single());
+    }
+
+    if (error && hasMissingTimerCorrectionsColumnError(error.message)) {
+      ({ data, error } = await supabase.from("games").update(stripOptionalGameFields(updatePayload, true)).eq("id", gameId).select("*").single());
     }
 
     if (error) {
@@ -1557,7 +1578,7 @@ export const gamesRepository = {
     return mapSupabaseGameToAppGame(data as SupabaseGameRecord, events);
   },
 
-  async upsertGameSnapshot(game: Game): Promise<Game> {
+  async upsertGameSnapshot(game: Game, canWrite: () => boolean = () => true): Promise<Game> {
     if (!(await hasRemoteGameSnapshotChanged(game))) {
       return game;
     }
@@ -1565,7 +1586,7 @@ export const gamesRepository = {
     const supabase = getSupabaseClient();
     const upsertPayload = createSyncedGamePayload(game);
     let { data, error } = await supabase
-      .from("games")
+      .from("games").guardWrite(canWrite)
       .upsert(upsertPayload, {
         onConflict: "id"
       })
@@ -1581,12 +1602,16 @@ export const gamesRepository = {
       )
     ) {
       ({ data, error } = await supabase
-        .from("games")
-        .upsert(stripOptionalGameFields(upsertPayload), {
+        .from("games").guardWrite(canWrite)
+        .upsert(stripOptionalGameFields(upsertPayload, hasMissingTimerCorrectionsColumnError(error.message)), {
           onConflict: "id"
         })
         .select("*")
         .single());
+    }
+
+    if (error && hasMissingTimerCorrectionsColumnError(error.message)) {
+      ({ data, error } = await supabase.from("games").guardWrite(canWrite).upsert(stripOptionalGameFields(upsertPayload, true), { onConflict: "id" }).select("*").single());
     }
 
     if (error) {
@@ -1616,9 +1641,13 @@ export const gamesRepository = {
         hasMissingStatsEligibilityColumnError(error.message)
       )
     ) {
-      ({ error } = await supabase.from("games").upsert(stripOptionalGameFields(upsertPayload), {
+      ({ error } = await supabase.from("games").upsert(stripOptionalGameFields(upsertPayload, hasMissingTimerCorrectionsColumnError(error.message)), {
         onConflict: "id"
       }));
+    }
+
+    if (error && hasMissingTimerCorrectionsColumnError(error.message)) {
+      ({ error } = await supabase.from("games").upsert(stripOptionalGameFields(upsertPayload, true), { onConflict: "id" }));
     }
 
     if (error) {
@@ -1641,10 +1670,10 @@ export const gamesRepository = {
     return gamesRepository.getGameById(game.id);
   },
 
-  async deleteGame(gameId: string): Promise<void> {
+  async deleteGame(gameId: string, canWrite: () => boolean = () => true): Promise<void> {
     const supabase = getSupabaseClient();
     const { data, error: loadError } = await supabase
-      .from("games")
+      .from("games").guardWrite(canWrite)
       .select("*")
       .eq("id", gameId);
 
@@ -1664,11 +1693,11 @@ export const gamesRepository = {
       notes: serializeSoftDeletedNotes(gameRecord.notes, deletedAt)
     };
 
-    let { error } = await supabase.from("games").update(softDeletePayload).eq("id", gameId);
+    let { error } = await supabase.from("games").guardWrite(canWrite).update(softDeletePayload).eq("id", gameId);
 
     if (error && hasMissingDeletedAtColumnError(error.message)) {
       ({ error } = await supabase
-        .from("games")
+        .from("games").guardWrite(canWrite)
         .update({
           notes: softDeletePayload.notes
         })
@@ -1703,7 +1732,7 @@ export const gamesRepository = {
     return data as SupabaseEventRecord;
   },
 
-  async upsertEvent(payload: CreateSupabaseEventPayload): Promise<SupabaseEventRecord> {
+  async upsertEvent(payload: CreateSupabaseEventPayload, canWrite: () => boolean = () => true): Promise<SupabaseEventRecord> {
     const supabase = getSupabaseClient();
     const upsertPayload: CreateSupabaseEventPayload = {
       ...payload,
@@ -1718,7 +1747,7 @@ export const gamesRepository = {
     }
 
     const { data, error } = await supabase
-      .from("events")
+      .from("events").guardWrite(canWrite)
       .upsert(upsertPayload, {
         onConflict: "id"
       })
@@ -1754,9 +1783,9 @@ export const gamesRepository = {
     return (data ?? []) as SupabaseEventRecord[];
   },
 
-  async deleteEvent(eventId: string): Promise<void> {
+  async deleteEvent(eventId: string, canWrite: () => boolean = () => true): Promise<void> {
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("events").delete().eq("id", eventId);
+    const { error } = await supabase.from("events").guardWrite(canWrite).delete().eq("id", eventId);
 
     if (error) {
       throw new Error(`Event konnte nicht geloescht werden: ${error.message}`);

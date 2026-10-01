@@ -1,0 +1,77 @@
+const assert = require('node:assert/strict');
+const { estimateClockSample, estimateClockOffset, applyClockOffset, elapsedTimerMs, observeServerDate, getServerNow } = require('../.test-dist/utils/serverClock.js');
+const { getNowIso } = require('../.test-dist/utils/time.js');
+const { getTurnBaseDurationMs, getSetupDurationMs, getTimeoutDurationMs } = require('../.test-dist/utils/gameCalculations.js');
+const { createBaseGame } = require('./helpers/gameFixtures.cjs');
+const runServerClockTests = () => {
+  const server = Date.parse('2026-10-01T12:00:00Z');
+  const date = new Date(server).toUTCString();
+  assert.equal(estimateClockSample(null, 0, 10), null);
+  assert.equal(estimateClockSample('bad', 0, 10), null);
+  assert.equal(estimateClockSample(date, 10, 0), null);
+  assert.equal(estimateClockSample(date, 0, 6000), null);
+  assert.equal(estimateClockOffset([]), 0);
+  assert.equal(estimateClockOffset([{lowerBoundMs: NaN, upperBoundMs: 100, roundTripMs: 2}]), 0);
+  assert.equal(estimateClockOffset([{lowerBoundMs: 20, upperBoundMs: 10, roundTripMs: 2}]), 0);
+  const deviceSamples = (skew, phases) => phases.map((phase, index) => {
+    const sent = server + index * 1000 + phase;
+    return estimateClockSample(new Date(Math.floor((sent + 20) / 1000) * 1000).toUTCString(), sent + skew, sent + skew + 40);
+  });
+  const a = deviceSamples(47000, [100, 300, 500, 850]);
+  const b = deviceSamples(-90000, [100, 300, 500, 850]);
+  assert.ok(Math.abs(estimateClockOffset(a.slice(0, 1)) + 47000) > 250, 'One truncated header retains uncertainty');
+  assert.ok(Math.abs(estimateClockOffset(a) + 47000) < 250, 'Different phases converge below 250ms');
+  const nowA = applyClockOffset(server + 10000 + 47000, estimateClockOffset(a));
+  const nowB = applyClockOffset(server + 10000 - 90000, estimateClockOffset(b));
+  assert.equal(nowA, nowB, 'Two skewed devices calculate the same corrected now');
+  assert.equal(elapsedTimerMs(server, 5000, true, nowA), elapsedTimerMs(server, 5000, true, nowB));
+  // Symmetric early/late samples pin the true offset, independent of RTT midpoint bias.
+  assert.equal(estimateClockOffset(deviceSamples(47000, [30, 930])), -47000);
+  const jumped = deviceSamples(147000, [30, 930]);
+  assert.equal(estimateClockOffset([...a, ...jumped]), -147000, 'Clock jump resets to newest compatible samples');
+  const outlier = deviceSamples(999000, [500])[0];
+  assert.equal(estimateClockOffset([...a, outlier]), estimateClockOffset([outlier]), 'Incompatible newest sample resets bounds');
+  assert.equal(estimateClockOffset([...a, outlier, ...b]), estimateClockOffset(b), 'Subsequent valid samples discard outlier bounds');
+  const old = {lowerBoundMs: 10000, upperBoundMs: 11000, roundTripMs: 10};
+  const recent = {lowerBoundMs: 20, upperBoundMs: 80, roundTripMs: 10};
+  assert.equal(estimateClockOffset([old, ...Array(9).fill(recent)]), 50, 'Only recent samples contribute');
+  assert.equal(elapsedTimerMs(100, 500, false, 9000), 500);
+  assert.equal(elapsedTimerMs(100, 500, true, 50), 500);
+  assert.equal(elapsedTimerMs(undefined, -10, true, 50), 0);
+  assert.equal(applyClockOffset(123, NaN), 123);
+  const original = Date.now;
+  try {
+    Date.now = () => server + 60000;
+    assert.equal(getServerNow(), Date.now(), 'Without readable samples, use zero offset');
+    const observeDevice = (skew) => [100, 300, 500, 850].forEach((phase, index) => {
+      const sent = server + index * 1000 + phase;
+      observeServerDate(new Date(Math.floor((sent + 20) / 1000) * 1000).toUTCString(), sent + skew, sent + skew + 40);
+    });
+    observeDevice(47000);
+    Date.now = () => server + 10000 + 47000;
+    assert.equal(getServerNow(), nowA);
+    observeServerDate(null, Date.now(), Date.now() + 10);
+    assert.equal(getServerNow(), nowA, 'Unavailable headers do not erase valid estimates');
+    observeDevice(-90000);
+    Date.now = () => server + 10000 - 90000;
+    assert.equal(getServerNow(), nowB, 'Runtime samples recover after a clock jump');
+    assert.equal(getNowIso(), new Date(nowB).toISOString(), 'New events use corrected timestamps');
+    Date.now = () => server + 60000;
+    observeServerDate(date, server + 59500, server + 60500);
+    assert.equal(getNowIso(), new Date(server + 500).toISOString());
+    const iso = (offset) => new Date(server + offset).toISOString();
+    const turn = {timing: {startedAt: iso(-10000), pauses: [{startedAt: iso(-8000), endedAt: iso(-5000)}, {startedAt: iso(-2000)}]}};
+    assert.equal(getTurnBaseDurationMs(turn), 5000);
+    turn.timing.pauses[1].endedAt = iso(-1000);
+    assert.equal(getTurnBaseDurationMs(turn), 6500);
+    turn.timing.endedAt = iso(0);
+    assert.equal(getTurnBaseDurationMs(turn), 6000);
+    assert.equal(getTurnBaseDurationMs({timing: {startedAt: 'bad', pauses: []}}), 0);
+    const game = createBaseGame({ timeEvents: [{action: 'setup-start', createdAt: iso(-10000)}, {action: 'setup-pause', createdAt: iso(-2000)}] });
+    assert.equal(getSetupDurationMs(game), 8000);
+    game.timeEvents = [{ action: 'timeout-start', createdAt: iso(-2000) }];
+    game.endedAt = iso(0);
+    assert.equal(getTimeoutDurationMs(game), 2000);
+  } finally { Date.now = original; }
+};
+module.exports = { runServerClockTests };

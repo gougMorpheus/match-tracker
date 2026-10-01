@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.formatClockTimeWithSeconds = exports.formatClockTime = exports.formatDateLabel = exports.formatDuration = exports.getDurationMs = exports.toLocalTimeInput = exports.toLocalDateInput = exports.getNowIso = void 0;
-const getNowIso = () => new Date().toISOString();
+const serverClock_1 = require("./serverClock");
+const getNowIso = () => new Date((0, serverClock_1.getServerNow)()).toISOString();
 exports.getNowIso = getNowIso;
 const toLocalDateInput = (date = new Date()) => {
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -18,7 +19,7 @@ const getDurationMs = (startedAt, endedAt) => {
     }
     const start = new Date(startedAt).getTime();
     const end = new Date(endedAt).getTime();
-    return Math.max(end - start, 0);
+    return (0, serverClock_1.elapsedTimerMs)(start, 0, true, end);
 };
 exports.getDurationMs = getDurationMs;
 const formatDuration = (durationMs) => {

@@ -1,4 +1,6 @@
-export const getNowIso = (): string => new Date().toISOString();
+import { elapsedTimerMs, getServerNow } from "./serverClock";
+
+export const getNowIso = (): string => new Date(getServerNow()).toISOString();
 
 export const toLocalDateInput = (date = new Date()): string => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -16,7 +18,7 @@ export const getDurationMs = (startedAt?: string, endedAt?: string): number => {
 
   const start = new Date(startedAt).getTime();
   const end = new Date(endedAt).getTime();
-  return Math.max(end - start, 0);
+  return elapsedTimerMs(start, 0, true, end);
 };
 
 export const formatDuration = (durationMs: number): string => {

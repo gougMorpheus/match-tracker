@@ -3574,3 +3574,38 @@ button.stats-table__row.is-active {
     padding-right: 1rem;
   }
 }
+
+/* Read-only TV display: viewport-scaled, landscape-first and fullscreen-ready. */
+.tv-game {
+  position: fixed; inset: 0; z-index: 1000; overflow: auto;
+  min-height: 100dvh; background: #080d18; color: #f7fafc;
+  padding: clamp(12px, 2vw, 48px); display: flex; flex-direction: column; gap: 2vh;
+  font-size: clamp(18px, 2.2vw, 56px);
+}
+.tv-game--idle, .tv-game--idle * { cursor: none; }
+.tv-game__header, .tv-game__footer { display: flex; justify-content: space-between; gap: 2vw; align-items: center; }
+.tv-game__header span { color: #cbd5e1; }
+.tv-game__players { display: grid; grid-template-columns: 1fr 1fr; gap: 2vw; flex: 1; }
+.tv-player { padding: 2vh 2vw; border: 3px solid #475569; border-radius: 1vw; background: #111c30; min-width: 0; }
+.tv-player--active { border-color: #facc15; box-shadow: inset 0 0 0 3px #facc15; background: #192941; }
+.tv-player__active { color: #cbd5e1; font-size: clamp(16px, 1.6vw, 38px); }
+.tv-player--active .tv-player__active { color: #facc15; font-weight: 800; }
+.tv-player h1 { font-size: clamp(28px, 3.8vw, 96px); margin: 1vh 0; overflow-wrap: anywhere; line-height: 1.1; }
+.tv-player__army { font-size: clamp(20px, 2.5vw, 64px); margin: 0; color: #cbd5e1; overflow-wrap: anywhere; }
+.tv-player__score { font-size: clamp(64px, min(10vw, 16vh), 240px); font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.tv-player__score span { font-size: clamp(20px, 2.5vw, 64px); margin-left: 1vw; color: #cbd5e1; }
+.tv-player__details { display: flex; flex-wrap: wrap; gap: 1.5vw; }
+.tv-player__details strong { color: #fff; }
+.tv-player__timer { display: flex; flex-direction: column; margin-top: 2vh; }
+.tv-player__timer span, .tv-game__phase span { font-size: clamp(16px, 1.5vw, 36px); color: #cbd5e1; }
+.tv-player__timer strong, .tv-game__phase strong { font-size: clamp(30px, 4vw, 100px); font-variant-numeric: tabular-nums; }
+.tv-game__phase { display: flex; flex-direction: column; }
+.tv-game__footer p { margin: .5vh 0; overflow-wrap: anywhere; }
+.tv-game__controls { position: fixed; bottom: 2vh; right: 2vw; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; background: #080d18ee; border-radius: 12px; transition: opacity .2s; }
+.tv-game__controls button { color: #fff; background: #26364d; border: 1px solid #94a3b8; padding: 12px 20px; border-radius: 8px; font-size: 18px; }
+.tv-game--idle .tv-game__controls { opacity: 0; visibility: hidden; pointer-events: none; }
+.tv-game:has(.tv-game__controls:focus-within) .tv-game__controls { opacity: 1; visibility: visible; pointer-events: auto; }
+@media (orientation: portrait) {
+  .tv-game__players { grid-template-columns: 1fr; }
+  .tv-game__header, .tv-game__footer { flex-wrap: wrap; }
+}

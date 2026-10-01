@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { getGameRouteAccess } from "./utils/gameAccessMode";
+import { useEffect, useState } from "react";
 import { GamesPage } from "./pages/GamesPage";
 import { GamePage } from "./pages/GamePage";
 import { NewGamePage } from "./pages/NewGamePage";
@@ -8,15 +9,16 @@ type Route =
   | { view: "games" }
   | { view: "new" }
   | { view: "stats" }
-  | { view: "game"; gameId: string; mode?: "overview" };
+  | { view: "game"; gameId: string; mode?: "overview"; tv?: boolean };
 
 const parseHashRoute = (hash: string): Route => {
-  const normalized = hash.replace(/^#/, "");
+  const normalized = hash.replace(/^#/, "").split("?")[0];
+  const { tv } = getGameRouteAccess(hash, window.location.search);
 
   if (normalized.startsWith("/game/")) {
     const [, , gameId, mode] = normalized.split("/");
     return gameId
-      ? { view: "game", gameId, mode: mode === "overview" ? "overview" : undefined }
+      ? { view: "game", gameId, tv, mode: mode === "overview" ? "overview" : undefined }
       : { view: "games" };
   }
 
@@ -86,6 +88,7 @@ const App = () => {
         <GamePage
           gameId={route.gameId}
           forceOverview={route.mode === "overview"}
+          forceTv={route.tv}
           onBack={() => navigate({ view: "games" })}
         />
       ) : null}

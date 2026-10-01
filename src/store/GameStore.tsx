@@ -53,7 +53,6 @@ import {
   isSetupPaused,
   isSetupRunning,
   isTimeoutActive,
-  isTurnActive,
   isTurnPaused
 } from "../utils/gameCalculations";
 import {
@@ -75,8 +74,9 @@ import { createId } from "../utils/id";
 import { getNowIso } from "../utils/time";
 import {
   getGameAccessMode,
+  getGameRouteAccess,
+  isGameWriteBlocked,
   isGameCompletedForDisplay,
-  isGameViewOnlyInState,
   setGameAccessModeInState,
   type GameAccessMode,
   type GameAccessModeState
@@ -331,17 +331,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     saveSyncQueue(syncQueue);
   }, [syncQueue]);
 
-  useEffect(() => {
-    gameAccessModesRef.current = gameAccessModes;
-  }, [gameAccessModes]);
-
   const getGameAccessModeForId = useCallback(
     (gameId: string) => getGameAccessMode(gameAccessModesRef.current, gameId),
     []
   );
 
   const isGameViewOnly = useCallback(
-    (gameId: string) => isGameViewOnlyInState(gameAccessModesRef.current, gameId),
+    (gameId: string) => isGameWriteBlocked(gameAccessModesRef.current, gameId,
+      getGameRouteAccess(window.location.hash, window.location.search)),
     []
   );
 
@@ -353,9 +350,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const shouldBlockGameWrite = useCallback(
     (gameId: string, action: string): boolean => {
-      if (!isGameViewOnly(gameId)) {
-        return false;
-      }
+      const completed = isGameCompletedForDisplay(gamesRef.current.find((game) => game.id === gameId));
+      const openedHere = getGameRouteAccess(window.location.hash, window.location.search).gameId === gameId;
+      // Persist an editor's just-completed snapshot, but never edit a completed
+      // display. Administrative import/delete/reopen outside the display remain compatible.
+      const persistence = action.startsWith("enqueue-");
+      const administration = !openedHere && ["reopenGame", "deleteGame", "importGames"].includes(action);
+      if (!isGameViewOnly(gameId) && (!completed || persistence || administration)) return false;
 
       warnBlockedViewOnlyWrite(gameId, action);
       return true;
@@ -364,15 +365,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const setGameAccessMode = useCallback((gameId: string, mode: GameAccessMode | null) => {
-    setGameAccessModes((currentModes) => {
-      const nextModes = setGameAccessModeInState(currentModes, gameId, mode);
-      gameAccessModesRef.current = nextModes;
-      return nextModes;
-    });
+    const nextModes = setGameAccessModeInState(gameAccessModesRef.current, gameId, mode);
+    gameAccessModesRef.current = nextModes;
+    setGameAccessModes(nextModes);
   }, []);
 
   const updateSyncQueue = useCallback((updater: (currentQueue: SyncQueueItem[]) => SyncQueueItem[]) => {
-    const nextQueue = updater(queueRef.current);
+    const candidateQueue = updater(queueRef.current);
+    if (candidateQueue === queueRef.current) return;
+    const existingIds = new Set(queueRef.current.map((item) => item.id));
+    const nextQueue = candidateQueue.filter((item) => existingIds.has(item.id) || !isGameViewOnly(item.gameId));
     if (nextQueue === queueRef.current) {
       return;
     }
@@ -384,7 +386,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         length: nextQueue.length
       });
     }
-  }, []);
+  }, [isGameViewOnly]);
 
   const getGame = useCallback(
     (gameId: string) => gamesRef.current.find((game) => game.id === gameId),
@@ -433,6 +435,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const replaceGame = useCallback((nextGame: Game) => {
+    if (isGameViewOnly(nextGame.id)) return gamesRef.current.find((game) => game.id === nextGame.id) ?? nextGame;
     const syncedGame = syncDerivedGameState(nextGame);
     const nextGames = sortGames([syncedGame, ...gamesRef.current.filter((game) => game.id !== syncedGame.id)]);
     gamesRef.current = nextGames;
@@ -440,15 +443,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     saveCachedGames(nextGames);
     syncRememberedPlayerNames(nextGames);
     return syncedGame;
-  }, []);
+  }, [isGameViewOnly]);
 
   const removeGameLocally = useCallback((gameId: string) => {
+    if (isGameViewOnly(gameId)) return;
     const nextGames = gamesRef.current.filter((game) => game.id !== gameId);
     gamesRef.current = nextGames;
     setGames(nextGames);
     saveCachedGames(nextGames);
     syncRememberedPlayerNames(nextGames);
-  }, []);
+  }, [isGameViewOnly]);
 
   const enqueueGameUpsert = useCallback((gameId: string) => {
     if (shouldBlockGameWrite(gameId, "enqueue-game-upsert")) {
@@ -591,6 +595,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       kind: GameHistoryEntry["kind"] = "snapshot",
       recordHistory = true
     ): Game => {
+      if (isGameViewOnly(afterGame.id)) return beforeGame;
       const nextGame = replaceGame(afterGame);
       enqueueSnapshotSync(beforeGame, nextGame);
       if (recordHistory) {
@@ -598,7 +603,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
       return nextGame;
     },
-    [enqueueSnapshotSync, recordHistoryAction, replaceGame]
+    [enqueueSnapshotSync, isGameViewOnly, recordHistoryAction, replaceGame]
   );
 
   const removeQueueItem = useCallback((queueItemId: string) => {
@@ -709,33 +714,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
     try {
       const remoteGames = await gamesRepository.listGames();
-      const mergedGames = mergeRemoteWithPending(remoteGames, gamesRef.current, queueRef.current);
-      const localGamesById = new Map(gamesRef.current.map((game) => [game.id, game]));
-
-      const nextGames = mergedGames.map((remoteGame) => {
-        const localGame = localGamesById.get(remoteGame.id);
-        if (!localGame) {
-          return remoteGame;
-        }
-
-        if (queueRef.current.some((item) => item.type === "reopen-game" && item.gameId === remoteGame.id)) {
-          return localGame;
-        }
-
-        if (isGameCompletedForDisplay(remoteGame)) {
-          return remoteGame;
-        }
-
-        if (isGameCompletedForDisplay(localGame)) {
-          return localGame;
-        }
-
-        if (isSetupRunning(localGame) || isTurnActive(localGame)) {
-          return localGame;
-        }
-
-        return remoteGame;
-      });
+      const nextGames = mergeRemoteWithPending(remoteGames, gamesRef.current,
+        queueRef.current.filter((item) => !isGameViewOnly(item.gameId)));
       gamesRef.current = nextGames;
       setGames(nextGames);
       saveCachedGames(nextGames);
@@ -753,7 +733,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       setSyncStatus("error");
       return false;
     }
-  }, []);
+  }, [isGameViewOnly]);
 
   const flushSyncQueue = useCallback(async (): Promise<boolean> => {
     if (!canAttemptRemoteSync()) {
@@ -798,7 +778,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
 
           if (nextItem.type === "delete-game") {
-            await gamesRepository.deleteGame(nextItem.gameId);
+            await gamesRepository.deleteGame(nextItem.gameId, () => !isGameViewOnly(nextItem.gameId));
             removeQueueItem(nextItem.id);
             continue;
           }
@@ -811,21 +791,22 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
           if (nextItem.type === "reopen-game") {
             if (nextItem.gameEndEventId) {
-              await gamesRepository.deleteEvent(nextItem.gameEndEventId);
+              await gamesRepository.deleteEvent(nextItem.gameEndEventId, () => !isGameViewOnly(nextItem.gameId));
             }
-            await gamesRepository.upsertGameSnapshot(currentGame);
+            if (isGameViewOnly(nextItem.gameId)) break;
+            await gamesRepository.upsertGameSnapshot(currentGame, () => !isGameViewOnly(nextItem.gameId));
             removeQueueItem(nextItem.id);
             continue;
           }
 
           if (nextItem.type === "upsert-game") {
-            await gamesRepository.upsertGameSnapshot(currentGame);
+            await gamesRepository.upsertGameSnapshot(currentGame, () => !isGameViewOnly(nextItem.gameId));
             removeQueueItem(nextItem.id);
             continue;
           }
 
           if (nextItem.type === "delete-event") {
-            await gamesRepository.deleteEvent(nextItem.eventId);
+            await gamesRepository.deleteEvent(nextItem.eventId, () => !isGameViewOnly(nextItem.gameId));
             removeQueueItem(nextItem.id);
             continue;
           }
@@ -836,9 +817,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             continue;
           }
 
-          await gamesRepository.upsertEvent(eventPayload);
+          await gamesRepository.upsertEvent(eventPayload, () => !isGameViewOnly(nextItem.gameId));
           removeQueueItem(nextItem.id);
         } catch (error) {
+          if (isGameViewOnly(nextItem.gameId)) {
+            setSyncStatus("pending");
+            return false;
+          }
           if (import.meta.env.DEV) {
             console.debug("[sync-queue] failure", {
               message: getErrorMessage(error),
@@ -988,7 +973,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         { event: "*", schema: "public", table: "events" },
         () => scheduleRemoteRefresh()
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") scheduleRemoteRefresh();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
@@ -1002,6 +989,30 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
     return () => window.clearInterval(interval);
   }, [refreshGames]);
+
+  useEffect(() => {
+    let busy = false;
+    let cancelled = false;
+    const pullViewerGame = async () => {
+      const { gameId } = getGameRouteAccess(window.location.hash, window.location.search);
+      if (busy || document.hidden || !canAttemptRemoteSync() || !gameId || !isGameViewOnly(gameId) ||
+          isGameCompletedForDisplay(gamesRef.current.find((game) => game.id === gameId))) return;
+      busy = true;
+      try {
+        const remoteGame = await gamesRepository.getGameById(gameId);
+        if (cancelled || !isGameViewOnly(gameId) ||
+            getGameRouteAccess(window.location.hash, window.location.search).gameId !== gameId) return;
+        const nextGames = sortGames([remoteGame, ...gamesRef.current.filter((game) => game.id !== gameId)]);
+        gamesRef.current = nextGames;
+        setGames(nextGames);
+        saveCachedGames(nextGames);
+      } catch { /* Full refresh/retry handles errors; keep last synced display. */ }
+      finally { busy = false; }
+    };
+    void pullViewerGame();
+    const interval = window.setInterval(() => void pullViewerGame(), 3000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [gameAccessModes, isGameViewOnly]);
 
   useEffect(
     () => () => {
@@ -2299,6 +2310,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const reopenGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "reopenGame")) return;
         const game = getGame(gameId);
         if (
           !game ||
@@ -2334,7 +2346,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         recordHistoryAction("Spiel wieder eroeffnet", game, syncedGame);
         void flushSyncQueue();
       }),
-    [flushSyncQueue, getGame, recordHistoryAction, replaceGame, runMutation, updateSyncQueue]
+    [flushSyncQueue, getGame, recordHistoryAction, replaceGame, runMutation, shouldBlockGameWrite, updateSyncQueue]
   );
 
   const updateGameEvent = useCallback(
@@ -2471,19 +2483,21 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const deleteGame = useCallback(
     async (gameId: string) =>
       runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "deleteGame")) return;
         removeGameLocally(gameId);
         updateSyncQueue((currentQueue) =>
           enqueueSyncQueueItem(currentQueue, createGameSyncQueueItem("delete-game", gameId, getNowIso()))
         );
         void flushSyncQueue();
       }),
-    [flushSyncQueue, removeGameLocally, runMutation, updateSyncQueue]
+    [flushSyncQueue, removeGameLocally, runMutation, shouldBlockGameWrite, updateSyncQueue]
   );
 
   const importGames = useCallback(
     async (importedGames: Game[]) =>
       runMutation(async () => {
         importedGames.forEach((game) => {
+          if (shouldBlockGameWrite(game.id, "importGames")) return;
           const normalizedGame = mapPersistedGame(game);
           if (!normalizedGame) {
             return;
@@ -2499,7 +2513,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
         void flushSyncQueue();
       }),
-    [enqueueEventUpsert, enqueueGameUpsert, flushSyncQueue, replaceGame, runMutation]
+    [enqueueEventUpsert, enqueueGameUpsert, flushSyncQueue, replaceGame, runMutation, shouldBlockGameWrite]
   );
 
   const exportGames = useCallback(() => gamesRef.current, []);

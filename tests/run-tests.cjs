@@ -1,3 +1,7 @@
+const { runServerSecondTickerTests } = require("./serverSecondTicker.test.cjs");
+const { runRealtimeTests } = require("./realtime.test.cjs");
+const { runServerClockTests } = require("./serverClock.test.cjs");
+const { runGameStoreReadOnlyTests } = require("./gameStoreReadOnly.test.cjs");
 const { runGameCalculationsTests } = require("./gameCalculations.test.cjs");
 const { runGameAccessModeTests } = require("./gameAccessMode.test.cjs");
 const { runGameSecurityTests } = require("./gameSecurity.test.cjs");
@@ -9,14 +13,19 @@ const suites = [
   ["gameAccessMode", runGameAccessModeTests],
   ["gameSecurity", runGameSecurityTests],
   ["localSync", runLocalSyncTests],
-  ["timerFocus", runTimerFocusTests]
+  ["timerFocus", runTimerFocusTests],
+  ["serverClock", runServerClockTests],
+  ["serverSecondTicker", runServerSecondTickerTests],
+  ["gameStoreReadOnly", runGameStoreReadOnlyTests],
+  ["realtime", runRealtimeTests]
 ];
 
+const main = async () => {
 let failures = 0;
 
 for (const [name, run] of suites) {
   try {
-    run();
+    await run();
     console.log(`PASS ${name}`);
   } catch (error) {
     failures += 1;
@@ -30,3 +39,6 @@ if (failures > 0) {
 } else {
   console.log(`OK ${suites.length} suites`);
 }
+
+};
+void main().catch((error) => { console.error(error); process.exitCode = 1; });

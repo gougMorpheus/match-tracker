@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useServerSecondTick } from "../utils/useServerSecondTick";
+import { TvGameView } from "../components/TvGameView";
 import { FloatingMenu } from "../components/FloatingMenu";
 import { GameMetaFields } from "../components/GameMetaFields";
 import { GameOverview } from "../components/GameOverview";
@@ -50,6 +52,7 @@ interface GamePageProps {
   gameId: string;
   onBack: () => void;
   forceOverview?: boolean;
+  forceTv?: boolean;
 }
 
 type EditableEventFilterType =
@@ -219,11 +222,30 @@ const getCrossedThresholds = (
     (threshold) => previousScore < threshold && nextScore >= threshold
   );
 
-export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProps) => {
+export const GamePage = (props: GamePageProps) => {
+  const { getGame, isLoading, errorMessage, setGameAccessMode } = useGameStore();
+  const game = getGame(props.gameId);
+  useEffect(() => () => setGameAccessMode(props.gameId, null), [props.gameId, setGameAccessMode]);
+  useEffect(() => {
+    if (props.forceTv) setGameAccessMode(props.gameId, "view");
+  }, [props.forceTv, props.gameId, setGameAccessMode]);
+  if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
+    subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfuegbar."} />;
+  if (props.forceTv) return <TvGameView game={game} onExit={() => {
+    setGameAccessMode(game.id, "view");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tv");
+    url.hash = `/game/${game.id}`;
+    window.history.replaceState(null, "", url);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  }} />;
+  return <LoadedGamePage key={props.gameId} {...props} game={game} />;
+};
+
+const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePageProps & { game: Game }) => {
   const {
     games,
     getGame,
-    isLoading,
     isMutating,
     errorMessage,
     clearError,
@@ -252,7 +274,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     isGameViewOnly,
     setGameAccessMode
   } = useGameStore();
-  const [, setTick] = useState(0);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [editingNote, setEditingNote] = useState("");
@@ -292,13 +313,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   const timeoutHoldTimerRef = useRef<number | null>(null);
   const timeoutHoldTriggeredRef = useRef(false);
   const advanceInFlightRef = useRef(false);
-  const game = getGame(gameId);
   const accessMode = getGameAccessMode(gameId);
-  const viewOnlyActive = game ? isGameViewOnly(game.id) : false;
+  const viewOnlyActive = isGameCompletedForDisplay(game) || isGameViewOnly(game.id);
   const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode);
-  const [gameForm, setGameForm] = useState<CreateGameInput | null>(
-    game ? createGameFormState(game) : null
-  );
+  const [gameForm, setGameForm] = useState<CreateGameInput>(createGameFormState(game));
 
   const allTurns = useMemo(
     () =>
@@ -479,12 +497,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   useEffect(() => {
-    if (!game) {
-      setGameForm(null);
-      setSelectedTurnKey(null);
-      return;
-    }
-
     if (isEditingGame) {
       return;
     }
@@ -568,13 +580,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     }
   }, [game]);
 
-  useEffect(
-    () => () => {
-      setGameAccessMode(gameId, null);
-    },
-    [gameId, setGameAccessMode]
-  );
-
   useEffect(() => {
     if (roundChangePulse === null) {
       return;
@@ -593,19 +598,6 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
       clearRedoHoldTimer();
     }
   }, [game?.status, isMutating, redoActionLabel, viewOnlyActive]);
-
-  if (!game && isLoading) {
-    return <Layout title="Tracker" subtitle="Spiel wird geladen" />;
-  }
-
-  if (!game || !gameForm) {
-    return (
-      <Layout
-        title="Spiel nicht gefunden"
-        subtitle={errorMessage ?? "Das Match ist nicht verfuegbar oder konnte nicht geladen werden."}
-      />
-    );
-  }
 
   const latestRound = game.rounds[game.rounds.length - 1];
   const selectedTurn =
@@ -655,6 +647,10 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     const previousState = previousTimerStateRef.current;
     previousTimerStateRef.current = timerStateKey;
 
+    if (viewOnlyActive) {
+      setTimerStateNotice(null);
+      return;
+    }
     if (!previousState || previousState === timerStateKey || isClosed) {
       return;
     }
@@ -676,7 +672,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
             };
 
     setTimerStateNotice(nextNotice);
-  }, [isClosed, timerStateKey]);
+  }, [isClosed, timerStateKey, viewOnlyActive]);
 
   const displayTurn = timerFocusTurn ?? selectedTurn;
   const displayRound =
@@ -705,16 +701,8 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
 
-  useEffect(() => {
-    const focusTurn = timerFocusTurn;
-    if (setupActive || shouldRunTimerRenderTicker(focusTurn, timeoutActive, isClosed)) {
-      const interval = window.setInterval(() => {
-        setTick((current) => current + 1);
-      }, 1000);
-
-      return () => window.clearInterval(interval);
-    }
-  }, [isClosed, setupActive, timeoutActive, timerFocusTurn]);
+  const renderFocusTurn = getTimerFocusTurn(timerFocusTurn, latestTurn, viewOnlyActive);
+  useServerSecondTick(!isClosed && (setupActive || shouldRunTimerRenderTicker(renderFocusTurn, timeoutActive, isClosed)));
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
@@ -913,6 +901,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleRequestDeleteGame = () => {
+    if (isReadOnly) return;
     setDeletePasswordOpen(true);
     setDeletePassword("");
     setDeletePasswordError("");
@@ -925,6 +914,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleConfirmDeleteGame = async () => {
+    if (isReadOnly) return;
     if (!isGameAdminPassword(deletePassword)) {
       setDeletePasswordError("Falsches Passwort.");
       return;
@@ -965,6 +955,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleFinishGame = async (finishReason: GameFinishReason) => {
+    if (isReadOnly) return;
     try {
       await finishGame(game.id, finishReason);
       closeFinishDialog();
@@ -1009,12 +1000,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
   };
 
   const handleRequestReopenGame = () => {
+    if (isReadOnly) return;
     setReopenPasswordOpen(true);
     setReopenPassword("");
     setReopenPasswordError("");
   };
 
   const handleConfirmReopenGame = async () => {
+    if (isReadOnly) return;
     if (!isGameAdminPassword(reopenPassword)) {
       setReopenPasswordError("Falsches Passwort.");
       return;
@@ -1247,9 +1240,11 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   Timer: {timerStatusLabel}
                 </span>
               ) : null}
-              {isReadOnly ? <span className="status-pill status-pill--view-only">View only</span> : null}
+              {isReadOnly ? <span className="status-pill status-pill--view-only">Nur ansehen</span> : null}
             </div>
           </div>
+          {isReadOnly ? <button type="button" className="secondary-button compact-button"
+            onClick={() => { setGameAccessMode(game.id, "view"); window.location.hash = `/game/${game.id}?tv=1`; }}>TV-Modus</button> : null}
           <FloatingMenu
             fixed
             ariaLabel="Spielmenue"
@@ -1276,7 +1271,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
                   { label: "Einstellungen", onClick: openGameSettings },
-                  isClosed
+                  ...(!isReadOnly ? [isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
                         onClick: handleRequestReopenGame,
@@ -1293,7 +1288,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                     onClick: handleRequestDeleteGame,
                     disabled: writeDisabled,
                     danger: true
-                  }
+                  }] : [])
                 ]
               }
             ]}
@@ -1315,14 +1310,14 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
                   className="primary-button compact-button"
                   onClick={() => setGameAccessMode(game.id, "edit")}
                 >
-                  Edit mode
+                  Bearbeiten
                 </button>
                 <button
                   type="button"
                   className="secondary-button compact-button"
                   onClick={() => setGameAccessMode(game.id, "view")}
                 >
-                  View-only mode
+                  Nur ansehen
                 </button>
               </div>
             </div>
@@ -1371,7 +1366,7 @@ export const GamePage = ({ gameId, onBack, forceOverview = false }: GamePageProp
           <span>Spielzeit laeuft, Spielerzeit ist pausiert.</span>
         </div>
       ) : null}
-      {timerStateNotice ? (
+      {!viewOnlyActive && timerStateNotice ? (
         <div className="modal-backdrop">
           <div className="modal-card timer-state-modal">
             <div className="stack">

@@ -4,6 +4,7 @@ exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCo
 exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = void 0;
 exports.getTimeoutDurationMs = getTimeoutDurationMs;
 const time_1 = require("./time");
+const time_2 = require("./time");
 const sumValues = (items) => items.reduce((total, item) => total + item.value, 0);
 const clampFloor = (value) => Math.max(value, 0);
 const getRoundCorrectionKey = (roundNumber) => String(roundNumber);
@@ -331,9 +332,9 @@ const getPlayerCurrentRoundCommandPointsSpent = (game, playerId, roundNumber = (
     .reduce((total, event) => total + event.value, 0);
 exports.getPlayerCurrentRoundCommandPointsSpent = getPlayerCurrentRoundCommandPointsSpent;
 const getTurnBaseDurationMs = (turn, fallbackEndedAt) => {
-    const effectiveEndedAt = turn.timing.endedAt ?? fallbackEndedAt ?? new Date().toISOString();
-    const totalDuration = (0, time_1.getDurationMs)(turn.timing.startedAt, effectiveEndedAt);
-    const pausedDuration = turn.timing.pauses.reduce((total, pause) => total + (0, time_1.getDurationMs)(pause.startedAt, pause.endedAt ?? effectiveEndedAt), 0);
+    const effectiveEndedAt = turn.timing.endedAt ?? fallbackEndedAt ?? (0, time_1.getNowIso)();
+    const totalDuration = (0, time_2.getDurationMs)(turn.timing.startedAt, effectiveEndedAt);
+    const pausedDuration = turn.timing.pauses.reduce((total, pause) => total + (0, time_2.getDurationMs)(pause.startedAt, pause.endedAt ?? effectiveEndedAt), 0);
     return Math.max(totalDuration - pausedDuration, 0);
 };
 exports.getTurnBaseDurationMs = getTurnBaseDurationMs;
@@ -389,28 +390,28 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
             return;
         }
         if (event.action === "setup-resume" && pauseStartedAt) {
-            pausedDuration += (0, time_1.getDurationMs)(pauseStartedAt, event.createdAt);
+            pausedDuration += (0, time_2.getDurationMs)(pauseStartedAt, event.createdAt);
             pauseStartedAt = null;
             return;
         }
         if (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start") {
             const endedAt = event.createdAt;
             if (pauseStartedAt) {
-                pausedDuration += (0, time_1.getDurationMs)(pauseStartedAt, endedAt);
+                pausedDuration += (0, time_2.getDurationMs)(pauseStartedAt, endedAt);
                 pauseStartedAt = null;
             }
-            total += Math.max((0, time_1.getDurationMs)(startedAt, endedAt) - pausedDuration, 0);
+            total += Math.max((0, time_2.getDurationMs)(startedAt, endedAt) - pausedDuration, 0);
             startedAt = null;
             pausedDuration = 0;
             setupClosed = true;
         }
     });
     if (startedAt && includeOpenSetup) {
-        const now = game.endedAt ?? new Date().toISOString();
+        const now = game.endedAt ?? (0, time_1.getNowIso)();
         const openPausedDuration = pauseStartedAt
-            ? pausedDuration + (0, time_1.getDurationMs)(pauseStartedAt, now)
+            ? pausedDuration + (0, time_2.getDurationMs)(pauseStartedAt, now)
             : pausedDuration;
-        total += Math.max((0, time_1.getDurationMs)(startedAt, now) - openPausedDuration, 0);
+        total += Math.max((0, time_2.getDurationMs)(startedAt, now) - openPausedDuration, 0);
     }
     return total;
 };
@@ -488,12 +489,12 @@ function getTimeoutDurationMs(game, roundNumber) {
             return;
         }
         if (event.action === "timeout-end" && openStartedAt) {
-            total += (0, time_1.getDurationMs)(openStartedAt, event.createdAt);
+            total += (0, time_2.getDurationMs)(openStartedAt, event.createdAt);
             openStartedAt = null;
         }
     });
     if (openStartedAt) {
-        total += (0, time_1.getDurationMs)(openStartedAt, new Date().toISOString());
+        total += (0, time_2.getDurationMs)(openStartedAt, game.endedAt ?? (0, time_1.getNowIso)());
     }
     return total;
 }

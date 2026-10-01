@@ -1,3 +1,4 @@
+import { getNowIso } from "./time";
 import type {
   CommandPointEvent,
   Game,
@@ -573,7 +574,7 @@ export const getPlayerCurrentRoundCommandPointsSpent = (
     .reduce((total, event) => total + event.value, 0);
 
 export const getTurnBaseDurationMs = (turn: Turn, fallbackEndedAt?: string): number => {
-  const effectiveEndedAt = turn.timing.endedAt ?? fallbackEndedAt ?? new Date().toISOString();
+  const effectiveEndedAt = turn.timing.endedAt ?? fallbackEndedAt ?? getNowIso();
   const totalDuration = getDurationMs(turn.timing.startedAt, effectiveEndedAt);
   const pausedDuration = turn.timing.pauses.reduce(
     (total, pause) => total + getDurationMs(pause.startedAt, pause.endedAt ?? effectiveEndedAt),
@@ -668,7 +669,7 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
   });
 
   if (startedAt && includeOpenSetup) {
-    const now = game.endedAt ?? new Date().toISOString();
+    const now = game.endedAt ?? getNowIso();
     const openPausedDuration = pauseStartedAt
       ? pausedDuration + getDurationMs(pauseStartedAt, now)
       : pausedDuration;
@@ -786,7 +787,7 @@ export function getTimeoutDurationMs(game: Game, roundNumber?: number): number {
   });
 
   if (openStartedAt) {
-    total += getDurationMs(openStartedAt, new Date().toISOString());
+    total += getDurationMs(openStartedAt, game.endedAt ?? getNowIso());
   }
 
   return total;

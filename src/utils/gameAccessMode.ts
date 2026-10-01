@@ -39,3 +39,17 @@ export const shouldOpenGameViewOnly = (
   game: Game | undefined,
   mode: GameAccessMode | null
 ): boolean => Boolean(game && (isGameCompletedForDisplay(game) || mode === "view"));
+
+// Route policy also protects initial cache/queue flushes before page effects run.
+export const getGameRouteAccess = (hash: string, search = ""): { gameId: string | null; tv: boolean } => {
+  const [path, query = ""] = hash.replace(/^#/, "").split("?");
+  return {
+    gameId: path.startsWith("/game/") ? path.split("/")[2] || null : null,
+    tv: new URLSearchParams(query).get("tv") === "1" || new URLSearchParams(search).get("tv") === "1"
+  };
+};
+export const isGameWriteBlocked = (
+  modes: GameAccessModeState, gameId: string,
+  route: { gameId: string | null; tv: boolean } = { gameId: null, tv: false }
+): boolean => isGameViewOnlyInState(modes, gameId) ||
+  (route.gameId === gameId && (route.tv || getGameAccessMode(modes, gameId) !== "edit"));

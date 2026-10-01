@@ -1,8 +1,8 @@
 import type { Round, Turn } from "../types/game";
 import { isTurnPaused } from "./gameCalculations";
 
-export const getTimerFocusTurn = (selectedTurn?: Turn, latestTurn?: Turn): Turn | undefined =>
-  selectedTurn ?? latestTurn;
+export const getTimerFocusTurn = (selectedTurn?: Turn, latestTurn?: Turn, viewOnly = false): Turn | undefined =>
+  viewOnly ? latestTurn : selectedTurn ?? latestTurn;
 
 export const shouldRunTimerTicker = (
   turn?: Turn,

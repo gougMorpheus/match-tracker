@@ -44,6 +44,9 @@ const runTimerFocusTests = () => {
     });
 
     assert.equal(getTimerFocusTurn(selectedTurn, latestTurn), selectedTurn);
+    assert.equal(getTimerFocusTurn(selectedTurn, latestTurn, true), latestTurn);
+    const endedSelection = {...selectedTurn, timing: {...selectedTurn.timing, endedAt: "2026-04-20T18:40:00Z"}};
+    assert.equal(shouldRunTimerRenderTicker(getTimerFocusTurn(endedSelection, latestTurn, true)), true);
     assert.equal(shouldRunTimerTicker(selectedTurn), true);
     assert.equal(shouldRunTimerTicker(latestTurn), true);
   }

@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const { createBaseGame, createCompletedGameFixture } = require("./helpers/gameFixtures.cjs");
 const {
   getGameAccessMode,
+  getGameRouteAccess,
+  isGameWriteBlocked,
   isGameCompletedForDisplay,
   isGameViewOnlyInState,
   setGameAccessModeInState,
@@ -74,6 +76,15 @@ const runGameAccessModeTests = () => {
   assert.equal(editQueue.length, 1);
 
   assert.equal(isGameViewOnlyInState({}, completedGame.id), false);
+  const route = getGameRouteAccess(`#/game/${runningGame.id}?tv=1`);
+  assert.deepEqual(route, {gameId: runningGame.id, tv: true});
+  assert.equal(isGameWriteBlocked(editModes, runningGame.id, route), true);
+  assert.equal(isGameWriteBlocked({}, runningGame.id, getGameRouteAccess(`#/game/${runningGame.id}`)), true);
+  assert.equal(isGameWriteBlocked(editModes, runningGame.id, getGameRouteAccess(`#/game/${runningGame.id}`)), false);
+  assert.equal(getGameRouteAccess(`#/game/${runningGame.id}/overview?tv=1`).gameId, runningGame.id);
+  assert.equal(getGameRouteAccess(`#/game/${runningGame.id}`, '?tv=1').tv, true);
+  assert.equal(getGameRouteAccess(`#/game/${runningGame.id}?tv=0`).tv, false);
+  assert.deepEqual(getGameRouteAccess('#/games'), {gameId: null, tv: false});
 };
 
 module.exports = {
