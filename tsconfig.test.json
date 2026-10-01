@@ -15,6 +15,7 @@
   },
   "include": [
     "src/types/**/*.ts",
+    "src/data/factionColors.ts",
     "src/utils/**/*.ts"
   ]
 }

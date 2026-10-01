@@ -1,3 +1,9 @@
+const { runFactionColorsTests } = require("./factionColors.test.cjs");
+const { runTvEventFeedTests } = require("./tvEventFeed.test.cjs");
+const { runTvGameViewTests } = require("./tvGameView.test.cjs");
+const { runHeadToHeadTests } = require("./headToHead.test.cjs");
+const { runTvDashboardTests } = require("./tvDashboard.test.cjs");
+const { runTvHighlightsTests } = require("./tvHighlights.test.cjs");
 const { runServerSecondTickerTests } = require("./serverSecondTicker.test.cjs");
 const { runRealtimeTests } = require("./realtime.test.cjs");
 const { runServerClockTests } = require("./serverClock.test.cjs");
@@ -9,6 +15,12 @@ const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 
 const suites = [
+  ["factionColors", runFactionColorsTests],
+  ["tvEventFeed", runTvEventFeedTests],
+  ["tvGameView", runTvGameViewTests],
+  ["headToHead", runHeadToHeadTests],
+  ["tvDashboard", runTvDashboardTests],
+  ["tvHighlights", runTvHighlightsTests],
   ["gameCalculations", runGameCalculationsTests],
   ["gameAccessMode", runGameAccessModeTests],
   ["gameSecurity", runGameSecurityTests],

@@ -1,0 +1,32 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ARMY_OPTIONS = void 0;
+exports.ARMY_OPTIONS = [
+    "Adepta Sororitas",
+    "Adeptus Custodes",
+    "Adeptus Mechanicus",
+    "Aeldari",
+    "Astra Militarum",
+    "Black Templars",
+    "Blood Angels",
+    "Chaos Daemons",
+    "Chaos Knights",
+    "Chaos Space Marines",
+    "Dark Angels",
+    "Death Guard",
+    "Deathwatch",
+    "Drukhari",
+    "Genestealer Cults",
+    "Grey Knights",
+    "Imperial Agents",
+    "Imperial Knights",
+    "Leagues of Votann",
+    "Necrons",
+    "Orks",
+    "Space Marines",
+    "Space Wolves",
+    "Tau Empire",
+    "Thousand Sons",
+    "Tyranids",
+    "World Eaters"
+];
