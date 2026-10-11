@@ -51,3 +51,14 @@ npm run build
 - `src/utils`: Berechnungen, Zeit- und Import/Export-Helfer
 - `src/data`: Seed-Daten fuer Demo-/Importfaelle
 - `src/styles`: globale Styles
+
+## Supabase-Keepalive (GitHub Actions)
+
+Das kostenlose Supabase-Projekt `match-tracker` wird sonst nach ca. 7 Tagen zu geringer Datenbankaktivitaet pausiert. Der Workflow `.github/workflows/supabase-keepalive.yml` verhindert das kostenlos:
+
+- Laeuft 4x taeglich (UTC 02:17, 08:17, 14:17, 20:17 = Berlin 04:17, 10:17, 16:17, 22:17 im Sommer bzw. eine Stunde frueher im Winter) sowie manuell (`gh workflow run "Supabase Keepalive"`).
+- Fuehrt echte PostgREST-Leseabfragen aus (`games`, `events`, Zaehlung), die bis in Postgres laufen. `/auth/v1/health` zaehlt nicht als Aktivitaet und wird nicht benutzt.
+- Prueft HTTP-Status und ein gueltiges JSON-Array. Jeder Fehler macht den Lauf ROT; GitHub schickt dann eine Benachrichtigung bzw. Workflow-Mail (Einstellung: GitHub > Settings > Notifications > Actions > "Send notifications for failed workflows only").
+- Schluessel liegen nur als Repository-Secrets `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` (Settings > Secrets and variables > Actions). Nie im Klartext ins Repo oder in Logs schreiben.
+
+> **WARNUNG: GitHub schaltet Zeitplaene (`schedule`) in Repos nach ca. 60 Tagen ohne Repo-Aktivitaet automatisch ab.** Dann laeuft der Keepalive nicht mehr und Supabase pausiert das Projekt. Gegenmassnahme: Der Job `repo-aktivitaet` im selben Workflow erzeugt automatisch einen kleinen Heartbeat-Commit (`.github/keepalive-heartbeat.txt`) auf `main`, wenn der letzte Commit aelter als 45 Tage ist. Bekommst du von GitHub trotzdem die Mail "scheduled workflow disabled", unter Actions > Supabase Keepalive > "Enable workflow" klicken. Ein Push auf `main` kann einen Netlify-Build ausloesen (gleicher Code, nur eine Textdatei geaendert).

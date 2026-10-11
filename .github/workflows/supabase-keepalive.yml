@@ -1,50 +1,161 @@
+# Supabase-Keepalive fuer das kostenlose Projekt "match-tracker"
+#
+# Zweck: Das Free-Projekt wird von Supabase pausiert, wenn ueber 7 Tage zu wenig
+# Datenbankaktivitaet stattfindet. Dieser Workflow fuehrt mehrmals taeglich ECHTE
+# PostgREST-Abfragen aus (laufen bis in Postgres; /auth/v1/health zaehlt NICHT).
+#
+# Schluessel: ausschliesslich als GitHub-Secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL              (z. B. https://<projekt-id>.supabase.co)
+#   SUPABASE_PUBLISHABLE_KEY  (Publishable/Anon-Key, derselbe wie in der App)
+# Nie Klartext-Schluessel in diese Datei oder ins Repo schreiben.
+#
+# Fehlerweg: Jede Pruefung (HTTP-Status 200, gueltiges JSON-Array) laesst den Lauf ROT werden.
+# GitHub benachrichtigt dann den Account, der zuletzt den cron-Eintrag dieser Datei geaendert hat
+# (Benachrichtigungen > Actions > "Send notifications for failed workflows only" aktiv lassen).
+#
+# !!! WARNUNG: GitHub deaktiviert Zeitplaene (schedule) in oeffentlichen Repos automatisch,
+# !!! wenn ca. 60 Tage lang keine Repo-Aktivitaet (Commits) stattfindet. Dann laeuft dieser
+# !!! Keepalive NICHT mehr und das Supabase-Projekt wird pausiert.
+# !!! Gegenmassnahme: Job "repo-aktivitaet" unten (Heartbeat-Commit, wenn der letzte Commit
+# !!! auf main aelter als 45 Tage ist). Siehe README, Abschnitt "Supabase-Keepalive".
+
 name: Supabase Keepalive
 
 on:
   schedule:
-    - cron: "23 3 * * *"
+    # Uhrzeiten in UTC. Berlin = UTC+2 (Sommerzeit) bzw. UTC+1 (Winterzeit).
+    # 02:17 / 08:17 / 14:17 / 20:17 UTC = 04:17 / 10:17 / 16:17 / 22:17 Uhr (MESZ)
+    #                                    = 03:17 / 09:17 / 15:17 / 21:17 Uhr (MEZ)
+    # Absichtlich krumme Minute, weil GitHub volle Stunden stark verzoegert.
+    - cron: "17 2,8,14,20 * * *"
   workflow_dispatch:
+    inputs:
+      dry_run_heartbeat:
+        description: "Heartbeat-Commit nur simulieren (kein Push). Bei Zeitplanlaeufen immer aus."
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
 jobs:
   keepalive:
-    name: Read one Supabase row
+    name: Supabase Datenbank abfragen
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
     steps:
-      - name: Query public.games
+      - name: Echte Datenbankabfragen (games, events, Zaehlung)
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
-            echo "::error::Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY repository secret."
+            echo "::error::Secret SUPABASE_URL oder SUPABASE_PUBLISHABLE_KEY fehlt."
             exit 1
           fi
+          base="${SUPABASE_URL%/}/rest/v1"
 
-          endpoint="${SUPABASE_URL%/}/rest/v1/games?select=id&limit=1"
-          http_status="$(
-            curl --silent --show-error --output response.json --write-out "%{http_code}" \
-              --request GET \
-              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
-              --header "Authorization: Bearer ${SUPABASE_PUBLISHABLE_KEY}" \
-              --header "Accept: application/json" \
-              "${endpoint}"
-          )"
+          # Gibt nie den Schluessel oder Tabelleninhalte aus, nur Status und Struktur.
+          # $1 = Name, $2 = Pfad+Query, $3 = optional "count" (Prefer: count=exact)
+          check() {
+            local name="$1" path="$2" mode="${3:-}" out hdr status
+            out="$(mktemp)"; hdr="$(mktemp)"
+            local extra=()
+            [[ "${mode}" == "count" ]] && extra=(--header "Prefer: count=exact")
+            status="$(
+              curl --silent --show-error --max-time 30 --retry 2 --retry-delay 5 \
+                --output "${out}" --dump-header "${hdr}" --write-out "%{http_code}" \
+                --request GET \
+                --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+                --header "Authorization: Bearer ${SUPABASE_PUBLISHABLE_KEY}" \
+                --header "Accept: application/json" \
+                "${extra[@]}" \
+                "${base}/${path}"
+            )" || { echo "::error::${name}: curl fehlgeschlagen (Netzwerk/Timeout)."; return 1; }
 
-          if [[ ! "${http_status}" =~ ^2 ]]; then
-            echo "::error::Supabase keepalive failed with HTTP ${http_status}."
-            if [[ -s response.json ]]; then
-              echo "Response body:"
-              head -c 2000 response.json
-              echo
+            # Bei "Prefer: count=exact" + limit antwortet PostgREST regulaer mit 206 (Partial Content).
+            local ok="200"
+            [[ "${mode}" == "count" ]] && ok="200|206"
+            if [[ ! "${status}" =~ ^(${ok})$ ]]; then
+              echo "::error::${name}: erwartet HTTP ${ok//|/ oder }, erhalten HTTP ${status}."
+              # PostgREST-Fehlertext (enthaelt keine Schluessel) gekuerzt anzeigen
+              head -c 300 "${out}" | tr -d '\r' || true; echo
+              return 1
             fi
+            if ! jq -e 'type == "array"' "${out}" >/dev/null 2>&1; then
+              echo "::error::${name}: HTTP ${status}, aber Antwort ist kein gueltiges JSON-Array."
+              return 1
+            fi
+            if ! jq -e 'all(.[]; type == "object" and has("id"))' "${out}" >/dev/null 2>&1; then
+              echo "::error::${name}: Array-Eintraege ohne erwartetes Feld 'id'."
+              return 1
+            fi
+            local rows range
+            rows="$(jq 'length' "${out}")"
+            range="$(grep -i '^content-range:' "${hdr}" | tr -d '\r' | cut -d' ' -f2 || true)"
+            echo "OK ${name}: HTTP ${status}, JSON-Array mit ${rows} Eintrag/Eintraegen${range:+, content-range ${range}}."
+            rm -f "${out}" "${hdr}"
+          }
+
+          failed=0
+          check "games (select id, limit 1)"      "games?select=id&limit=1"                         || failed=1
+          check "events (select id, limit 1)"     "events?select=id&order=created_at.desc&limit=1"  || failed=1
+          check "games (Zaehlung, Postgres count)" "games?select=id&limit=1"             count      || failed=1
+
+          if [[ "${failed}" -ne 0 ]]; then
+            echo "::error::Supabase-Keepalive FEHLGESCHLAGEN - Datenbank evtl. pausiert oder Schluessel/URL falsch."
             exit 1
           fi
+          echo "Supabase-Keepalive erfolgreich: alle Abfragen lieferten HTTP 200 (Zaehlung 200/206) und gueltige Daten."
 
-          echo "Supabase keepalive succeeded with HTTP ${http_status}."
+  repo-aktivitaet:
+    # Haelt den Zeitplan am Leben (GitHub deaktiviert schedule nach ~60 Tagen ohne Repo-Aktivitaet).
+    # Nutzt nur das eingebaute GITHUB_TOKEN und die offizielle actions/checkout-Aktion, keine Fremdaktion.
+    # Schreibt nur eine Textdatei (.github/keepalive-heartbeat.txt), nie App-Code.
+    name: Zeitplan am Leben halten (Heartbeat-Commit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      MAX_AGE_DAYS: "45"
+    steps:
+      - name: Repo auschecken (Default-Branch)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Alter des letzten Commits pruefen, ggf. Heartbeat-Commit
+        shell: bash
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run_heartbeat || 'false' }}
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          last="$(git log -1 --format=%ct)"
+          now="$(date +%s)"
+          age_days=$(( (now - last) / 86400 ))
+          echo "Letzter Commit auf ${BRANCH}: vor ${age_days} Tag(en) (Grenze: ${MAX_AGE_DAYS} Tage; GitHub-Abschaltung ca. 60 Tage)."
+          if (( age_days < MAX_AGE_DAYS )); then
+            echo "Kein Heartbeat-Commit noetig."
+            exit 0
+          fi
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "DRY RUN: Heartbeat-Commit waere jetzt faellig, wird nicht gepusht."
+            exit 0
+          fi
+          date -u +"Letzter Keepalive-Heartbeat: %Y-%m-%dT%H:%M:%SZ" > .github/keepalive-heartbeat.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive-heartbeat.txt
+          git commit -m "chore: keepalive heartbeat (haelt GitHub-Zeitplan aktiv) [skip ci]"
+          git push origin "HEAD:${BRANCH}"
+          echo "Heartbeat-Commit auf ${BRANCH} gepusht."
