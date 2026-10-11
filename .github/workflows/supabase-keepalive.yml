@@ -51,6 +51,46 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
     steps:
+      - name: Projekt-Ref der Secrets pruefen (gibt nur passt/passt nicht aus)
+        shell: bash
+        env:
+          EXPECTED_REF: qznocdybgwzsbovgmesi
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "::error::Secret SUPABASE_URL oder SUPABASE_PUBLISHABLE_KEY fehlt."
+            exit 1
+          fi
+          # Nie Secret-Werte oder Teile davon ausgeben, nur das Ergebnis.
+          url_ref="$(printf '%s' "${SUPABASE_URL}" | sed -nE 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#p')"
+          if [[ "${url_ref}" == "${EXPECTED_REF}" ]]; then
+            echo "SUPABASE_URL: Projekt-Ref passt zu ${EXPECTED_REF}."
+          else
+            echo "::error::SUPABASE_URL: Projekt-Ref passt NICHT zu ${EXPECTED_REF} (oder URL hat unerwartetes Format)."
+            exit 1
+          fi
+          key="${SUPABASE_PUBLISHABLE_KEY}"
+          if [[ "${key}" == sb_publishable_* ]]; then
+            echo "SUPABASE_PUBLISHABLE_KEY: Publishable-Key (kein JWT, enthaelt keinen ref-Claim; Zuordnung wird durch die erfolgreichen Abfragen auf dieses Projekt belegt)."
+          elif [[ "${key}" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]]; then
+            payload="$(printf '%s' "${key}" | cut -d. -f2 | tr '_-' '/+')"
+            while (( ${#payload} % 4 )); do payload+="="; done
+            key_ref="$(printf '%s' "${payload}" | base64 -d 2>/dev/null | jq -r '.ref // empty' 2>/dev/null || true)"
+            key_role="$(printf '%s' "${payload}" | base64 -d 2>/dev/null | jq -r '.role // empty' 2>/dev/null || true)"
+            if [[ "${key_ref}" != "${EXPECTED_REF}" ]]; then
+              echo "::error::SUPABASE_PUBLISHABLE_KEY (JWT): ref-Claim passt NICHT zu ${EXPECTED_REF}."
+              exit 1
+            fi
+            if [[ "${key_role}" != "anon" ]]; then
+              echo "::error::SUPABASE_PUBLISHABLE_KEY (JWT): Rolle ist nicht 'anon' (kein Service-Key in Workflows verwenden!)."
+              exit 1
+            fi
+            echo "SUPABASE_PUBLISHABLE_KEY: JWT, ref-Claim passt, Rolle anon."
+          else
+            echo "::error::SUPABASE_PUBLISHABLE_KEY: unbekanntes Format (weder sb_publishable_ noch JWT)."
+            exit 1
+          fi
+
       - name: Echte Datenbankabfragen (games, events, Zaehlung)
         shell: bash
         run: |
