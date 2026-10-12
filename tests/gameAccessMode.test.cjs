@@ -9,7 +9,9 @@ const {
   setGameAccessModeInState,
   shouldAskGameAccessMode,
   shouldOpenGameViewOnly,
-  shouldShowSpectatorTv
+  shouldShowSpectatorTv,
+  shouldShowClosedGameTv,
+  getTvModeHash
 } = require("../.test-dist/utils/gameAccessMode.js");
 const {
   createGameSyncQueueItem,
@@ -29,9 +31,15 @@ const runGameAccessModeTests = () => {
   assert.equal(shouldShowSpectatorTv(runningGame, "edit"), false);
   assert.equal(shouldShowSpectatorTv(runningGame, null), false);
   assert.equal(shouldShowSpectatorTv(completedGame, "view"), false);
-  // Beendetes Spiel im TV-Modus: Abschlussbildschirm statt TV-Ansicht.
+  // Beendete Spiele: TV-Modus mit Menue ersetzt den Abschlussbildschirm, fuer Spieler und Zuschauer.
   assert.equal(shouldShowSpectatorTv(completedGame, null, true), false);
-  assert.equal(shouldShowSpectatorTv(completedGame, "view", true), false);
+  assert.equal(shouldShowClosedGameTv(completedGame, null), true, "Klick in der Liste -> TV");
+  assert.equal(shouldShowClosedGameTv(completedGame, "view"), true, "?tv=1 bzw. Zuschauer -> TV");
+  assert.equal(shouldShowClosedGameTv(completedGame, "edit"), false, "nur nach Passwort-Entsperren in die Bearbeitung");
+  assert.equal(shouldShowClosedGameTv(runningGame, null), false, "laufende Spiele unveraendert");
+  assert.equal(shouldShowClosedGameTv(runningGame, "view"), false);
+  assert.equal(shouldShowClosedGameTv(undefined, null), false);
+  assert.deepEqual(getGameRouteAccess(`#${getTvModeHash(completedGame.id)}`), { gameId: completedGame.id, tv: true });
   assert.equal(shouldShowSpectatorTv(runningGame, null, true), true);
   assert.equal(shouldShowSpectatorTv(undefined, "view", true), false);
   // Abschluss im TV-Modus bleibt gesperrt: ohne Passwort kein Schreiben, auch nicht mit "edit"-Status.

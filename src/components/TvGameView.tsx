@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useMemo, type CSSProperties, type ReactNode } from "react";
 import { TvScoreChart } from "./TvScoreChart";
 import { TvEventFeed } from "./TvEventFeed";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
@@ -28,7 +28,8 @@ const clock = (ms: number): string => {
     .map((value) => String(value).padStart(2, "0")).join(":");
 };
 
-export const TvGameView = ({ game, onExit }: { game: Game; onExit: () => void }) => {
+// menu: optionales Spielmenue (bei beendeten Spielen; Funktionen des frueheren Abschlussbildschirms).
+export const TvGameView = ({ game, onExit, menu }: { game: Game; onExit: () => void; menu?: ReactNode }) => {
   const { games } = useGameStore();
   const [highlightQueue, setHighlightQueue] = useState<TvHighlight[]>([]);
   const snapshot = useRef<TvSnapshot | null>(null);
@@ -248,6 +249,7 @@ export const TvGameView = ({ game, onExit }: { game: Game; onExit: () => void })
           <TvEventFeed feed={feed} gameId={game.id} />
         </section>
       </main>
+      {menu ? <div className="tv-game__menu">{menu}</div> : null}
       <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
         {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>Vollbild</button> : null}
         <button type="button" onClick={() => void exit()}>TV-Modus verlassen</button>
