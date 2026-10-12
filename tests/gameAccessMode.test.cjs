@@ -29,8 +29,17 @@ const runGameAccessModeTests = () => {
   assert.equal(shouldShowSpectatorTv(runningGame, "edit"), false);
   assert.equal(shouldShowSpectatorTv(runningGame, null), false);
   assert.equal(shouldShowSpectatorTv(completedGame, "view"), false);
-  assert.equal(shouldShowSpectatorTv(completedGame, null, true), true);
+  // Beendetes Spiel im TV-Modus: Abschlussbildschirm statt TV-Ansicht.
+  assert.equal(shouldShowSpectatorTv(completedGame, null, true), false);
+  assert.equal(shouldShowSpectatorTv(completedGame, "view", true), false);
+  assert.equal(shouldShowSpectatorTv(runningGame, null, true), true);
   assert.equal(shouldShowSpectatorTv(undefined, "view", true), false);
+  // Abschluss im TV-Modus bleibt gesperrt: ohne Passwort kein Schreiben, auch nicht mit "edit"-Status.
+  const tvRoute = getGameRouteAccess(`#/game/${completedGame.id}?tv=1`);
+  assert.equal(shouldOpenGameViewOnly(completedGame, "view"), true);
+  assert.equal(isGameWriteBlocked(setGameAccessModeInState({}, completedGame.id, "view"), completedGame.id, tvRoute), true);
+  assert.equal(isGameWriteBlocked(setGameAccessModeInState({}, completedGame.id, "edit"), completedGame.id, tvRoute), true);
+  assert.equal(isGameWriteBlocked({}, completedGame.id, tvRoute), true);
 
   const inconsistentCompletedGame = {
     ...runningGame,

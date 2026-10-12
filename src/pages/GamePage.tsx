@@ -241,7 +241,7 @@ export const GamePage = (props: GamePageProps) => {
   return <LoadedGamePage key={props.gameId} {...props} game={game} />;
 };
 
-const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePageProps & { game: Game }) => {
+const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false, game }: GamePageProps & { game: Game }) => {
   const {
     games,
     getGame,
@@ -1242,7 +1242,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
               {isReadOnly ? <span className="status-pill status-pill--view-only">Nur ansehen</span> : null}
             </div>
           </div>
-          {isReadOnly ? <button type="button" className="secondary-button compact-button"
+          {isReadOnly && !(forceTv && isClosed) ? <button type="button" className="secondary-button compact-button"
             onClick={() => { setGameAccessMode(game.id, "view"); window.location.hash = `/game/${game.id}?tv=1`; }}>TV-Modus</button> : null}
           <FloatingMenu
             fixed
