@@ -19,8 +19,9 @@ const shouldAskGameAccessMode = (game, mode) => Boolean(game && !(0, exports.isG
 exports.shouldAskGameAccessMode = shouldAskGameAccessMode;
 const shouldOpenGameViewOnly = (game, mode) => Boolean(game && ((0, exports.isGameCompletedForDisplay)(game) || mode === "view"));
 exports.shouldOpenGameViewOnly = shouldOpenGameViewOnly;
-// Zuschauer sehen ausschliesslich den TV-Modus: TV-Link oder Wahl "Nur ansehen" bei laufendem Spiel.
-const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && (forceTv || (mode === "view" && !(0, exports.isGameCompletedForDisplay)(game))));
+// Zuschauer sehen bei laufendem Spiel ausschliesslich den TV-Modus (TV-Link oder Wahl "Nur ansehen").
+// Beendete Spiele zeigen auch mit TV-Link den (gesperrten) Abschlussbildschirm.
+const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && !(0, exports.isGameCompletedForDisplay)(game) && (forceTv || mode === "view"));
 exports.shouldShowSpectatorTv = shouldShowSpectatorTv;
 // Route policy also protects initial cache/queue flushes before page effects run.
 const getGameRouteAccess = (hash, search = "") => {

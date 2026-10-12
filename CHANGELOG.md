@@ -5,6 +5,10 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-12
 
+### Beendete Spiele zeigen auch im TV-Modus den Abschlussbildschirm
+
+- Ein beendetes Spiel mit TV-Link (`#/game/<id>?tv=1`) zeigt jetzt den gesperrten Abschlussbildschirm (Ergebnis) statt der TV-Ansicht. Laufende Spiele im TV-Modus unveraendert. `shouldShowSpectatorTv` liefert fuer beendete Spiele immer `false`; der Button "TV-Modus" wird im Abschlussbildschirm unter TV-Link ausgeblendet (sonst Schleife). Wiedereroeffnen/Loeschen/Bearbeiten bleiben gesperrt; die TV-Route blockiert Schreibzugriffe weiterhin. Kein Schema-, RPC- oder Versionswechsel. Tests ergaenzt.
+
 ### Sync-Absicherung (Versionen, Server-RPCs, strengere RLS)
 
 - Fehlerbild: Zwei Geraete konnten gleichzeitig "Weiter" druecken (doppelte Zugwechsel), gekreuztes Start/Stop mit falscher Geraeteuhr verfaelschte Zeiten, Upserts mit dem oeffentlichen Key ueberschrieben fremde Aenderungen. Ursache: direkte Tabellen-Upserts ohne Versions- oder Zeitpruefung, offene RLS-Policies.
