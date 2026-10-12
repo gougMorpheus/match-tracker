@@ -29,7 +29,8 @@ const clock = (ms: number): string => {
 };
 
 // menu: optionales Spielmenue (bei beendeten Spielen; Funktionen des frueheren Abschlussbildschirms).
-export const TvGameView = ({ game, onExit, menu }: { game: Game; onExit: () => void; menu?: ReactNode }) => {
+// fullscreenDocument: Vollbild auf dem ganzen Dokument statt nur der TV-Flaeche, damit Menue-Dialoge im Vollbild sichtbar bleiben.
+export const TvGameView = ({ game, onExit, menu, fullscreenDocument = false }: { game: Game; onExit: () => void; menu?: ReactNode; fullscreenDocument?: boolean }) => {
   const { games } = useGameStore();
   const [highlightQueue, setHighlightQueue] = useState<TvHighlight[]>([]);
   const snapshot = useRef<TvSnapshot | null>(null);
@@ -124,7 +125,7 @@ export const TvGameView = ({ game, onExit, menu }: { game: Game; onExit: () => v
         if (doc.exitFullscreen) await doc.exitFullscreen();
         else doc.webkitExitFullscreen?.();
       } else {
-        const element = root.current as FullscreenElement | null;
+        const element = (fullscreenDocument ? document.documentElement : root.current) as FullscreenElement | null;
         if (element?.requestFullscreen) await element.requestFullscreen();
         else element?.webkitRequestFullscreen?.();
       }

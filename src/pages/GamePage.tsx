@@ -230,14 +230,6 @@ const exitTvToGames = () => {
   window.dispatchEvent(new HashChangeEvent("hashchange"));
 };
 
-const leaveFullscreen = () => {
-  const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
-  try {
-    if (doc.fullscreenElement) void doc.exitFullscreen();
-    else if (doc.webkitFullscreenElement) doc.webkitExitFullscreen?.();
-  } catch { /* Menue funktioniert auch ohne Vollbild-Ende. */ }
-};
-
 export const GamePage = (props: GamePageProps) => {
   const { getGame, isLoading, errorMessage, getGameAccessMode, setGameAccessMode } = useGameStore();
   const game = getGame(props.gameId);
@@ -1222,6 +1214,33 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
     }
   };
 
+  // Escape schliesst den obersten offenen Dialog (Menue behandelt FloatingMenu selbst).
+  const escapeClosers: Array<[boolean, () => void]> = [
+    [reopenPasswordOpen, closeReopenDialog],
+    [deletePasswordOpen, closeDeleteDialog],
+    [statsEligibilityEditorOpen, () => setStatsEligibilityEditorOpen(false)],
+    [noteDialogPlayerId !== null, closeNoteDialog],
+    [editingEventId !== null, closeEditor],
+    [finishDialogOpen, closeFinishDialog],
+    [entriesOpen, () => setEntriesOpen(false)],
+    [notesOpen, () => setNotesOpen(false)],
+    [detailsOpen, closeGameDetails],
+    [overviewOpen, closeOverviewWindow],
+    [scoreLimitWarning !== null, () => setScoreLimitWarning(null)],
+    [timerStateNotice !== null, () => setTimerStateNotice(null)]
+  ];
+  const escapeCloseRef = useRef<(() => void) | null>(null);
+  escapeCloseRef.current = escapeClosers.find(([open]) => open)?.[1] ?? null;
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !escapeCloseRef.current) return;
+      event.preventDefault();
+      escapeCloseRef.current();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <Layout
       title="Tracker"
@@ -1320,6 +1339,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
         <TvGameView
           game={game}
           onExit={exitTvToGames}
+          fullscreenDocument
           menu={
             <FloatingMenu
               ariaLabel="Spielmenue"
@@ -1327,19 +1347,19 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                 {
                   label: "Navigation",
                   items: [
-                    { label: "Zur Uebersicht", onClick: () => { leaveFullscreen(); exitTvToGames(); } },
-                    { label: "Neues Spiel", onClick: () => { leaveFullscreen(); window.location.hash = "/new"; } },
-                    { label: "Statistik", onClick: () => { leaveFullscreen(); window.location.hash = "/stats"; } }
+                    { label: "Zur Uebersicht", onClick: () => { exitTvToGames(); } },
+                    { label: "Neues Spiel", onClick: () => { window.location.hash = "/new"; } },
+                    { label: "Statistik", onClick: () => { window.location.hash = "/stats"; } }
                   ]
                 },
                 {
                   label: "Optionen",
                   items: [
-                    { label: "Scoreboard", onClick: () => { leaveFullscreen(); openOverviewWindow(); } },
-                    { label: "Verlauf", onClick: () => { leaveFullscreen(); setEntriesOpen(true); } },
-                    { label: "Notizen", onClick: () => { leaveFullscreen(); setNotesOpen(true); } },
-                    { label: "Einstellungen", onClick: () => { leaveFullscreen(); openGameSettings(); } },
-                    { label: "Entsperren (Passwort)", detail: "Spiel wieder eroeffnen", onClick: () => { leaveFullscreen(); handleRequestReopenGame(); }, disabled: isMutating }
+                    { label: "Scoreboard", onClick: () => { openOverviewWindow(); } },
+                    { label: "Verlauf", onClick: () => { setEntriesOpen(true); } },
+                    { label: "Notizen", onClick: () => { setNotesOpen(true); } },
+                    { label: "Einstellungen", onClick: () => { openGameSettings(); } },
+                    { label: "Entsperren (Passwort)", detail: "Spiel wieder eroeffnen", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }
                   ]
                 }
               ]}

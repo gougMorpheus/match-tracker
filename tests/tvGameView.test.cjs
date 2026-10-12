@@ -91,6 +91,11 @@ const runTvGameViewTests = () => {
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-game__menu').length,0);
     cursor = 0; const withMenu = TvGameView({game:finished,onExit:()=>{},menu:{type:'menu',props:{}}}); while (pending.length) pending.shift()();
     assert.equal(nodes(withMenu).filter(n => n.props?.className === 'tv-game__menu').length,1);
+    // Beendete Spiele: Vollbild auf dem Dokument, damit Menue-Dialoge im Vollbild sichtbar bleiben.
+    let fsTarget = null; globalThis.document.documentElement.requestFullscreen = async function () { fsTarget = this; };
+    cursor = 0; const fsTree = TvGameView({game:finished,onExit:()=>{},menu:{type:'menu',props:{}},fullscreenDocument:true}); while (pending.length) pending.shift()();
+    nodes(fsTree).find(n => n.type === 'button' && n.props.children === 'Vollbild').props.onClick();
+    assert.equal(fsTarget, globalThis.document.documentElement);
     assert.doesNotMatch(content(tree),/Laufende Zugzeit|Aktueller Zug|VP zurück|verbleibender Runde/);
     const cards=nodes(tree).filter(n=>n.props?.className==='tv-panel tv-player');
     assert.notEqual(cards[0].props.style['--player-color'],cards[1].props.style['--player-color']);
