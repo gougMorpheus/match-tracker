@@ -13,6 +13,7 @@ const { runGameAccessModeTests } = require("./gameAccessMode.test.cjs");
 const { runGameSecurityTests } = require("./gameSecurity.test.cjs");
 const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
+const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -29,7 +30,8 @@ const suites = [
   ["serverClock", runServerClockTests],
   ["serverSecondTicker", runServerSecondTickerTests],
   ["gameStoreReadOnly", runGameStoreReadOnlyTests],
-  ["realtime", runRealtimeTests]
+  ["realtime", runRealtimeTests],
+  ["syncVersioning", runSyncVersioningTests]
 ];
 
 const main = async () => {
@@ -53,4 +55,7 @@ if (failures > 0) {
 }
 
 };
-void main().catch((error) => { console.error(error); process.exitCode = 1; });
+// Haengende Promises duerfen nicht still mit Exit 0 enden.
+let finished = false;
+process.on("exit", (code) => { if (!finished && code === 0) { console.error("FAIL runner: unvollstaendig beendet"); process.exitCode = 1; } });
+void main().then(() => { finished = true; }).catch((error) => { console.error(error); process.exitCode = 1; });

@@ -1,7 +1,10 @@
 import { observeServerDate } from "../utils/serverClock";
 
-interface SupabaseError {
+export interface SupabaseError {
   message: string;
+  status?: number;
+  code?: string;
+  details?: string | null;
 }
 
 interface SupabaseResponse<T> {
@@ -35,6 +38,7 @@ interface RealtimeChannel {
 
 export interface SupabaseClient<Database = unknown> {
   from: <Row = unknown>(table: string) => SupabaseQueryBuilder<Row>;
+  rpc: <Result = unknown>(fn: string, args: Record<string, unknown>, canWrite?: () => boolean) => Promise<SupabaseResponse<Result>>;
   channel: (name: string) => RealtimeChannel;
   removeChannel: (_channel: RealtimeChannel) => Promise<void>;
   readonly __database?: Database;
@@ -56,6 +60,54 @@ const getRequestSource = (): string => {
     .split("\n")
     .map((line) => line.trim())
     .find((line) => line && !line.includes("supabaseRestClient")) ?? "unknown";
+};
+
+const toSupabaseError = (response: Response, parsed: unknown): SupabaseError => {
+  const body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  return {
+    message: typeof body.message === "string" ? body.message : `${response.status} ${response.statusText}`.trim(),
+    status: response.status,
+    code: typeof body.code === "string" ? body.code : undefined,
+    details: typeof body.details === "string" ? body.details : null
+  };
+};
+
+// Schreibweg seit Schema 2: nur noch RPCs (security definer) mit Versionspruefung.
+const callRpc = async <Result>(
+  baseUrl: string,
+  apiKey: string,
+  fn: string,
+  args: Record<string, unknown>,
+  canWrite: () => boolean = () => true
+): Promise<SupabaseResponse<Result>> => {
+  if (!canWrite()) {
+    return { data: null, error: { message: "Schreibzugriff im Ansichtsmodus gesperrt." } };
+  }
+  try {
+    const sentAt = Date.now();
+    const response = await fetch(`${baseUrl}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { apikey: apiKey, Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(args)
+    });
+    observeServerDate(response.headers.get("Date"), sentAt, Date.now());
+    const rawText = await response.text();
+    let parsed: unknown = null;
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      parsed = null;
+    }
+    if (!response.ok) {
+      return { data: null, error: toSupabaseError(response, parsed) };
+    }
+    return { data: parsed as Result, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: { message: error instanceof Error ? error.message : "Supabase RPC fehlgeschlagen." }
+    };
+  }
 };
 
 class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | Row>> {
@@ -232,15 +284,7 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
       const parsed = rawText ? (JSON.parse(rawText) as Row[] | Row | { message?: string }) : null;
 
       if (!response.ok) {
-        return {
-          data: null,
-          error: {
-            message:
-              parsed && typeof parsed === "object" && "message" in parsed && typeof parsed.message === "string"
-                ? parsed.message
-                : `${response.status} ${response.statusText}`.trim()
-          }
-        };
+        return { data: null, error: toSupabaseError(response, parsed) };
       }
 
       return {
@@ -377,6 +421,8 @@ export const createClient = <Database = unknown>(
   _options?: unknown
 ): SupabaseClient<Database> => ({
   from: <Row = unknown>(table: string) => new SupabaseQueryBuilder<Row>(url, apiKey, table),
+  rpc: <Result = unknown>(fn: string, args: Record<string, unknown>, canWrite?: () => boolean) =>
+    callRpc<Result>(url, apiKey, fn, args, canWrite),
   channel: (name) => new SupabaseRealtimeChannel(url, apiKey, name),
   removeChannel: async (channel) => channel.close()
 });

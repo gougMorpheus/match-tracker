@@ -109,22 +109,26 @@ const runGameStoreReadOnlyTests = async () => {
     await store.refreshGames();
     assert.equal(store.getGame(id).timeEvents.at(-1).action, 'setup-pause');
     assert.equal(JSON.parse(data.get('match-tracker.sync-queue.v2')).length, 1);
-    // An access-mode change during repository preflight must block the subsequent POST.
-    store = open(false, [createGameSyncQueueItem('upsert-game', id, '2026-10-01T10:00:00Z')]);
+    // An access-mode change while a write RPC is in flight must block every further write.
+    store = open(false, [
+      createGameSyncQueueItem('upsert-game', id, '2026-10-01T10:00:00Z'),
+      createGameSyncQueueItem('delete-game', id, '2026-10-01T10:00:01Z')
+    ]);
     store.setGameAccessMode(id, 'edit');
     let release;
     let writes = 0;
     globalThis.fetch = async (_url, options) => {
-      if (options.method !== 'GET') writes++;
-      return await new Promise(resolve => { release = () => resolve(response([])); });
+      if (options.method === 'GET') return response([]);
+      writes++;
+      return await new Promise(resolve => { release = () => resolve(response({matched: true, version: 1, flow_version: 1})); });
     };
     const flushing = store.retrySync();
     await new Promise(setImmediate);
-    assert.ok(release, 'Repository preflight is in flight');
+    assert.ok(release, 'Write RPC is in flight');
     store.setGameAccessMode(id, 'view');
     release();
     await flushing;
-    assert.equal(writes, 0, 'REST guard rechecks access immediately before sending');
+    assert.equal(writes, 1, 'REST guard blocks further writes after switching to view mode');
     assert.equal(JSON.parse(data.get('match-tracker.sync-queue.v2')).length, 1);
     // Legacy imported corrections survive normal sync and absent-column fallback.
     const corrected = createBaseGame({id, timerCorrections: {totalMs: 5000, rounds: {'1': 2000}, turns: {'1:1': 1000}}});

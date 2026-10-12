@@ -32,6 +32,8 @@ export interface Database {
           stats_eligibility_overrides: Json | null;
           timer_corrections: Json | null;
           notes: string | null;
+          version?: number;
+          flow_version?: number;
         };
         Insert: {
           id?: string;
@@ -93,6 +95,7 @@ export interface Database {
           value_number: number | null;
           note: string | null;
           occurred_at: string;
+          revoked_by?: string | null;
         };
         Insert: {
           id?: string;

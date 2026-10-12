@@ -109,3 +109,11 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Zeit-Ueberholen: Nur bei Wechsel nach Runde N zu N+1 oder Spielende nach abgeschlossener Runde N, N >= 2. Fuer jede abgeschlossene Runde werden korrigierte Zugzeiten der Runden 1..N kumuliert; ein Zeitfuehrer existiert nur ab 60 Sekunden Abstand. Highlight bei Wechsel gegenueber dem letzten nicht-leeren Zeitfuehrer aus 1..N-1, inklusive beider Zeiten. Die gesamte Rundengeschichte entscheidet unabhaengig vom initialen Zuschauer-Snapshot; normales Hin-und-Her bei Zugwechseln erzeugt keine Zeit-Ueberholen-Highlights.
 
 - Abgeschlossene TV-Spiele zeigen letzte Zugzeit/letzten Spielerzug und das Ergebnis aus `getGameOutcome` statt Rueckstand. Wertbare Siege zeigen den positiven VP-Vorsprung, explizite Draws Unentschieden, Concede-Siege den Hinweis auf Aufgabe; nicht wertbare Enden nur Spiel beendet. Laufende Anzeigen bleiben unveraendert.
+
+## Sync-Absicherung (ab 2026-10-12)
+
+- Schreiben nur ueber RPCs (`src/services/gamesRepository.ts` → `syncRepository`); direkte Insert/Update/Delete sind per RLS/Grants gesperrt.
+- `games.version` schuetzt die Spielzeile, `games.flow_version` die Ablauf-Ereignisse (Start/Ende/Pause/Weiter, Timeout). Punkte, CP und Notizen sind kommutativ und werden nicht versioniert.
+- Konflikt = HTTP 409 (`PT409`); App verwirft die Aktionsgruppe, laedt neu, zeigt `SyncNotices`.
+- `APP_SCHEMA_VERSION` (`src/utils/syncVersioning.ts`) muss zu `mt_schema_info().min_app_schema` passen; bei Schemaaenderung beide erhoehen.
+- Migrationen in `supabase/migrations/` (immer mit `.rollback.sql`); Reihenfolge Rollback: 02, App, 01. `supabase/schema.sql` ist der Stand vor diesen Migrationen.

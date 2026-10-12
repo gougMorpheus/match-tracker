@@ -10,6 +10,11 @@ type SyncQueueItemBase = {
   id: string;
   gameId: string;
   createdAt: string;
+  // Serverstand, auf dem die lokale Aenderung beruht (games.version / games.flow_version).
+  baseVersion?: number;
+  baseFlowVersion?: number;
+  // Gemeinsame Kennung aller Eintraege einer Benutzeraktion (fuer Konfliktaufloesung als Ganzes).
+  batchId?: string;
 };
 
 export type SyncQueueItem =
@@ -77,7 +82,10 @@ const isSyncQueueItem = (item: unknown): item is SyncQueueItem => {
     typeof candidate.id !== "string" ||
     typeof candidate.gameId !== "string" ||
     typeof candidate.createdAt !== "string" ||
-    typeof candidate.type !== "string"
+    typeof candidate.type !== "string" ||
+    (candidate.baseVersion !== undefined && typeof candidate.baseVersion !== "number") ||
+    (candidate.baseFlowVersion !== undefined && typeof candidate.baseFlowVersion !== "number") ||
+    (candidate.batchId !== undefined && typeof candidate.batchId !== "string")
   ) {
     return false;
   }
@@ -244,4 +252,44 @@ export const getSyncErrorMessage = (error: unknown): string => {
 export const isTransientSyncError = (error: unknown): boolean => {
   const rawMessage = error instanceof Error ? error.message : String(error ?? "");
   return isTransientSupabaseErrorMessage(rawMessage);
+};
+
+const SYNC_CONFLICTS_KEY = "match-tracker.sync-conflicts.v1";
+
+// Verworfene Aenderungen werden lokal protokolliert (max. 20), damit nichts spurlos verschwindet.
+export const recordSyncConflict = (entry: Record<string, unknown>): void => {
+  if (!isBrowser) {
+    return;
+  }
+
+  const existing = parseJson<unknown[]>(window.localStorage.getItem(SYNC_CONFLICTS_KEY), []);
+  const next = [...(Array.isArray(existing) ? existing : []), entry].slice(-20);
+  window.localStorage.setItem(SYNC_CONFLICTS_KEY, JSON.stringify(next));
+};
+
+const HELD_GAMES_KEY = "match-tracker.held-local-games.v1";
+
+// Lokaler Stand von Spielen mit wartenden Aenderungen, solange sie nur angesehen werden
+// (Zuschauer/Auswahldialog). Ohne diese Sicherung wuerde der Server-Stand die Queue-Daten ueberschreiben.
+export const loadHeldGames = (): Record<string, Game> => {
+  if (!isBrowser) {
+    return {};
+  }
+
+  const raw = parseJson<Record<string, unknown>>(window.localStorage.getItem(HELD_GAMES_KEY), {});
+  return Object.fromEntries(Object.entries(raw && typeof raw === "object" ? raw : {})
+    .map(([id, value]) => [id, mapPersistedGame(value)] as const)
+    .filter((entry): entry is readonly [string, Game] => Boolean(entry[1])));
+};
+
+export const saveHeldGames = (games: Record<string, Game>): void => {
+  if (!isBrowser) {
+    return;
+  }
+
+  if (Object.keys(games).length) {
+    window.localStorage.setItem(HELD_GAMES_KEY, JSON.stringify(games));
+  } else {
+    window.localStorage.removeItem?.(HELD_GAMES_KEY);
+  }
 };

@@ -122,6 +122,9 @@ export interface TimerCorrections {
 
 export interface Game {
   id: string;
+  // Zuletzt bekannter Serverstand (games.version / games.flow_version), fehlt bei Altdaten.
+  syncVersion?: number;
+  syncFlowVersion?: number;
   createdAt: string;
   updatedAt: string;
   status: GameStatus;

@@ -4,6 +4,7 @@ import { GamesPage } from "./pages/GamesPage";
 import { GamePage } from "./pages/GamePage";
 import { NewGamePage } from "./pages/NewGamePage";
 import { StatsPage } from "./pages/StatsPage";
+import { SyncNotices } from "./components/SyncNotices";
 
 type Route =
   | { view: "games" }
@@ -69,6 +70,7 @@ const App = () => {
 
   return (
     <>
+      <SyncNotices />
       {route.view === "games" ? (
         <GamesPage
           onOpenGame={(gameId) => navigate({ view: "game", gameId })}

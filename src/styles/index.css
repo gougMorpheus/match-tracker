@@ -3706,3 +3706,32 @@ button.stats-table__row.is-active {
   .tv-game__controls { position: fixed; }
   .tv-highlight { position: fixed; }
 }
+
+.sync-notices {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: grid;
+  gap: 0.5rem;
+  width: min(32rem, calc(100vw - 1.5rem));
+}
+
+.sync-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(20, 24, 38, 0.97);
+  border: 1px solid rgba(255, 196, 77, 0.6);
+  color: #f5f7ff;
+  font-size: 0.9rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.sync-notice--update {
+  border-color: rgba(96, 196, 255, 0.7);
+}
