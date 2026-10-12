@@ -5,6 +5,12 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-12
 
+### Escape schliesst Menue/Dialoge, Vollbild bleibt bei Menueklick
+
+- Fehlerbild: Im TV-Menue beendete jeder Klick das Vollbild; Escape schloss Dialoge nicht. Ursache: Das Vollbild galt nur der TV-Flaeche, die Dialoge liegen ausserhalb und waeren im Vollbild unsichtbar; deshalb beendete das Menue (PR #5) das Vollbild vor jedem Dialog. Fuer Escape gab es keinen Handler.
+- Jetzt: Bei beendeten Spielen gilt das Vollbild dem ganzen Dokument (`TvGameView` `fullscreenDocument`), Menueklicks lassen es an. Escape schliesst zuerst ein offenes Menue (`FloatingMenu`), sonst den obersten Dialog der Spielseite. Hinweis: Im echten Browser-Vollbild beendet Escape zusaetzlich das Vollbild (Browser-Verhalten, nicht abschaltbar).
+- Geprueft, unveraendert: Liste und Statistik zaehlen dieselben sichtbaren (nicht geloeschten) Spiele.
+
 ### Beendete Spiele oeffnen im TV-Modus mit Spielmenue (ersetzt Abschlussbildschirm)
 
 - Fehlerbild nach dem vorigen Eintrag: Im Abschlussbildschirm passierte beim Klick auf "TV-Modus" nichts. Ursache: `shouldShowSpectatorTv` lieferte fuer beendete Spiele immer `false`, `?tv=1` renderte daher wieder den Abschlussbildschirm (nur der Button verschwand).
