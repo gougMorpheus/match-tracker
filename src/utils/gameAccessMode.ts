@@ -40,6 +40,13 @@ export const shouldOpenGameViewOnly = (
   mode: GameAccessMode | null
 ): boolean => Boolean(game && (isGameCompletedForDisplay(game) || mode === "view"));
 
+// Zuschauer sehen ausschliesslich den TV-Modus: TV-Link oder Wahl "Nur ansehen" bei laufendem Spiel.
+export const shouldShowSpectatorTv = (
+  game: Game | undefined,
+  mode: GameAccessMode | null,
+  forceTv = false
+): boolean => Boolean(game && (forceTv || (mode === "view" && !isGameCompletedForDisplay(game))));
+
 // Route policy also protects initial cache/queue flushes before page effects run.
 export const getGameRouteAccess = (hash: string, search = ""): { gameId: string | null; tv: boolean } => {
   const [path, query = ""] = hash.replace(/^#/, "").split("?");

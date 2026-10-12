@@ -8,7 +8,8 @@ const {
   isGameViewOnlyInState,
   setGameAccessModeInState,
   shouldAskGameAccessMode,
-  shouldOpenGameViewOnly
+  shouldOpenGameViewOnly,
+  shouldShowSpectatorTv
 } = require("../.test-dist/utils/gameAccessMode.js");
 const {
   createGameSyncQueueItem,
@@ -24,6 +25,12 @@ const runGameAccessModeTests = () => {
   assert.equal(shouldAskGameAccessMode(runningGame, "view"), false);
   assert.equal(shouldAskGameAccessMode(completedGame, null), false);
   assert.equal(shouldOpenGameViewOnly(completedGame, null), true);
+  assert.equal(shouldShowSpectatorTv(runningGame, "view"), true);
+  assert.equal(shouldShowSpectatorTv(runningGame, "edit"), false);
+  assert.equal(shouldShowSpectatorTv(runningGame, null), false);
+  assert.equal(shouldShowSpectatorTv(completedGame, "view"), false);
+  assert.equal(shouldShowSpectatorTv(completedGame, null, true), true);
+  assert.equal(shouldShowSpectatorTv(undefined, "view", true), false);
 
   const inconsistentCompletedGame = {
     ...runningGame,
