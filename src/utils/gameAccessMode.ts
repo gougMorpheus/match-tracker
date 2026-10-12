@@ -41,12 +41,19 @@ export const shouldOpenGameViewOnly = (
 ): boolean => Boolean(game && (isGameCompletedForDisplay(game) || mode === "view"));
 
 // Zuschauer sehen bei laufendem Spiel ausschliesslich den TV-Modus (TV-Link oder Wahl "Nur ansehen").
-// TV-Link (?tv=1) zeigt immer die TV-Ansicht, bei beendeten Spielen als TV-Abschlussansicht (nur lesen).
+// Beendete Spiele behandelt shouldShowClosedGameTv (TV-Ansicht mit Spielmenue).
 export const shouldShowSpectatorTv = (
   game: Game | undefined,
   mode: GameAccessMode | null,
   forceTv = false
-): boolean => Boolean(game && (forceTv || (mode === "view" && !isGameCompletedForDisplay(game))));
+): boolean => Boolean(game && !isGameCompletedForDisplay(game) && (forceTv || mode === "view"));
+
+// Beendete Spiele oeffnen fuer alle (Spieler und Zuschauer, mit oder ohne ?tv=1) im TV-Modus mit Menue.
+// Nur waehrend des Entsperrens per Passwort (Modus "edit") nicht mehr, danach wie bisher in die Bearbeitung.
+export const shouldShowClosedGameTv = (
+  game: Game | undefined,
+  mode: GameAccessMode | null
+): boolean => Boolean(game && isGameCompletedForDisplay(game) && mode !== "edit");
 
 // Ziel des Buttons "TV-Modus" im Spiel (auch im Abschlussbildschirm).
 export const getTvModeHash = (gameId: string): string => `/game/${gameId}?tv=1`;

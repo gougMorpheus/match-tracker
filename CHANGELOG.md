@@ -5,10 +5,10 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-12
 
-### Fix: "TV-Modus" im Abschlussbildschirm zeigt TV-Abschlussansicht
+### Beendete Spiele oeffnen im TV-Modus mit Spielmenue (ersetzt Abschlussbildschirm)
 
-- Fehlerbild: Im Abschlussbildschirm eines beendeten Spiels passierte beim Klick auf "TV-Modus" scheinbar nichts. Ursache (aus dem vorigen Eintrag): `shouldShowSpectatorTv` lieferte fuer beendete Spiele immer `false`, daher renderte `?tv=1` wieder den Abschlussbildschirm (nur der Button verschwand).
-- Jetzt: TV-Link bzw. Button zeigt bei beendeten Spielen die TV-Ansicht (`TvGameView`) im Abschlusszustand (Ergebnis, Spieler, Punkte, Vollbild, nur lesen); "TV-Modus verlassen" fuehrt wie bei laufenden Spielen zur Spieleliste. Ohne TV-Link bleibt der gesperrte Abschlussbildschirm; Sperre/Schreibrechte unveraendert. Neue Hilfsfunktion `getTvModeHash`, Tests fuer den Klickweg und die TV-Abschlussansicht.
+- Fehlerbild nach dem vorigen Eintrag: Im Abschlussbildschirm passierte beim Klick auf "TV-Modus" nichts. Ursache: `shouldShowSpectatorTv` lieferte fuer beendete Spiele immer `false`, `?tv=1` renderte daher wieder den Abschlussbildschirm (nur der Button verschwand).
+- Neu: Ein beendetes Spiel oeffnet fuer alle (Klick in der Liste, `?tv=1`) direkt die TV-Ansicht (`TvGameView`, Zustand "Spiel beendet"); der fruehere Abschlussbildschirm entfaellt. Neues Spielmenue oben rechts in der TV-Ansicht mit allen Funktionen des alten Abschlussbildschirms: Zur Uebersicht, Neues Spiel, Statistik, Scoreboard (frueher Inhalt des Abschlussbildschirms), Verlauf, Notizen, Einstellungen (Details) sowie "Entsperren (Passwort)" = Spiel wieder eroeffnen mit Passwort, danach wie bisher Bearbeitung. Vollbild und "TV-Modus verlassen" (zur Spieleliste) bleiben. Ohne Passwort keine Schreibaktion; Loeschen war im Abschlussbildschirm nicht erreichbar und bleibt es. Laufende Spiele unveraendert. Neue Hilfsfunktionen `shouldShowClosedGameTv`, `getTvModeHash`; Tests angepasst.
 
 ### Beendete Spiele zeigen auch im TV-Modus den Abschlussbildschirm
 

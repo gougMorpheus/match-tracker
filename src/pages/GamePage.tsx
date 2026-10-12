@@ -45,7 +45,7 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
-import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowSpectatorTv } from "../utils/gameAccessMode";
+import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowClosedGameTv, shouldShowSpectatorTv } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -222,6 +222,22 @@ const getCrossedThresholds = (
     (threshold) => previousScore < threshold && nextScore >= threshold
   );
 
+const exitTvToGames = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("tv");
+  url.hash = "/games";
+  window.history.replaceState(null, "", url);
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+};
+
+const leaveFullscreen = () => {
+  const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
+  try {
+    if (doc.fullscreenElement) void doc.exitFullscreen();
+    else if (doc.webkitFullscreenElement) doc.webkitExitFullscreen?.();
+  } catch { /* Menue funktioniert auch ohne Vollbild-Ende. */ }
+};
+
 export const GamePage = (props: GamePageProps) => {
   const { getGame, isLoading, errorMessage, getGameAccessMode, setGameAccessMode } = useGameStore();
   const game = getGame(props.gameId);
@@ -231,13 +247,7 @@ export const GamePage = (props: GamePageProps) => {
   }, [props.forceTv, props.gameId, setGameAccessMode]);
   if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
     subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfuegbar."} />;
-  if (shouldShowSpectatorTv(game, getGameAccessMode(game.id), props.forceTv)) return <TvGameView game={game} onExit={() => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("tv");
-    url.hash = "/games";
-    window.history.replaceState(null, "", url);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  }} />;
+  if (shouldShowSpectatorTv(game, getGameAccessMode(game.id), props.forceTv)) return <TvGameView game={game} onExit={exitTvToGames} />;
   return <LoadedGamePage key={props.gameId} {...props} game={game} />;
 };
 
@@ -315,6 +325,8 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
   const accessMode = getGameAccessMode(gameId);
   const viewOnlyActive = isGameCompletedForDisplay(game) || isGameViewOnly(game.id);
   const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode);
+  // Beendete Spiele: TV-Modus ersetzt den frueheren Abschlussbildschirm (Funktionen im TV-Menue).
+  const closedTv = shouldShowClosedGameTv(game, accessMode);
   const [gameForm, setGameForm] = useState<CreateGameInput>(createGameFormState(game));
 
   const allTurns = useMemo(
@@ -999,20 +1011,29 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
   };
 
   const handleRequestReopenGame = () => {
-    if (isReadOnly) return;
+    if (isReadOnly && !closedTv) return;
     setReopenPasswordOpen(true);
     setReopenPassword("");
     setReopenPasswordError("");
   };
 
   const handleConfirmReopenGame = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly && !closedTv) return;
     if (!isGameAdminPassword(reopenPassword)) {
       setReopenPasswordError("Falsches Passwort.");
       return;
     }
 
     try {
+      // Erst nach korrektem Passwort: Bearbeiten freigeben und TV-Link verlassen (sonst blockiert die Route das Schreiben).
+      if (closedTv) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("tv");
+        url.hash = `/game/${game.id}`;
+        window.history.replaceState(null, "", url);
+        setGameAccessMode(game.id, "edit");
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      }
       setGameAccessMode(game.id, "edit");
       await reopenGame(game.id);
       closeReopenDialog();
@@ -1225,7 +1246,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
       }
       stickyHeader
       headerClassName={gameHeaderClassName}
-      actions={
+      actions={closedTv ? undefined :
         <>
           <div className="game-header-meta">
             <div className="game-status-strip">
@@ -1295,6 +1316,37 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
         </>
       }
     >
+      {closedTv ? (
+        <TvGameView
+          game={game}
+          onExit={exitTvToGames}
+          menu={
+            <FloatingMenu
+              ariaLabel="Spielmenue"
+              sections={[
+                {
+                  label: "Navigation",
+                  items: [
+                    { label: "Zur Uebersicht", onClick: () => { leaveFullscreen(); exitTvToGames(); } },
+                    { label: "Neues Spiel", onClick: () => { leaveFullscreen(); window.location.hash = "/new"; } },
+                    { label: "Statistik", onClick: () => { leaveFullscreen(); window.location.hash = "/stats"; } }
+                  ]
+                },
+                {
+                  label: "Optionen",
+                  items: [
+                    { label: "Scoreboard", onClick: () => { leaveFullscreen(); openOverviewWindow(); } },
+                    { label: "Verlauf", onClick: () => { leaveFullscreen(); setEntriesOpen(true); } },
+                    { label: "Notizen", onClick: () => { leaveFullscreen(); setNotesOpen(true); } },
+                    { label: "Einstellungen", onClick: () => { leaveFullscreen(); openGameSettings(); } },
+                    { label: "Entsperren (Passwort)", detail: "Spiel wieder eroeffnen", onClick: () => { leaveFullscreen(); handleRequestReopenGame(); }, disabled: isMutating }
+                  ]
+                }
+              ]}
+            />
+          }
+        />
+      ) : null}
       {shouldShowAccessModeDialog ? (
         <div className="modal-backdrop">
           <div className="modal-card">
@@ -1384,7 +1436,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
           </div>
         </div>
       ) : null}
-      {overviewOpen && !showOverview ? (
+      {overviewOpen && (!showOverview || closedTv) ? (
         <div className="modal-backdrop">
           <div className="modal-card modal-card--wide game-overview-modal">
             <div className="stack">
@@ -1573,7 +1625,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
           </article>
         ) : null}
 
-        {showOverview ? (
+        {closedTv ? null : showOverview ? (
           <GameOverview game={game} />
         ) : isSetupScreen ? (
           <div className="stack">

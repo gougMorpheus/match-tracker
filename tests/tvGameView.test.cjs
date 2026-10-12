@@ -87,6 +87,10 @@ const runTvGameViewTests = () => {
     // TV-Abschlussansicht: nur Ansehen, kein Bearbeiten/Wiedereroeffnen/Loeschen.
     assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Vollbild','TV-Modus verlassen']);
     assert.doesNotMatch(content(tree),/eroeffnen|loeschen|Bearbeiten|Passwort/i);
+    // Spielmenue (beendete Spiele) wird nur angezeigt, wenn uebergeben.
+    assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-game__menu').length,0);
+    cursor = 0; const withMenu = TvGameView({game:finished,onExit:()=>{},menu:{type:'menu',props:{}}}); while (pending.length) pending.shift()();
+    assert.equal(nodes(withMenu).filter(n => n.props?.className === 'tv-game__menu').length,1);
     assert.doesNotMatch(content(tree),/Laufende Zugzeit|Aktueller Zug|VP zurück|verbleibender Runde/);
     const cards=nodes(tree).filter(n=>n.props?.className==='tv-panel tv-player');
     assert.notEqual(cards[0].props.style['--player-color'],cards[1].props.style['--player-color']);
