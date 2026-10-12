@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isGameWriteBlocked = exports.getGameRouteAccess = exports.shouldOpenGameViewOnly = exports.shouldAskGameAccessMode = exports.isGameCompletedForDisplay = exports.isGameViewOnlyInState = exports.getGameAccessMode = exports.setGameAccessModeInState = void 0;
+exports.isGameWriteBlocked = exports.getGameRouteAccess = exports.shouldShowSpectatorTv = exports.shouldOpenGameViewOnly = exports.shouldAskGameAccessMode = exports.isGameCompletedForDisplay = exports.isGameViewOnlyInState = exports.getGameAccessMode = exports.setGameAccessModeInState = void 0;
 const setGameAccessModeInState = (currentModes, gameId, mode) => {
     const { [gameId]: _currentMode, ...rest } = currentModes;
     return mode ? { ...rest, [gameId]: mode } : rest;
@@ -19,6 +19,9 @@ const shouldAskGameAccessMode = (game, mode) => Boolean(game && !(0, exports.isG
 exports.shouldAskGameAccessMode = shouldAskGameAccessMode;
 const shouldOpenGameViewOnly = (game, mode) => Boolean(game && ((0, exports.isGameCompletedForDisplay)(game) || mode === "view"));
 exports.shouldOpenGameViewOnly = shouldOpenGameViewOnly;
+// Zuschauer sehen ausschliesslich den TV-Modus: TV-Link oder Wahl "Nur ansehen" bei laufendem Spiel.
+const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && (forceTv || (mode === "view" && !(0, exports.isGameCompletedForDisplay)(game))));
+exports.shouldShowSpectatorTv = shouldShowSpectatorTv;
 // Route policy also protects initial cache/queue flushes before page effects run.
 const getGameRouteAccess = (hash, search = "") => {
     const [path, query = ""] = hash.replace(/^#/, "").split("?");

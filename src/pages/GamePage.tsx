@@ -45,7 +45,7 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
-import { isGameCompletedForDisplay, shouldAskGameAccessMode } from "../utils/gameAccessMode";
+import { isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowSpectatorTv } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -223,7 +223,7 @@ const getCrossedThresholds = (
   );
 
 export const GamePage = (props: GamePageProps) => {
-  const { getGame, isLoading, errorMessage, setGameAccessMode } = useGameStore();
+  const { getGame, isLoading, errorMessage, getGameAccessMode, setGameAccessMode } = useGameStore();
   const game = getGame(props.gameId);
   useEffect(() => () => setGameAccessMode(props.gameId, null), [props.gameId, setGameAccessMode]);
   useEffect(() => {
@@ -231,11 +231,10 @@ export const GamePage = (props: GamePageProps) => {
   }, [props.forceTv, props.gameId, setGameAccessMode]);
   if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
     subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfuegbar."} />;
-  if (props.forceTv) return <TvGameView game={game} onExit={() => {
-    setGameAccessMode(game.id, "view");
+  if (shouldShowSpectatorTv(game, getGameAccessMode(game.id), props.forceTv)) return <TvGameView game={game} onExit={() => {
     const url = new URL(window.location.href);
     url.searchParams.delete("tv");
-    url.hash = `/game/${game.id}`;
+    url.hash = "/games";
     window.history.replaceState(null, "", url);
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   }} />;
@@ -1315,7 +1314,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  onClick={() => setGameAccessMode(game.id, "view")}
+                  onClick={() => { setGameAccessMode(game.id, "view"); window.location.hash = `/game/${game.id}?tv=1`; }}
                 >
                   Nur ansehen
                 </button>

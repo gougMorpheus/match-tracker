@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-12
+
+### Zuschauer sehen nur noch den TV-Modus
+
+- Wer ein laufendes Match mit "Nur ansehen" oeffnet, landet direkt in `#/game/<id>?tv=1`; die klassische Nur-Lese-Ansicht fuer Zuschauer entfaellt. Alte TV-Links (`#/game/<id>?tv=1`, `?tv=1#/game/<id>`, auch mit `/overview`) bleiben TV. "TV-Modus verlassen" fuehrt jetzt zur Spieleliste statt in die Nur-Lese-Ansicht. Spielereingabe ("Bearbeiten") und Uebersicht beendeter Spiele unveraendert. Neue Hilfsfunktion `shouldShowSpectatorTv` mit Tests.
+
 ## 2026-10-01
 
 ### TV-Modus als 16:9-Dashboard
