@@ -5,6 +5,11 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-12
 
+### Fix: "TV-Modus" im Abschlussbildschirm zeigt TV-Abschlussansicht
+
+- Fehlerbild: Im Abschlussbildschirm eines beendeten Spiels passierte beim Klick auf "TV-Modus" scheinbar nichts. Ursache (aus dem vorigen Eintrag): `shouldShowSpectatorTv` lieferte fuer beendete Spiele immer `false`, daher renderte `?tv=1` wieder den Abschlussbildschirm (nur der Button verschwand).
+- Jetzt: TV-Link bzw. Button zeigt bei beendeten Spielen die TV-Ansicht (`TvGameView`) im Abschlusszustand (Ergebnis, Spieler, Punkte, Vollbild, nur lesen); "TV-Modus verlassen" fuehrt wie bei laufenden Spielen zur Spieleliste. Ohne TV-Link bleibt der gesperrte Abschlussbildschirm; Sperre/Schreibrechte unveraendert. Neue Hilfsfunktion `getTvModeHash`, Tests fuer den Klickweg und die TV-Abschlussansicht.
+
 ### Beendete Spiele zeigen auch im TV-Modus den Abschlussbildschirm
 
 - Ein beendetes Spiel mit TV-Link (`#/game/<id>?tv=1`) zeigt jetzt den gesperrten Abschlussbildschirm (Ergebnis) statt der TV-Ansicht. Laufende Spiele im TV-Modus unveraendert. `shouldShowSpectatorTv` liefert fuer beendete Spiele immer `false`; der Button "TV-Modus" wird im Abschlussbildschirm unter TV-Link ausgeblendet (sonst Schleife). Wiedereroeffnen/Loeschen/Bearbeiten bleiben gesperrt; die TV-Route blockiert Schreibzugriffe weiterhin. Kein Schema-, RPC- oder Versionswechsel. Tests ergaenzt.

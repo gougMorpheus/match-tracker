@@ -84,6 +84,9 @@ const runTvGameViewTests = () => {
     assert.match(content(phase(tree)),/Letzte Zugzeit/);
     assert.equal(content(deficit(tree)),'Alice gewinnt mit 15 VP Vorsprung');
     assert.match(content(tree),/Letzter Zug · Bob/);
+    // TV-Abschlussansicht: nur Ansehen, kein Bearbeiten/Wiedereroeffnen/Loeschen.
+    assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Vollbild','TV-Modus verlassen']);
+    assert.doesNotMatch(content(tree),/eroeffnen|loeschen|Bearbeiten|Passwort/i);
     assert.doesNotMatch(content(tree),/Laufende Zugzeit|Aktueller Zug|VP zurück|verbleibender Runde/);
     const cards=nodes(tree).filter(n=>n.props?.className==='tv-panel tv-player');
     assert.notEqual(cards[0].props.style['--player-color'],cards[1].props.style['--player-color']);

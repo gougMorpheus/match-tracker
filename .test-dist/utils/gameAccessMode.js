@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isGameWriteBlocked = exports.getGameRouteAccess = exports.shouldShowSpectatorTv = exports.shouldOpenGameViewOnly = exports.shouldAskGameAccessMode = exports.isGameCompletedForDisplay = exports.isGameViewOnlyInState = exports.getGameAccessMode = exports.setGameAccessModeInState = void 0;
+exports.isGameWriteBlocked = exports.getGameRouteAccess = exports.getTvModeHash = exports.shouldShowSpectatorTv = exports.shouldOpenGameViewOnly = exports.shouldAskGameAccessMode = exports.isGameCompletedForDisplay = exports.isGameViewOnlyInState = exports.getGameAccessMode = exports.setGameAccessModeInState = void 0;
 const setGameAccessModeInState = (currentModes, gameId, mode) => {
     const { [gameId]: _currentMode, ...rest } = currentModes;
     return mode ? { ...rest, [gameId]: mode } : rest;
@@ -20,9 +20,12 @@ exports.shouldAskGameAccessMode = shouldAskGameAccessMode;
 const shouldOpenGameViewOnly = (game, mode) => Boolean(game && ((0, exports.isGameCompletedForDisplay)(game) || mode === "view"));
 exports.shouldOpenGameViewOnly = shouldOpenGameViewOnly;
 // Zuschauer sehen bei laufendem Spiel ausschliesslich den TV-Modus (TV-Link oder Wahl "Nur ansehen").
-// Beendete Spiele zeigen auch mit TV-Link den (gesperrten) Abschlussbildschirm.
-const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && !(0, exports.isGameCompletedForDisplay)(game) && (forceTv || mode === "view"));
+// TV-Link (?tv=1) zeigt immer die TV-Ansicht, bei beendeten Spielen als TV-Abschlussansicht (nur lesen).
+const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && (forceTv || (mode === "view" && !(0, exports.isGameCompletedForDisplay)(game))));
 exports.shouldShowSpectatorTv = shouldShowSpectatorTv;
+// Ziel des Buttons "TV-Modus" im Spiel (auch im Abschlussbildschirm).
+const getTvModeHash = (gameId) => `/game/${gameId}?tv=1`;
+exports.getTvModeHash = getTvModeHash;
 // Route policy also protects initial cache/queue flushes before page effects run.
 const getGameRouteAccess = (hash, search = "") => {
     const [path, query = ""] = hash.replace(/^#/, "").split("?");
