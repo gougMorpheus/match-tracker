@@ -1,3 +1,4 @@
+import { parseSyncConflict, type SyncConflictInfo, type SyncRpcResult } from "../utils/syncVersioning";
 import type {
   CommandPointEvent,
   CreateGameInput,
@@ -962,7 +963,9 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
   const noteEvents: NoteEvent[] = [];
   const timeEvents: TimeEvent[] = [];
 
-  sortEventRecordsByCreation(events).forEach((event) => {
+  // Zurueckgenommene Ereignisse und Audit-Zeilen (Schema 2) nie anzeigen; RLS blendet sie bereits aus.
+  sortEventRecordsByCreation(events.filter((event) =>
+    !event.revoked_by && event.event_type !== "revoke" && event.event_type !== "restore")).forEach((event) => {
     const playerId = getPlayerIdFromSlot(gameId, event.player_slot);
     const eventNote = event.note ?? undefined;
     const baseEvent = {
@@ -1033,10 +1036,22 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
   };
 };
 
+// Server liefert Zeitstempel als "+00:00" mit variabler Nachkommastelle, Clients als "...Z".
+// Einheitliches ISO-Format, damit Stringvergleiche/Sortierung (startedAt, Timer) stabil bleiben.
+const toIsoTimestamp = <T extends string | null | undefined>(value: T): T => {
+  if (!value) return value;
+  const parsed = Date.parse(value);
+  return (Number.isFinite(parsed) ? new Date(parsed).toISOString() : value) as T;
+};
+
 export const mapSupabaseGameToAppGame = (
-  row: SupabaseGameRecord,
-  events: SupabaseEventRecord[]
+  rawRow: SupabaseGameRecord,
+  rawEvents: SupabaseEventRecord[]
 ): Game => {
+  const row: SupabaseGameRecord = { ...rawRow, created_at: toIsoTimestamp(rawRow.created_at),
+    started_at: toIsoTimestamp(rawRow.started_at), ended_at: toIsoTimestamp(rawRow.ended_at) };
+  const events = rawEvents.map((event) => ({ ...event, created_at: toIsoTimestamp(event.created_at),
+    occurred_at: toIsoTimestamp(event.occurred_at) }));
   const playerOneId = createPlayerId(row.id, 1);
   const playerTwoId = createPlayerId(row.id, 2);
   const { date, time } = getScheduledDateParts(row.game_date);
@@ -1060,6 +1075,8 @@ export const mapSupabaseGameToAppGame = (
 
   return {
     id: row.id,
+    syncVersion: typeof row.version === "number" ? row.version : undefined,
+    syncFlowVersion: typeof row.flow_version === "number" ? row.flow_version : undefined,
     createdAt: row.created_at,
     updatedAt: getUpdatedAt(row, events),
     status: endedAt ? "completed" : "active",
@@ -1451,6 +1468,52 @@ const fetchEventsForGameIds = async (gameIds: string[]): Promise<SupabaseEventRe
   }
 
   return events;
+};
+
+export class SyncRpcError extends Error {
+  constructor(message: string, readonly conflict: SyncConflictInfo | null, readonly status?: number) {
+    super(message);
+    this.name = "SyncRpcError";
+  }
+}
+
+const runSyncRpc = async (fn: string, args: Record<string, unknown>, canWrite: () => boolean, label: string): Promise<SyncRpcResult> => {
+  const { data, error } = await getSupabaseClient().rpc<SyncRpcResult>(fn, args, canWrite);
+  if (error) {
+    throw new SyncRpcError(`${label}: ${error.message}`, parseSyncConflict(error), error.status);
+  }
+  return data ?? { matched: false };
+};
+
+// Schreibweg ab Schema 2 (supabase/migrations/20261012_01_sync_absicherung.sql).
+export const syncRepository = {
+  saveGame(game: Game, expectedVersion: number, canWrite: () => boolean = () => true): Promise<SyncRpcResult> {
+    return runSyncRpc("mt_save_game", { p_game: createSyncedGamePayload(game), p_expected_version: expectedVersion },
+      canWrite, "Spiel konnte nicht gespeichert werden");
+  },
+  putEvent(payload: CreateSupabaseEventPayload, expectedFlowVersion: number, queuedMs: number,
+    canWrite: () => boolean = () => true): Promise<SyncRpcResult> {
+    return runSyncRpc("mt_put_event", { p_event: payload, p_expected_flow: expectedFlowVersion, p_queued_ms: queuedMs },
+      canWrite, "Event konnte nicht gespeichert werden");
+  },
+  revokeEvent(gameId: string, eventId: string, expectedFlowVersion: number,
+    canWrite: () => boolean = () => true): Promise<SyncRpcResult> {
+    return runSyncRpc("mt_revoke_event", { p_game_id: gameId, p_event_id: eventId, p_expected_flow: expectedFlowVersion },
+      canWrite, "Event konnte nicht zurueckgenommen werden");
+  },
+  async deleteGame(gameId: string, canWrite: () => boolean = () => true): Promise<SyncRpcResult> {
+    const gameRecord = await fetchGameRecordById(gameId);
+    if (!gameRecord || isSupabaseGameDeleted(gameRecord)) {
+      return { matched: true, noop: true };
+    }
+    return runSyncRpc("mt_delete_game", { p_game_id: gameId,
+      p_notes: serializeSoftDeletedNotes(gameRecord.notes, getNowIso()) }, canWrite, "Spiel konnte nicht geloescht werden");
+  },
+  async getSchemaInfo(): Promise<{ schema_version: number; min_app_schema: number } | null> {
+    const { data, error } = await getSupabaseClient().rpc<{ schema_version: number; min_app_schema: number }>(
+      "mt_schema_info", {});
+    return error ? null : data;
+  }
 };
 
 export const gamesRepository = {

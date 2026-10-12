@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
+exports.saveHeldGames = exports.loadHeldGames = exports.recordSyncConflict = exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
 const id_1 = require("./id");
 const gameState_1 = require("./gameState");
 const supabaseErrors_1 = require("./supabaseErrors");
@@ -45,7 +45,10 @@ const isSyncQueueItem = (item) => {
     if (typeof candidate.id !== "string" ||
         typeof candidate.gameId !== "string" ||
         typeof candidate.createdAt !== "string" ||
-        typeof candidate.type !== "string") {
+        typeof candidate.type !== "string" ||
+        (candidate.baseVersion !== undefined && typeof candidate.baseVersion !== "number") ||
+        (candidate.baseFlowVersion !== undefined && typeof candidate.baseFlowVersion !== "number") ||
+        (candidate.batchId !== undefined && typeof candidate.batchId !== "string")) {
         return false;
     }
     if (candidate.type === "upsert-game" || candidate.type === "delete-game") {
@@ -151,3 +154,39 @@ const isTransientSyncError = (error) => {
     return (0, supabaseErrors_1.isTransientSupabaseErrorMessage)(rawMessage);
 };
 exports.isTransientSyncError = isTransientSyncError;
+const SYNC_CONFLICTS_KEY = "match-tracker.sync-conflicts.v1";
+// Verworfene Aenderungen werden lokal protokolliert (max. 20), damit nichts spurlos verschwindet.
+const recordSyncConflict = (entry) => {
+    if (!isBrowser) {
+        return;
+    }
+    const existing = parseJson(window.localStorage.getItem(SYNC_CONFLICTS_KEY), []);
+    const next = [...(Array.isArray(existing) ? existing : []), entry].slice(-20);
+    window.localStorage.setItem(SYNC_CONFLICTS_KEY, JSON.stringify(next));
+};
+exports.recordSyncConflict = recordSyncConflict;
+const HELD_GAMES_KEY = "match-tracker.held-local-games.v1";
+// Lokaler Stand von Spielen mit wartenden Aenderungen, solange sie nur angesehen werden
+// (Zuschauer/Auswahldialog). Ohne diese Sicherung wuerde der Server-Stand die Queue-Daten ueberschreiben.
+const loadHeldGames = () => {
+    if (!isBrowser) {
+        return {};
+    }
+    const raw = parseJson(window.localStorage.getItem(HELD_GAMES_KEY), {});
+    return Object.fromEntries(Object.entries(raw && typeof raw === "object" ? raw : {})
+        .map(([id, value]) => [id, (0, gameState_1.mapPersistedGame)(value)])
+        .filter((entry) => Boolean(entry[1])));
+};
+exports.loadHeldGames = loadHeldGames;
+const saveHeldGames = (games) => {
+    if (!isBrowser) {
+        return;
+    }
+    if (Object.keys(games).length) {
+        window.localStorage.setItem(HELD_GAMES_KEY, JSON.stringify(games));
+    }
+    else {
+        window.localStorage.removeItem?.(HELD_GAMES_KEY);
+    }
+};
+exports.saveHeldGames = saveHeldGames;

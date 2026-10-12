@@ -1,4 +1,18 @@
 import {
+  APP_SCHEMA_VERSION,
+  decideBuildUpdate,
+  decideSchemaUpdate,
+  formatConflictNotice,
+  getItemBaseFlowVersion,
+  getItemBaseVersion,
+  getQueuedMs,
+  isSameSyncBatch,
+  rebaseSyncQueue,
+  type SyncRpcResult
+} from "../utils/syncVersioning";
+import { getServerNow } from "../utils/serverClock";
+import { loadHeldGames, recordSyncConflict, saveHeldGames } from "../utils/localSync";
+import {
   createContext,
   useCallback,
   useContext,
@@ -11,6 +25,8 @@ import {
 import { getSupabaseClient, getSupabaseConfigError } from "../lib/supabase";
 import {
   gamesRepository,
+  syncRepository,
+  SyncRpcError,
   getEventPayloadFingerprint,
   getGameSnapshotFingerprint,
   getSyncedEventPayload,
@@ -123,6 +139,9 @@ interface GameStoreValue {
   isLoading: boolean;
   isMutating: boolean;
   errorMessage: string | null;
+  syncNotice: string | null;
+  appUpdateNotice: string | null;
+  dismissSyncNotice: () => void;
   syncStatus: SyncStatus;
   lastSyncAt: string | null;
   pendingSyncCount: number;
@@ -306,6 +325,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const [isMutating, setIsMutating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [appUpdateNotice, setAppUpdateNotice] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [gameAccessModes, setGameAccessModes] = useState<GameAccessModeState>({});
   const gamesRef = useRef(games);
@@ -364,17 +385,75 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [isGameViewOnly, warnBlockedViewOnlyWrite]
   );
 
+  const flushSyncQueueRef = useRef<(() => Promise<boolean>) | null>(null);
+  const heldGamesRef = useRef<Record<string, Game>>(loadHeldGames());
+  // Vor dem Ersetzen durch den Server-Stand: lokalen Stand gesperrter Spiele mit wartender Queue sichern.
+  const holdBlockedLocalGames = () => {
+    let changed = false;
+    queueRef.current.forEach((item) => {
+      if (heldGamesRef.current[item.gameId] || !isGameViewOnly(item.gameId)) return;
+      const localGame = gamesRef.current.find((game) => game.id === item.gameId);
+      if (!localGame) return;
+      heldGamesRef.current = { ...heldGamesRef.current, [item.gameId]: localGame };
+      changed = true;
+    });
+    if (changed) saveHeldGames(heldGamesRef.current);
+  };
+  const releaseHeldGame = (gameId: string) => {
+    if (!heldGamesRef.current[gameId]) return;
+    const { [gameId]: _released, ...rest } = heldGamesRef.current;
+    heldGamesRef.current = rest;
+    saveHeldGames(rest);
+  };
+  const flushAgainRef = useRef(false);
+  // Aktionsgruppen: alle Queue-Eintraege eines synchronen Durchlaufs teilen sich eine batchId.
+  const currentBatchRef = useRef<string | null>(null);
+  const getCurrentBatchId = () => {
+    if (!currentBatchRef.current) {
+      currentBatchRef.current = createId("batch");
+      void Promise.resolve().then(() => { currentBatchRef.current = null; });
+    }
+    return currentBatchRef.current;
+  };
+  // Bereits gesendete Ereignisse je Gruppe, damit sie bei Konflikt der Gruppe zurueckgenommen werden.
+  const appliedEventsRef = useRef<Array<{ gameId: string; eventId: string; batchId?: string; createdAt: string;
+    flowVersion: number }>>([]);
   const setGameAccessMode = useCallback((gameId: string, mode: GameAccessMode | null) => {
     const nextModes = setGameAccessModeInState(gameAccessModesRef.current, gameId, mode);
     gameAccessModesRef.current = nextModes;
     setGameAccessModes(nextModes);
+    // Nach "Bearbeiten" wartende (z. B. offline oder von aelterer App-Version gespeicherte) Aenderungen sofort senden.
+    const held = heldGamesRef.current[gameId];
+    if (mode === "edit" && held) {
+      // Gesicherten lokalen Stand wieder ueber den Server-Stand legen, bevor gesendet wird.
+      const pending = queueRef.current.filter((item) => item.gameId === gameId);
+      const merged = mergeRemoteWithPending(gamesRef.current.filter((game) => game.id === gameId), [held], pending)
+        .find((game) => game.id === gameId);
+      if (merged) {
+        gamesRef.current = sortGames([merged, ...gamesRef.current.filter((game) => game.id !== gameId)]);
+        setGames(gamesRef.current);
+      }
+      releaseHeldGame(gameId);
+    }
+    if (mode === "edit" && queueRef.current.some((item) => item.gameId === gameId)) {
+      void Promise.resolve().then(() => flushSyncQueueRef.current?.());
+    }
   }, []);
 
   const updateSyncQueue = useCallback((updater: (currentQueue: SyncQueueItem[]) => SyncQueueItem[]) => {
     const candidateQueue = updater(queueRef.current);
     if (candidateQueue === queueRef.current) return;
     const existingIds = new Set(queueRef.current.map((item) => item.id));
-    const nextQueue = candidateQueue.filter((item) => existingIds.has(item.id) || !isGameViewOnly(item.gameId));
+    const nextQueue = candidateQueue
+      .filter((item) => existingIds.has(item.id) || !isGameViewOnly(item.gameId))
+      .map((item) => {
+        // Neue Eintraege merken den Serverstand, auf dem die lokale Aenderung beruht.
+        if (existingIds.has(item.id) || item.batchId !== undefined) return item;
+        const baseGame = gamesRef.current.find((game) => game.id === item.gameId);
+        return { ...item, batchId: getCurrentBatchId(),
+          ...(baseGame?.syncVersion === undefined && baseGame?.syncFlowVersion === undefined ? {}
+            : { baseVersion: baseGame?.syncVersion, baseFlowVersion: baseGame?.syncFlowVersion }) };
+      });
     if (nextQueue === queueRef.current) {
       return;
     }
@@ -714,6 +793,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
     try {
       const remoteGames = await gamesRepository.listGames();
+      holdBlockedLocalGames();
       const nextGames = mergeRemoteWithPending(remoteGames, gamesRef.current,
         queueRef.current.filter((item) => !isGameViewOnly(item.gameId)));
       gamesRef.current = nextGames;
@@ -742,9 +822,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     }
 
     if (flushPromiseRef.current) {
+      // Waehrend eines laufenden Durchgangs angefragt (z. B. Wechsel auf "Bearbeiten"): danach erneut senden.
+      flushAgainRef.current = true;
       return flushPromiseRef.current;
     }
 
+    flushAgainRef.current = false;
     flushPromiseRef.current = (async () => {
       const configError = getSupabaseConfigError();
       if (configError) {
@@ -760,6 +843,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         });
       }
 
+      let droppedConflicts = 0;
       while (queueRef.current.length) {
         const nextItem = queueRef.current.find((item) => !isGameViewOnly(item.gameId));
         if (!nextItem) {
@@ -777,8 +861,23 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
 
+          const canWrite = () => !isGameViewOnly(nextItem.gameId);
+          const base = { version: getItemBaseVersion(nextItem), flowVersion: getItemBaseFlowVersion(nextItem) };
+          // "matched" bezieht sich je RPC nur auf die geprueften Version: Spielzeile bzw. Spielablauf.
+          const rowOnly = (result: SyncRpcResult): SyncRpcResult => ({ ...result, flow_version: undefined });
+          const flowOnly = (result: SyncRpcResult): SyncRpcResult => ({ ...result, version: undefined });
+          const applyResult = (result: SyncRpcResult, current = base) => {
+            // Eigene Schreibvorgaenge ohne fremde Zwischenstaende: Queue und lokalen Stand mitziehen.
+            if (!result.matched) return current;
+            updateSyncQueue((queue) => rebaseSyncQueue(queue, nextItem.gameId, current, result));
+            const next = { version: result.version ?? current.version, flowVersion: result.flow_version ?? current.flowVersion };
+            gamesRef.current = gamesRef.current.map((game) => game.id === nextItem.gameId
+              ? { ...game, syncVersion: next.version, syncFlowVersion: next.flowVersion } : game);
+            return next;
+          };
+
           if (nextItem.type === "delete-game") {
-            await gamesRepository.deleteGame(nextItem.gameId, () => !isGameViewOnly(nextItem.gameId));
+            await syncRepository.deleteGame(nextItem.gameId, canWrite);
             removeQueueItem(nextItem.id);
             continue;
           }
@@ -790,39 +889,68 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
 
           if (nextItem.type === "reopen-game") {
+            let current = base;
             if (nextItem.gameEndEventId) {
-              await gamesRepository.deleteEvent(nextItem.gameEndEventId, () => !isGameViewOnly(nextItem.gameId));
+              current = applyResult(flowOnly(await syncRepository.revokeEvent(nextItem.gameId, nextItem.gameEndEventId,
+                current.flowVersion, canWrite)), current);
             }
             if (isGameViewOnly(nextItem.gameId)) break;
-            await gamesRepository.upsertGameSnapshot(currentGame, () => !isGameViewOnly(nextItem.gameId));
+            applyResult(rowOnly(await syncRepository.saveGame(currentGame, current.version, canWrite)), current);
             removeQueueItem(nextItem.id);
             continue;
           }
 
           if (nextItem.type === "upsert-game") {
-            await gamesRepository.upsertGameSnapshot(currentGame, () => !isGameViewOnly(nextItem.gameId));
+            applyResult(rowOnly(await syncRepository.saveGame(currentGame, base.version, canWrite)));
             removeQueueItem(nextItem.id);
             continue;
           }
 
           if (nextItem.type === "delete-event") {
-            await gamesRepository.deleteEvent(nextItem.eventId, () => !isGameViewOnly(nextItem.gameId));
+            applyResult(flowOnly(await syncRepository.revokeEvent(nextItem.gameId, nextItem.eventId, base.flowVersion, canWrite)));
             removeQueueItem(nextItem.id);
             continue;
           }
 
           const eventPayload = getSyncedEventPayload(currentGame, nextItem.eventId);
           if (!eventPayload) {
+            // Lokale Daten zur wartenden Aenderung fehlen (z. B. lokal wieder entfernt): protokollieren.
+            recordSyncConflict({ at: getNowIso(), item: nextItem, conflict: { kind: "local-missing" } });
             removeQueueItem(nextItem.id);
             continue;
           }
 
-          await gamesRepository.upsertEvent(eventPayload, () => !isGameViewOnly(nextItem.gameId));
+          const eventResult = applyResult(flowOnly(await syncRepository.putEvent(eventPayload, base.flowVersion,
+            getQueuedMs(nextItem.createdAt, getServerNow()), canWrite)));
+          appliedEventsRef.current = [...appliedEventsRef.current.slice(-200), { gameId: nextItem.gameId,
+            eventId: nextItem.eventId, batchId: nextItem.batchId, createdAt: nextItem.createdAt,
+            flowVersion: eventResult.flowVersion }];
           removeQueueItem(nextItem.id);
         } catch (error) {
           if (isGameViewOnly(nextItem.gameId)) {
             setSyncStatus("pending");
             return false;
+          }
+          if (error instanceof SyncRpcError && (error.conflict || error.status === 404)) {
+            // Konflikt (veraltete Version) oder Spiel fehlt: Aenderung verwerfen, protokollieren, Stand neu laden.
+            recordSyncConflict({ at: getNowIso(), item: nextItem, conflict: error.conflict, status: error.status });
+            removeQueueItem(nextItem.id);
+            droppedConflicts += 1;
+            // Die ganze Benutzeraktion verwerfen: wartende Geschwister entfernen, gesendete zuruecknehmen.
+            const siblings = queueRef.current.filter((item) => item.id !== nextItem.id && isSameSyncBatch(item, nextItem));
+            siblings.forEach((item) => recordSyncConflict({ at: getNowIso(), item, conflict: { kind: "batch" } }));
+            updateSyncQueue((queue) => queue.filter((item) => !siblings.some((sibling) => sibling.id === item.id)));
+            droppedConflicts += siblings.length;
+            const applied = appliedEventsRef.current.filter((entry) => isSameSyncBatch(entry, nextItem));
+            appliedEventsRef.current = appliedEventsRef.current.filter((entry) => !applied.includes(entry));
+            for (const entry of applied.reverse()) {
+              await syncRepository.revokeEvent(entry.gameId, entry.eventId, entry.flowVersion,
+                () => !isGameViewOnly(entry.gameId)).catch((revokeError) =>
+                recordSyncConflict({ at: getNowIso(), item: entry, conflict: { kind: "revoke-failed" },
+                  message: getErrorMessage(revokeError) }));
+              droppedConflicts += 1;
+            }
+            continue;
           }
           if (import.meta.env.DEV) {
             console.debug("[sync-queue] failure", {
@@ -839,6 +967,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
       }
 
+      if (droppedConflicts) {
+        setSyncNotice(formatConflictNotice(droppedConflicts));
+      }
       const pulled = await pullRemoteGames();
       if (pulled) {
         retryAttemptRef.current = 0;
@@ -849,10 +980,16 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       return pulled;
     })().finally(() => {
       flushPromiseRef.current = null;
+      if (flushAgainRef.current && queueRef.current.some((item) => !isGameViewOnly(item.gameId))) {
+        flushAgainRef.current = false;
+        void Promise.resolve().then(() => flushSyncQueueRef.current?.());
+      }
     });
 
     return flushPromiseRef.current;
-  }, [clearRetryTimer, isGameViewOnly, pullRemoteGames, removeQueueItem, scheduleSyncRetry]);
+  }, [clearRetryTimer, isGameViewOnly, pullRemoteGames, removeQueueItem, scheduleSyncRetry, updateSyncQueue]);
+
+  flushSyncQueueRef.current = flushSyncQueue;
 
   const refreshGames = useCallback(async () => {
     if (!canAttemptRemoteSync()) {
@@ -1002,6 +1139,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const remoteGame = await gamesRepository.getGameById(gameId);
         if (cancelled || !isGameViewOnly(gameId) ||
             getGameRouteAccess(window.location.hash, window.location.search).gameId !== gameId) return;
+        holdBlockedLocalGames();
         const nextGames = sortGames([remoteGame, ...gamesRef.current.filter((game) => game.id !== gameId)]);
         gamesRef.current = nextGames;
         setGames(nextGames);
@@ -2518,6 +2656,45 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   const exportGames = useCallback(() => gamesRef.current, []);
   const clearError = useCallback(() => setErrorMessage(null), []);
+  const dismissSyncNotice = useCallback(() => setSyncNotice(null), []);
+
+  // Schema- und Build-Pruefung: alte gecachte App-Versionen erkennen und neu laden.
+  useEffect(() => {
+    if (typeof window === "undefined" || getSupabaseConfigError()) return;
+    const currentBuild = String(import.meta.env.VITE_APP_BUILD ?? "dev");
+    const reloadKey = "match-tracker.update-reload";
+    const reloadOnce = (reason: string) => {
+      if (window.sessionStorage?.getItem(reloadKey) === reason) return false;
+      window.sessionStorage?.setItem(reloadKey, reason);
+      window.location.reload();
+      return true;
+    };
+    let cancelled = false;
+    const check = async () => {
+      if (cancelled || !canAttemptRemoteSync()) return;
+      const info = await syncRepository.getSchemaInfo().catch(() => null);
+      const schemaDecision = decideSchemaUpdate(info?.min_app_schema ?? null,
+        window.sessionStorage?.getItem(reloadKey) === "schema");
+      if (schemaDecision === "reload" && !queueRef.current.length && reloadOnce("schema")) return;
+      if (schemaDecision !== "ok") {
+        setAppUpdateNotice(`Diese App-Version (Schema ${APP_SCHEMA_VERSION}) ist veraltet. Bitte neu laden.`);
+        return;
+      }
+      const liveBuild = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((body: { build?: string } | null) => body?.build ?? null)
+        .catch(() => null);
+      const buildDecision = decideBuildUpdate(currentBuild, liveBuild, queueRef.current.length);
+      if (buildDecision === "reload" && reloadOnce(`build:${liveBuild}`)) return;
+      setAppUpdateNotice(buildDecision === "notice"
+        ? "Neue App-Version verfuegbar. Sie wird geladen, sobald alle Aenderungen synchronisiert sind." : null);
+    };
+    void check();
+    const interval = window.setInterval(() => void check(), 120000);
+    const onVisible = () => { if (!document.hidden) void check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { cancelled = true; window.clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
+  }, []);
 
   const value = useMemo<GameStoreValue>(
     () => ({
@@ -2525,6 +2702,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       isLoading,
       isMutating,
       errorMessage,
+      syncNotice,
+      appUpdateNotice,
+      dismissSyncNotice,
       syncStatus,
       lastSyncAt,
       pendingSyncCount: syncQueue.length,
@@ -2572,6 +2752,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       deleteGame,
       deleteGameEvent,
       errorMessage,
+      syncNotice,
+      appUpdateNotice,
+      dismissSyncNotice,
       exportGames,
       finishGame,
       gameAccessModes,

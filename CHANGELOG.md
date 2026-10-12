@@ -5,6 +5,14 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-12
 
+### Sync-Absicherung (Versionen, Server-RPCs, strengere RLS)
+
+- Fehlerbild: Zwei Geraete konnten gleichzeitig "Weiter" druecken (doppelte Zugwechsel), gekreuztes Start/Stop mit falscher Geraeteuhr verfaelschte Zeiten, Upserts mit dem oeffentlichen Key ueberschrieben fremde Aenderungen. Ursache: direkte Tabellen-Upserts ohne Versions- oder Zeitpruefung, offene RLS-Policies.
+- Neu: `games.version` und `games.flow_version`, RPCs `mt_save_game`, `mt_put_event`, `mt_revoke_event`, `mt_delete_game`, `mt_schema_info` mit Versionspruefung (HTTP 409) und Serverzeit fuer Ablauf-Ereignisse; eindeutiger Index fuer Zug-/Rundenstart; Undo als Gegen-Ereignis (`revoke`); Altdaten als `legacy` markiert.
+- App: Queue-Eintraege tragen Basisversionen und Aktionsgruppe; bei 409 wird neu geladen und ein kurzer Hinweis gezeigt; kommutative Ereignisse (Punkte, CP, Notizen) werden nachgespielt. Schema-/Build-Pruefung (`mt_schema_info`, `/version.json`) laedt veraltete Versionen einmal neu. Offline-Queue wird auch bei gesperrter Ansicht nicht ueberschrieben.
+- RLS: anon/authenticated duerfen nur noch lesen; Schreiben ausschliesslich ueber die RPCs. Migrationen und Rollback-SQL unter `supabase/migrations/`, SQL-Tests unter `supabase/tests/`.
+- `package-lock.json` synchronisiert (`npm ci` gruen).
+
 ### Zuschauer sehen nur noch den TV-Modus
 
 - Wer ein laufendes Match mit "Nur ansehen" oeffnet, landet direkt in `#/game/<id>?tv=1`; die klassische Nur-Lese-Ansicht fuer Zuschauer entfaellt. Alte TV-Links (`#/game/<id>?tv=1`, `?tv=1#/game/<id>`, auch mit `/overview`) bleiben TV. "TV-Modus verlassen" fuehrt jetzt zur Spieleliste statt in die Nur-Lese-Ansicht. Spielereingabe ("Bearbeiten") und Uebersicht beendeter Spiele unveraendert. Neue Hilfsfunktion `shouldShowSpectatorTv` mit Tests.
