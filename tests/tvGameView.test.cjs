@@ -35,7 +35,7 @@ const runTvGameViewTests = () => {
     const before = JSON.stringify(base);
     let tree = render(TvGameView,base);
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0, 'Initial load shows no historical highlights');
-    assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Vollbild','TV-Modus verlassen']);
+    assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Full screen']);
     const samePhase = structuredClone(base);
     samePhase.scoreEvents.push({...samePhase.scoreEvents[0],id:'s2',playerId:base.players[1].id,value:12});
     tree = render(TvGameView,samePhase);
@@ -85,7 +85,7 @@ const runTvGameViewTests = () => {
     assert.equal(content(deficit(tree)),'Alice gewinnt mit 15 VP Vorsprung');
     assert.match(content(tree),/Letzter Zug · Bob/);
     // TV-Abschlussansicht: nur Ansehen, kein Bearbeiten/Wiedereroeffnen/Loeschen.
-    assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Vollbild','TV-Modus verlassen']);
+    assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Full screen']);
     assert.doesNotMatch(content(tree),/eroeffnen|loeschen|Bearbeiten|Passwort/i);
     // Spielmenue (beendete Spiele) wird nur angezeigt, wenn uebergeben.
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-game__menu').length,0);
@@ -94,7 +94,7 @@ const runTvGameViewTests = () => {
     // Beendete Spiele: Vollbild auf dem Dokument, damit Menue-Dialoge im Vollbild sichtbar bleiben.
     let fsTarget = null; globalThis.document.documentElement.requestFullscreen = async function () { fsTarget = this; };
     cursor = 0; const fsTree = TvGameView({game:finished,onExit:()=>{},menu:{type:'menu',props:{}},fullscreenDocument:true}); while (pending.length) pending.shift()();
-    nodes(fsTree).find(n => n.type === 'button' && n.props.children === 'Vollbild').props.onClick();
+    nodes(fsTree).find(n => n.type === 'button' && n.props.children === 'Full screen').props.onClick();
     assert.equal(fsTarget, globalThis.document.documentElement);
     assert.doesNotMatch(content(tree),/Laufende Zugzeit|Aktueller Zug|VP zurück|verbleibender Runde/);
     const cards=nodes(tree).filter(n=>n.props?.className==='tv-panel tv-player');

@@ -3,6 +3,17 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-14
+
+### Nur noch zwei Modi: "Edit" und "View only"
+
+- View only ist die bisherige TV-Ansicht; die separate Nur-ansehen-Ansicht, der Button "TV-Modus" und "TV-Modus verlassen" entfallen. "Full screen" / "Full screen verlassen" bleiben. Scoreboard im Edit oeffnet View only.
+- Laufendes Spiel: Dialog "Edit" / "View only". Abgeschlossenes Spiel: immer direkt View only.
+- View only komplett schreibgeschuetzt: Verlauf ohne Bearbeiten/Loeschen/Undo/Redo (nicht nur deaktiviert), Store blockiert weiterhin alle Schreibaktionen.
+- Menue in View only wie ueberall (Main, Neues Spiel, Statistik, darunter Optionen), im Full screen ausgeblendet. "Entsperren" (Passwort) nur bei abgeschlossenem Spiel; laufende Spiele in View only ohne Entsperren/Edit (Edit nur ueber Main -> Spiel -> Edit).
+- Fehlerbild: Entsperren eines abgeschlossenen Spiels bewirkte nichts. Ursache: `shouldBlockGameWrite` blockierte `reopenGame` immer, wenn das Spiel auf der eigenen Seite offen war. Jetzt erlaubt, sobald per Passwort der Modus "edit" gesetzt ist (`canReopenFromGamePage`); danach Edit mit gestopptem Timer.
+- Serverseite: RPCs pruefen weder Sperre noch Passwort; das Passwort liegt im Klartext im Client. Vorschlag (nicht ausgefuehrt) unter `supabase/proposed/20261014_01_sperre_passwort.sql` samt Rollback.
+
 ## 2026-10-12
 
 ### Escape schliesst Menue/Dialoge, Vollbild bleibt bei Menueklick

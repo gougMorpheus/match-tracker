@@ -63,7 +63,21 @@ const runGameStoreReadOnlyTests = async () => {
     await attemptAll(open());
     let store = open(); store.setGameAccessMode(id, 'view'); await attemptAll(store);
     store = open(true); store.setGameAccessMode(id, 'view'); await attemptAll(store);
-    store = open(true); store.setGameAccessMode(id, 'edit'); await attemptAll(store);
+    // Punkt 6: Entsperren (Modus "edit" erst nach Passwort) darf ein abgeschlossenes Spiel auf seiner Seite wieder eroeffnen.
+    store = open(true); store.setGameAccessMode(id, 'edit');
+    { const playerId = store.getGame(id).players[0].id; const before = JSON.stringify(store.getGame(id));
+      await store.addScoreEvent({gameId: id, playerId, scoreType: 'primary', value: 5});
+      assert.equal(JSON.stringify(store.getGame(id)), before, 'Abgeschlossen: keine Punkte vor dem Wiedereroeffnen');
+      await store.reopenGame(id);
+      assert.equal(store.getGame(id).status !== 'completed' && !store.getGame(id).timeEvents.some(e => e.action === 'game-end'), true, 'Entsperren eroeffnet das Spiel');
+      assert.equal(store.getGame(id).rounds.flatMap(r => r.turns).some(t => t.timing.startedAt && !t.timing.endedAt), false, 'Timer bleibt gestoppt');
+      await store.addScoreEvent({gameId: id, playerId, scoreType: 'primary', value: 5});
+      assert.equal(store.getGame(id).scoreEvents.length, 5, 'Nach Entsperren alles bearbeitbar'); }
+    // Ohne Passwort (Modus "view" bzw. ohne Modus) kein Wiedereroeffnen.
+    store = open(true); store.setGameAccessMode(id, 'view'); await store.reopenGame(id);
+    assert.equal(store.getGame(id).status, 'completed');
+    store = open(true); await store.reopenGame(id);
+    assert.equal(store.getGame(id).status, 'completed');
     // Both TV URL forms override even explicit edit mode, before any effects.
     for (const [hash, search] of [[`#/game/${id}?tv=1`, ''], [`#/game/${id}`, '?tv=1']]) {
       window.location = {hash, search};

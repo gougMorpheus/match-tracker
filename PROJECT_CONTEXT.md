@@ -117,3 +117,11 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Konflikt = HTTP 409 (`PT409`); App verwirft die Aktionsgruppe, laedt neu, zeigt `SyncNotices`.
 - `APP_SCHEMA_VERSION` (`src/utils/syncVersioning.ts`) muss zu `mt_schema_info().min_app_schema` passen; bei Schemaaenderung beide erhoehen.
 - Migrationen in `supabase/migrations/` (immer mit `.rollback.sql`); Reihenfolge Rollback: 02, App, 01. `supabase/schema.sql` ist der Stand vor diesen Migrationen.
+
+
+## Edit / View only (14.10.2026)
+
+- Zwei Modi: "Edit" und "View only" (= TV-Ansicht, `shouldShowViewOnly`). Laufend: Dialog; abgeschlossen: immer View only; `?tv=1` erzwingt View only. Scoreboard im Edit oeffnet View only.
+- View-only-Menue (`getViewOnlyMenuLabels`): Main, Neues Spiel, Statistik; Verlauf, Notizen, Einstellungen (nur lesen); "Entsperren" nur bei abgeschlossenen Spielen. Menue im Full screen ausgeblendet.
+- Entsperren: Passwort (derzeit nur Client-Pruefung) -> Modus "edit" -> `reopenGame` (erlaubt per `canReopenFromGamePage`) -> Timer gestoppt.
+- Serverseitig keine Sperre (RPCs per Publishable Key fuer alle). Vorschlag mit bcrypt-Hash, Edit-Token und Triggern: `supabase/proposed/` (nicht ausgefuehrt).

@@ -1,6 +1,7 @@
 const { runFactionColorsTests } = require("./factionColors.test.cjs");
 const { runTvEventFeedTests } = require("./tvEventFeed.test.cjs");
 const { runTvGameViewTests } = require("./tvGameView.test.cjs");
+const { runEditViewOnlyTests } = require("./editViewOnly.test.cjs");
 const { runHeadToHeadTests } = require("./headToHead.test.cjs");
 const { runTvDashboardTests } = require("./tvDashboard.test.cjs");
 const { runTvHighlightsTests } = require("./tvHighlights.test.cjs");
@@ -31,7 +32,8 @@ const suites = [
   ["serverSecondTicker", runServerSecondTickerTests],
   ["gameStoreReadOnly", runGameStoreReadOnlyTests],
   ["realtime", runRealtimeTests],
-  ["syncVersioning", runSyncVersioningTests]
+  ["syncVersioning", runSyncVersioningTests],
+  ["editViewOnly", runEditViewOnlyTests]
 ];
 
 const main = async () => {

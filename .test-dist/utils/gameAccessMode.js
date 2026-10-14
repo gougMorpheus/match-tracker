@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isGameWriteBlocked = exports.getGameRouteAccess = exports.getTvModeHash = exports.shouldShowClosedGameTv = exports.shouldShowSpectatorTv = exports.shouldOpenGameViewOnly = exports.shouldAskGameAccessMode = exports.isGameCompletedForDisplay = exports.isGameViewOnlyInState = exports.getGameAccessMode = exports.setGameAccessModeInState = void 0;
+exports.isGameWriteBlocked = exports.getGameRouteAccess = exports.getTvModeHash = exports.canReopenFromGamePage = exports.getViewOnlyMenuLabels = exports.shouldShowClosedGameTv = exports.shouldShowSpectatorTv = exports.shouldShowViewOnly = exports.shouldOpenGameViewOnly = exports.shouldAskGameAccessMode = exports.isGameCompletedForDisplay = exports.isGameViewOnlyInState = exports.getGameAccessMode = exports.setGameAccessModeInState = void 0;
 const setGameAccessModeInState = (currentModes, gameId, mode) => {
     const { [gameId]: _currentMode, ...rest } = currentModes;
     return mode ? { ...rest, [gameId]: mode } : rest;
@@ -19,14 +19,32 @@ const shouldAskGameAccessMode = (game, mode) => Boolean(game && !(0, exports.isG
 exports.shouldAskGameAccessMode = shouldAskGameAccessMode;
 const shouldOpenGameViewOnly = (game, mode) => Boolean(game && ((0, exports.isGameCompletedForDisplay)(game) || mode === "view"));
 exports.shouldOpenGameViewOnly = shouldOpenGameViewOnly;
-// Zuschauer sehen bei laufendem Spiel ausschliesslich den TV-Modus (TV-Link oder Wahl "Nur ansehen").
-// Beendete Spiele behandelt shouldShowClosedGameTv (TV-Ansicht mit Spielmenue).
-const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && !(0, exports.isGameCompletedForDisplay)(game) && (forceTv || mode === "view"));
+// Zwei Modi: "Edit" und "View only". View only ist die TV-Ansicht (komplett schreibgeschuetzt).
+// - Abgeschlossene Spiele: immer View only, ausser nach Entsperren per Passwort (Modus "edit").
+// - Laufende Spiele: View only per Dialogwahl ("view") oder View-only-Link (?tv=1).
+const shouldShowViewOnly = (game, mode, forceTv = false) => {
+    if (!game)
+        return false;
+    if ((0, exports.isGameCompletedForDisplay)(game))
+        return mode !== "edit";
+    return forceTv || mode === "view";
+};
+exports.shouldShowViewOnly = shouldShowViewOnly;
+// Kompatibel: frueherer Name fuer laufende Spiele.
+const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && !(0, exports.isGameCompletedForDisplay)(game) && (0, exports.shouldShowViewOnly)(game, mode, forceTv));
 exports.shouldShowSpectatorTv = shouldShowSpectatorTv;
-// Beendete Spiele oeffnen fuer alle (Spieler und Zuschauer, mit oder ohne ?tv=1) im TV-Modus mit Menue.
-// Nur waehrend des Entsperrens per Passwort (Modus "edit") nicht mehr, danach wie bisher in die Bearbeitung.
+// Abgeschlossene Spiele in View only (fuer Menue "Entsperren").
 const shouldShowClosedGameTv = (game, mode) => Boolean(game && (0, exports.isGameCompletedForDisplay)(game) && mode !== "edit");
 exports.shouldShowClosedGameTv = shouldShowClosedGameTv;
+// Menue der View-only-Ansicht: gleiche Navigation wie ueberall, Entsperren nur bei abgeschlossenem Spiel.
+const getViewOnlyMenuLabels = (game) => ({
+    navigation: ["Main", "Neues Spiel", "Statistik"],
+    options: ["Verlauf", "Notizen", "Einstellungen", ...((0, exports.isGameCompletedForDisplay)(game) ? ["Entsperren"] : [])]
+});
+exports.getViewOnlyMenuLabels = getViewOnlyMenuLabels;
+// Entsperren (Passwort) bei abgeschlossenem Spiel: nur im Modus "edit" darf die eigene Seite wieder eroeffnen.
+const canReopenFromGamePage = (completed, openedHere, mode) => completed && (!openedHere || mode === "edit");
+exports.canReopenFromGamePage = canReopenFromGamePage;
 // Ziel des Buttons "TV-Modus" im Spiel (auch im Abschlussbildschirm).
 const getTvModeHash = (gameId) => `/game/${gameId}?tv=1`;
 exports.getTvModeHash = getTvModeHash;

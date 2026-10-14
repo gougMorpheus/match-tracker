@@ -92,6 +92,7 @@ import {
   getGameAccessMode,
   getGameRouteAccess,
   isGameWriteBlocked,
+  canReopenFromGamePage,
   isGameCompletedForDisplay,
   setGameAccessModeInState,
   type GameAccessMode,
@@ -376,7 +377,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       // Persist an editor's just-completed snapshot, but never edit a completed
       // display. Administrative import/delete/reopen outside the display remain compatible.
       const persistence = action.startsWith("enqueue-");
-      const administration = !openedHere && ["reopenGame", "deleteGame", "importGames"].includes(action);
+      // Ursache "Entsperren geht nicht": reopenGame wurde auf der eigenen Spielseite immer blockiert (openedHere).
+      // Jetzt erlaubt, wenn das Spiel per Passwort entsperrt wurde (Modus "edit").
+      const administration = action === "reopenGame"
+        ? canReopenFromGamePage(completed, openedHere, getGameAccessMode(gameAccessModesRef.current, gameId))
+        : !openedHere && ["deleteGame", "importGames"].includes(action);
       if (!isGameViewOnly(gameId) && (!completed || persistence || administration)) return false;
 
       warnBlockedViewOnlyWrite(gameId, action);

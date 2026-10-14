@@ -30,7 +30,8 @@ const clock = (ms: number): string => {
 
 // menu: optionales Spielmenue (bei beendeten Spielen; Funktionen des frueheren Abschlussbildschirms).
 // fullscreenDocument: Vollbild auf dem ganzen Dokument statt nur der TV-Flaeche, damit Menue-Dialoge im Vollbild sichtbar bleiben.
-export const TvGameView = ({ game, onExit, menu, fullscreenDocument = false }: { game: Game; onExit: () => void; menu?: ReactNode; fullscreenDocument?: boolean }) => {
+// View only: kein "verlassen"-Button mehr; Navigation ueber das Menue (Main).
+export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: Game; onExit?: () => void; menu?: ReactNode; fullscreenDocument?: boolean }) => {
   const { games } = useGameStore();
   const [highlightQueue, setHighlightQueue] = useState<TvHighlight[]>([]);
   const snapshot = useRef<TvSnapshot | null>(null);
@@ -90,6 +91,17 @@ export const TvGameView = ({ game, onExit, menu, fullscreenDocument = false }: {
     return () => { if (idleTimer.current) clearTimeout(idleTimer.current); };
   }, []);
   useServerSecondTick(!completed);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const doc = document as FullscreenDocument;
+    const update = () => setIsFullscreen(Boolean(doc.fullscreenElement || doc.webkitFullscreenElement));
+    document.addEventListener("fullscreenchange", update);
+    document.addEventListener("webkitfullscreenchange", update);
+    return () => {
+      document.removeEventListener("fullscreenchange", update);
+      document.removeEventListener("webkitfullscreenchange", update);
+    };
+  }, []);
   useEffect(() => {
     let disposed = false;
     let acquiring = false;
@@ -131,14 +143,6 @@ export const TvGameView = ({ game, onExit, menu, fullscreenDocument = false }: {
       }
       setFullscreenError(false);
     } catch { setFullscreenError(true); }
-  };
-  const exit = async () => {
-    const doc = document as FullscreenDocument;
-    try {
-      if (doc.fullscreenElement) await doc.exitFullscreen();
-      else if (doc.webkitFullscreenElement) doc.webkitExitFullscreen?.();
-    } catch { /* Exit TV mode even when fullscreen cannot be exited. */ }
-    onExit();
   };
   const colors = getPlayerColors(game.players[0].army.name, game.players[1].army.name);
   const playerStyle = (i: number) => ({ "--player-color": colors[i] } as CSSProperties);
@@ -203,7 +207,7 @@ export const TvGameView = ({ game, onExit, menu, fullscreenDocument = false }: {
         {renderPlayer(0)}
         <section className="tv-panel tv-phase">
           <span className="tv-eyebrow">MATCH TRACKER · LIVE DASHBOARD</span>
-          <h2 className="tv-phase__title">{phase}</h2><span className={`tv-chip${running && !timeout ? " tv-chip--running" : ""}`}>{status} · Nur ansehen</span>
+          <h2 className="tv-phase__title">{phase}</h2><span className={`tv-chip${running && !timeout ? " tv-chip--running" : ""}`}>{status} · View only</span>
           <div className="tv-phase__clock"><span>{timeout ? "Time-out" : turn ? completed ? "Letzte Zugzeit" : "Laufende Zugzeit" : "Aufstellungszeit"}</span><strong>{clock(phaseMs)}</strong></div>
           <div className="tv-deficit"><strong>{completed ? result : deficit.text}</strong>{!completed && deficit.perRound !== null && <span>≈ {deficit.perRound} VP pro verbleibender Runde nötig</span>}</div>
         </section>
@@ -252,9 +256,8 @@ export const TvGameView = ({ game, onExit, menu, fullscreenDocument = false }: {
       </main>
       {menu ? <div className="tv-game__menu">{menu}</div> : null}
       <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
-        {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>Vollbild</button> : null}
-        <button type="button" onClick={() => void exit()}>TV-Modus verlassen</button>
-        {fullscreenError ? <span role="status">Vollbild ist hier nicht verfügbar.</span> : null}
+        {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>{isFullscreen ? "Full screen verlassen" : "Full screen"}</button> : null}
+        {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
       </nav>
       {activeHighlight && <div key={activeHighlight.id} className="tv-highlight" role="status" data-kind={activeHighlight.kind}
         style={{ "--player-color": colors[Math.max(0, game.players.findIndex(p => p.id === activeHighlight.playerId))] } as CSSProperties}>

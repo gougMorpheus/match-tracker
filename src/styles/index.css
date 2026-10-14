@@ -3739,3 +3739,5 @@ button.stats-table__row.is-active {
 /* Beendete Spiele: Spielmenue im TV-Modus; Dialoge liegen ueber der TV-Ansicht. */
 .tv-game__menu { position: absolute; top: calc(var(--tv-unit) * 1.3); right: calc(var(--tv-unit) * 1.3); z-index: 4; }
 body:has(.tv-game) .modal-backdrop { z-index: 1100; }
+/* View only: Menue oben rechts verschwindet im Full screen. */
+:root:fullscreen .tv-game__menu, .tv-game:fullscreen .tv-game__menu { display: none; }

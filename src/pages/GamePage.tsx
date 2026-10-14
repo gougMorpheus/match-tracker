@@ -45,7 +45,7 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
-import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowClosedGameTv, shouldShowSpectatorTv } from "../utils/gameAccessMode";
+import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowClosedGameTv, shouldShowViewOnly } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
@@ -239,11 +239,10 @@ export const GamePage = (props: GamePageProps) => {
   }, [props.forceTv, props.gameId, setGameAccessMode]);
   if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
     subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfuegbar."} />;
-  if (shouldShowSpectatorTv(game, getGameAccessMode(game.id), props.forceTv)) return <TvGameView game={game} onExit={exitTvToGames} />;
   return <LoadedGamePage key={props.gameId} {...props} game={game} />;
 };
 
-const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePageProps & { game: Game }) => {
+const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false, game }: GamePageProps & { game: Game }) => {
   const {
     games,
     getGame,
@@ -316,8 +315,10 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
   const advanceInFlightRef = useRef(false);
   const accessMode = getGameAccessMode(gameId);
   const viewOnlyActive = isGameCompletedForDisplay(game) || isGameViewOnly(game.id);
-  const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode);
-  // Beendete Spiele: TV-Modus ersetzt den frueheren Abschlussbildschirm (Funktionen im TV-Menue).
+  const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode) && !forceTv;
+  // View only (= TV-Ansicht) fuer abgeschlossene Spiele und laufende Spiele mit Wahl "View only" bzw. ?tv=1.
+  const viewOnlyTv = shouldShowViewOnly(game, accessMode, forceTv);
+  // Abgeschlossenes Spiel in View only: Menue bietet "Entsperren" (Passwort).
   const closedTv = shouldShowClosedGameTv(game, accessMode);
   const [gameForm, setGameForm] = useState<CreateGameInput>(createGameFormState(game));
 
@@ -1028,6 +1029,8 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
       }
       setGameAccessMode(game.id, "edit");
       await reopenGame(game.id);
+      // Nachtraegliche Korrektur: Timer bleibt gestoppt.
+      await pauseActiveTimer(game.id);
       closeReopenDialog();
       if (forceOverview) {
         window.location.hash = `/game/${game.id}`;
@@ -1059,6 +1062,12 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
       snapToLatestTurnRef.current = true;
     }
     await redoGameAction(game.id);
+  };
+
+  // Scoreboard im Edit-Modus oeffnet die View-only-Ansicht; zurueck nur ueber Main -> Spiel -> Edit.
+  const openViewOnly = () => {
+    setGameAccessMode(game.id, "view");
+    window.location.hash = getTvModeHash(game.id);
   };
 
   const openOverviewWindow = () => {
@@ -1265,7 +1274,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
       }
       stickyHeader
       headerClassName={gameHeaderClassName}
-      actions={closedTv ? undefined :
+      actions={viewOnlyTv ? undefined :
         <>
           <div className="game-header-meta">
             <div className="game-status-strip">
@@ -1279,11 +1288,9 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                   Timer: {timerStatusLabel}
                 </span>
               ) : null}
-              {isReadOnly ? <span className="status-pill status-pill--view-only">Nur ansehen</span> : null}
+              {isReadOnly ? <span className="status-pill status-pill--view-only">View only</span> : null}
             </div>
           </div>
-          {isReadOnly ? <button type="button" className="secondary-button compact-button"
-            onClick={() => { setGameAccessMode(game.id, "view"); window.location.hash = getTvModeHash(game.id); }}>TV-Modus</button> : null}
           <FloatingMenu
             fixed
             ariaLabel="Spielmenue"
@@ -1303,7 +1310,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                     ? [
                         {
                           label: "Scoreboard",
-                          onClick: openOverviewWindow
+                          onClick: openViewOnly
                         }
                       ]
                     : []),
@@ -1335,10 +1342,9 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
         </>
       }
     >
-      {closedTv ? (
+      {viewOnlyTv ? (
         <TvGameView
           game={game}
-          onExit={exitTvToGames}
           fullscreenDocument
           menu={
             <FloatingMenu
@@ -1347,7 +1353,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                 {
                   label: "Navigation",
                   items: [
-                    { label: "Zur Uebersicht", onClick: () => { exitTvToGames(); } },
+                    { label: "Main", onClick: () => { exitTvToGames(); } },
                     { label: "Neues Spiel", onClick: () => { window.location.hash = "/new"; } },
                     { label: "Statistik", onClick: () => { window.location.hash = "/stats"; } }
                   ]
@@ -1355,11 +1361,11 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                 {
                   label: "Optionen",
                   items: [
-                    { label: "Scoreboard", onClick: () => { openOverviewWindow(); } },
                     { label: "Verlauf", onClick: () => { setEntriesOpen(true); } },
                     { label: "Notizen", onClick: () => { setNotesOpen(true); } },
                     { label: "Einstellungen", onClick: () => { openGameSettings(); } },
-                    { label: "Entsperren (Passwort)", detail: "Spiel wieder eroeffnen", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }
+                    // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
+                    ...(closedTv ? [{ label: "Entsperren", detail: "Passwort, danach Edit", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
                   ]
                 }
               ]}
@@ -1381,14 +1387,14 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                   className="primary-button compact-button"
                   onClick={() => setGameAccessMode(game.id, "edit")}
                 >
-                  Bearbeiten
+                  Edit
                 </button>
                 <button
                   type="button"
                   className="secondary-button compact-button"
                   onClick={() => { setGameAccessMode(game.id, "view"); window.location.hash = getTvModeHash(game.id); }}
                 >
-                  Nur ansehen
+                  View only
                 </button>
               </div>
             </div>
@@ -1645,7 +1651,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
           </article>
         ) : null}
 
-        {closedTv ? null : showOverview ? (
+        {viewOnlyTv ? null : showOverview ? (
           <GameOverview game={game} />
         ) : isSetupScreen ? (
           <div className="stack">
@@ -2229,6 +2235,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                 </button>
               </div>
               {finishDialogError ? <p className="muted-copy">{finishDialogError}</p> : null}
+              {!isReadOnly ? (
               <div className="button-row button-row--compact">
                 <button
                   type="button"
@@ -2249,6 +2256,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                   {redoLabel}
                 </button>
               </div>
+              ) : null}
               <div className="modal-filters">
                 <label className="field">
                   <span>Spieler</span>
@@ -2305,6 +2313,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                         <span className="event-editor__stamp">
                           {formatClockTimeWithSeconds(event.createdAt)}
                         </span>
+                        {!isReadOnly ? (
                         <div className="button-row button-row--compact event-editor__actions">
                           <button
                             type="button"
@@ -2323,6 +2332,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, game }: GamePag
                             Loeschen
                           </button>
                         </div>
+                        ) : null}
                       </div>
 
                       {editingEventId === event.id ? (
