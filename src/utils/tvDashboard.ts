@@ -3,6 +3,8 @@ import { getCurrentRoundNumber, getPlayerComparableTotalScore } from "./gameCalc
 import { formatClockTime } from "./time";
 
 export const TV_EVENT_LIMIT = 8;
+// View only: Ereignisliste scrollbar, bis zu so vielen Eintraegen.
+export const TV_FEED_SCROLL_LIMIT = 500;
 export const getDeficitInfo = (game: Game) => {
   const [a, b] = game.players.map(p => getPlayerComparableTotalScore(game, p.id));
   const remainingRounds = Math.max(0, 5 - getCurrentRoundNumber(game));
@@ -12,12 +14,15 @@ export const getDeficitInfo = (game: Game) => {
   return { text: `${player.name} liegt ${deficit} VP zurück`, deficit, playerId: player.id, remainingRounds,
     perRound: remainingRounds > 0 && game.status !== "completed" ? Math.ceil(deficit / remainingRounds) : null };
 };
-export interface TvFeedEvent { id: string; createdAt: string; time: string; text: string }
+export interface TvFeedEvent { id: string; createdAt: string; time: string; text: string; kind?: "highlight" }
 const signed = (n: number) => `${n < 0 ? "−" : "+"}${Math.abs(n)}`;
-export const buildTvEventFeed = (game: Game, limit = TV_EVENT_LIMIT): TvFeedEvent[] => {
+// highlights: abgeleitete Highlights (deriveGameHighlights), erscheinen als eigene Ereignisart.
+export const buildTvEventFeed = (game: Game, limit = TV_EVENT_LIMIT,
+  highlights: { id: string; createdAt: string; title: string; subtitle: string }[] = []): TvFeedEvent[] => {
   const name = (id?: string) => game.players.find(p => p.id === id)?.name ?? "Spieler";
   const round = (n?: number) => n ? `Runde ${n} · ` : "";
   const events: Omit<TvFeedEvent, "time">[] = [
+    ...highlights.map(h => ({ id: h.id, createdAt: h.createdAt, kind: "highlight" as const, text: `${h.title}: ${h.subtitle}` })),
     ...game.scoreEvents.map(e => ({ ...e, text: `${round(e.roundNumber)}${name(e.playerId)}: ${signed(e.value)} ${e.scoreType === "primary" ? "Primär" : e.scoreType === "secondary" ? "Sekundär" : e.scoreType === "challenge" ? "Herausforderung" : "VP"}` })),
     ...game.commandPointEvents.map(e => ({ ...e, text: `${round(e.roundNumber)}${name(e.playerId)}: ${signed(e.cpType === "spent" ? -e.value : e.value)} CP` })),
     ...game.noteEvents.map(e => ({ ...e, text: `${name(e.playerId)}: ${e.note}` }))
@@ -38,6 +43,6 @@ export const buildTvEventFeed = (game: Game, limit = TV_EVENT_LIMIT): TvFeedEven
     events.push({ id: e.id, createdAt: e.createdAt, text });
   }
   return events.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id))
-    .slice(0, Math.min(TV_EVENT_LIMIT, Math.max(0, Math.floor(limit))))
-    .map(e => ({ id: e.id, createdAt: e.createdAt, text: e.text, time: formatClockTime(e.createdAt) }));
+    .slice(0, Math.max(0, Math.floor(limit)))
+    .map(e => ({ id: e.id, createdAt: e.createdAt, text: e.text, time: formatClockTime(e.createdAt), ...(e.kind ? { kind: e.kind } : {}) }));
 };

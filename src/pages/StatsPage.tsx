@@ -999,7 +999,7 @@ const createScenarioSummaries = (
 };
 
 export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
-  const { games, isLoading, errorMessage, clearError } = useGameStore();
+  const { games, isLoading, errorMessage, clearError, refreshGames } = useGameStore();
   const [filters, setFilters] = useState(createInitialGameFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [openSections, setOpenSections] = useState(defaultOpenSections);
@@ -1341,6 +1341,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   { label: "Neues Spiel", onClick: onCreateGame },
                   { label: "Statistik", onClick: () => window.location.hash = "/stats" }
                 ]
+              },
+              {
+                label: "Optionen",
+                items: [{ label: "Update", onClick: () => void refreshGames(), disabled: isLoading }]
               }
             ]}
           />
@@ -2299,7 +2303,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     className="game-picker-item"
                     onClick={() => {
                       setGamePickerOpen(false);
-                      window.location.hash = `/game/${game.id}/overview`;
+                      window.location.hash = `/game/${game.id}`;
                     }}
                   >
                     <strong>

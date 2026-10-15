@@ -3,6 +3,26 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-15
+
+### Entsperren: keine alte Nur-Lesen-Ansicht mehr, Spiel wird wirklich wieder eroeffnet
+
+- Fehlerbild: Nach "Entsperren" eines abgeschlossenen Spiels erschien die alte Nur-Lesen-Ansicht, das Spiel blieb "zu".
+- Ursache (per Playwright mit Mock belegt): `handleConfirmReopenGame` setzte den Modus "edit", bevor das Wiedereroeffnen gelang. Abgeschlossen + "edit" renderte die alte Uebersicht (`GameOverview`). Schlug das Wiedereroeffnen fehl (409-Konflikt bei `mt_revoke_event`, Reload auf den Serverstand) oder wurde es blockiert (App-Stand vor PR #7: `shouldBlockGameWrite` blockierte still, keine RPC), blieb genau diese Ansicht mit "Spiel: zu" stehen.
+- Fix: Abgeschlossene Spiele zeigen immer View only (auch im Modus "edit"). Edit erst, wenn das Spiel danach wirklich offen ist; sonst zurueck auf View only mit Meldung. Die alte Uebersicht wird nirgends mehr gerendert (auch nicht unter dem Modus-Dialog). Alte Links (`/game/ID/overview`, `?mode=view`, `?view=1`, `?readonly=1`) werden auf View only umgeleitet; Statistik verlinkt nicht mehr auf `/overview`. Der Modus wird nicht in localStorage gespeichert (geprueft).
+
+### Highlights in Ereignisliste und Verlauf, scrollbare Ereignisliste
+
+- Die TV-Highlights (Fuehrungswechsel, Ausgleich, Herausforderungskarten, Zeit-Duell, Zeit-Meilensteine, Rundenabschluss, Spielende) erscheinen als eigene Art "Highlight" (★) in "Letzte Ereignisse" und im Verlauf (Filter "Highlights").
+- Abgeleitet aus den vorhandenen Ereignissen (`deriveGameHighlights`), nicht in der DB gespeichert, nicht bearbeit-/loeschbar, ohne Einfluss auf Punkte/Statistik. Undo der Ursache entfernt das Highlight.
+- Ereignisliste in View only (laufend und beendet) scrollbar per Touch, Mausrad und Tastatur (fokussierbar), ohne sichtbare Scrollbar, auch im Full screen.
+
+### Menue einheitlich
+
+- Ursache: Gleiches Bauteil `FloatingMenu`, aber im Spiel-Header (Edit) lag das feste Menue in einem Vorfahren mit `backdrop-filter` (Position relativ zur Header-Karte statt zum Fenster), in View only im TV-Raster mit skalierter Schrift (`--tv-unit`, z. B. 11,8 px statt 16 px auf dem Handy) und eigener Position. Statistik hatte keinen Optionen-Bereich.
+- Fix: Festes Menue per Portal an `<body>` (im Element-Vollbild an das Vollbild-Element), feste Basisschrift. Statistik bekommt Optionen -> Update. Reihenfolge ueberall Main, Neues Spiel, Statistik, dann Optionen.
+- "Entsperren" ohne Unterzeile "Passwort, danach Edit" (einzige Unterzeile in den Menues).
+
 ## 2026-10-14
 
 ### Nur noch zwei Modi: "Edit" und "View only"

@@ -33,7 +33,8 @@ const runTvDashboardTests = () => {
   assert.equal(buildTvEventFeed(g, 2).length, 2);
   assert.equal(buildTvEventFeed(g, -1).length, 0);
   g.noteEvents = Array.from({ length:12 }, (_, i) => ({ id:`note-${String(i).padStart(2,'0')}`, type:'note', playerId:a.id, note:'Notiz', createdAt:'2026-10-01T10:07:00Z' }));
-  assert.equal(buildTvEventFeed(g, 100).length, 8);
+  assert.equal(buildTvEventFeed(g).length, 8, 'Standard: acht Eintraege');
+  assert.equal(buildTvEventFeed(g, 100).length, 18, 'View only: scrollbare Liste mit allen Eintraegen');
   assert.equal(buildTvEventFeed(g)[0].id, 'note-11');
   const before = JSON.stringify(g); buildTvEventFeed(g); getDeficitInfo(g);
   assert.equal(JSON.stringify(g), before, 'Pure derivations must not mutate the source');

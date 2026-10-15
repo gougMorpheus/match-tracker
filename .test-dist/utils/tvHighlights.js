@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.detectTvHighlights = exports.HIGHLIGHT_RULES = exports.createTvSnapshot = void 0;
+exports.HIGHLIGHT_ICON = exports.deriveGameHighlights = exports.getGameAsOf = exports.detectTvHighlights = exports.HIGHLIGHT_RULES = exports.createTvSnapshot = void 0;
 const gameCalculations_1 = require("./gameCalculations");
 const headToHead_1 = require("./headToHead");
+const gameState_1 = require("./gameState");
 const createTvSnapshot = (game, nowIso) => {
     const round = (0, gameCalculations_1.getCurrentRoundNumber)(game), completed = game.status === "completed";
     const total = game.players.map(p => (0, gameCalculations_1.getPlayerComparableTotalScore)(game, p.id));
@@ -97,3 +98,44 @@ exports.HIGHLIGHT_RULES = [
 ];
 const detectTvHighlights = (prev, next, game, rules = exports.HIGHLIGHT_RULES) => prev.phaseKey === next.phaseKey ? [] : rules.flatMap(rule => rule(prev, next, game));
 exports.detectTvHighlights = detectTvHighlights;
+const PHASE_ACTIONS = new Set(["round-start", "turn-start", "game-end"]);
+const getGameAsOf = (game, iso) => {
+    const until = Date.parse(iso);
+    const keep = (items) => items.filter(e => Date.parse(e.createdAt) <= until);
+    const timeEvents = keep(game.timeEvents);
+    const ended = timeEvents.some(e => e.action === "game-end");
+    return (0, gameState_1.syncDerivedGameState)({ ...game, timeEvents, scoreEvents: keep(game.scoreEvents),
+        commandPointEvents: keep(game.commandPointEvents), noteEvents: keep(game.noteEvents),
+        endedAt: ended ? game.endedAt : undefined, finishReason: ended ? game.finishReason : undefined,
+        // Altdaten-Summen ohne Zeitstempel gehoeren zum Endstand.
+        legacyScoreTotals: ended ? game.legacyScoreTotals : {} });
+};
+exports.getGameAsOf = getGameAsOf;
+const deriveGameHighlights = (game, rules = exports.HIGHLIGHT_RULES) => {
+    const boundaries = [...new Set(game.timeEvents.filter(e => PHASE_ACTIONS.has(e.action)).map(e => e.createdAt))]
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+    const result = [];
+    const seen = new Set();
+    let prev = null;
+    for (const at of boundaries) {
+        const asOf = (0, exports.getGameAsOf)(game, at);
+        const next = (0, exports.createTvSnapshot)(asOf, asOf.endedAt ?? at);
+        if (!prev) {
+            prev = next;
+            continue;
+        }
+        if (prev.phaseKey === next.phaseKey)
+            continue;
+        for (const h of (0, exports.detectTvHighlights)(prev, next, asOf, rules)) {
+            if (seen.has(h.id))
+                continue;
+            seen.add(h.id);
+            result.push({ ...h, id: `highlight:${h.id}`, createdAt: at, roundNumber: (0, gameCalculations_1.getCurrentRoundNumber)(asOf), turnNumber: (0, gameCalculations_1.getCurrentTurnNumber)(asOf) });
+        }
+        next.lastLeaderId = next.leaderId ?? prev.lastLeaderId;
+        prev = next;
+    }
+    return result;
+};
+exports.deriveGameHighlights = deriveGameHighlights;
+exports.HIGHLIGHT_ICON = "★";

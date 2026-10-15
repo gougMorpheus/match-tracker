@@ -20,13 +20,14 @@ exports.shouldAskGameAccessMode = shouldAskGameAccessMode;
 const shouldOpenGameViewOnly = (game, mode) => Boolean(game && ((0, exports.isGameCompletedForDisplay)(game) || mode === "view"));
 exports.shouldOpenGameViewOnly = shouldOpenGameViewOnly;
 // Zwei Modi: "Edit" und "View only". View only ist die TV-Ansicht (komplett schreibgeschuetzt).
-// - Abgeschlossene Spiele: immer View only, ausser nach Entsperren per Passwort (Modus "edit").
+// - Abgeschlossene Spiele: immer View only. Entsperren eroeffnet das Spiel wieder; erst dann (Spiel offen) Edit.
+//   Es gibt keine alte Nur-Lesen-Uebersicht mehr, auch nicht im Modus "edit".
 // - Laufende Spiele: View only per Dialogwahl ("view") oder View-only-Link (?tv=1).
 const shouldShowViewOnly = (game, mode, forceTv = false) => {
     if (!game)
         return false;
     if ((0, exports.isGameCompletedForDisplay)(game))
-        return mode !== "edit";
+        return true;
     return forceTv || mode === "view";
 };
 exports.shouldShowViewOnly = shouldShowViewOnly;
@@ -34,7 +35,7 @@ exports.shouldShowViewOnly = shouldShowViewOnly;
 const shouldShowSpectatorTv = (game, mode, forceTv = false) => Boolean(game && !(0, exports.isGameCompletedForDisplay)(game) && (0, exports.shouldShowViewOnly)(game, mode, forceTv));
 exports.shouldShowSpectatorTv = shouldShowSpectatorTv;
 // Abgeschlossene Spiele in View only (fuer Menue "Entsperren").
-const shouldShowClosedGameTv = (game, mode) => Boolean(game && (0, exports.isGameCompletedForDisplay)(game) && mode !== "edit");
+const shouldShowClosedGameTv = (game, _mode) => Boolean(game && (0, exports.isGameCompletedForDisplay)(game));
 exports.shouldShowClosedGameTv = shouldShowClosedGameTv;
 // Menue der View-only-Ansicht: gleiche Navigation wie ueberall, Entsperren nur bei abgeschlossenem Spiel.
 const getViewOnlyMenuLabels = (game) => ({
@@ -48,12 +49,15 @@ exports.canReopenFromGamePage = canReopenFromGamePage;
 // Ziel des Buttons "TV-Modus" im Spiel (auch im Abschlussbildschirm).
 const getTvModeHash = (gameId) => `/game/${gameId}?tv=1`;
 exports.getTvModeHash = getTvModeHash;
+// Alte Links (?mode=view, ?view=1, ?readonly=1, /overview) fuehren zu View only statt zur alten Ansicht.
+const isLegacyViewParam = (params) => params.get("tv") === "1" || params.get("mode") === "view" || params.get("view") === "1" || params.get("readonly") === "1";
 // Route policy also protects initial cache/queue flushes before page effects run.
 const getGameRouteAccess = (hash, search = "") => {
     const [path, query = ""] = hash.replace(/^#/, "").split("?");
     return {
         gameId: path.startsWith("/game/") ? path.split("/")[2] || null : null,
-        tv: new URLSearchParams(query).get("tv") === "1" || new URLSearchParams(search).get("tv") === "1"
+        tv: isLegacyViewParam(new URLSearchParams(query)) || isLegacyViewParam(new URLSearchParams(search)) ||
+            path.split("/")[3] === "overview"
     };
 };
 exports.getGameRouteAccess = getGameRouteAccess;

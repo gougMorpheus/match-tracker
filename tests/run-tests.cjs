@@ -15,6 +15,7 @@ const { runGameSecurityTests } = require("./gameSecurity.test.cjs");
 const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
+const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -33,7 +34,8 @@ const suites = [
   ["gameStoreReadOnly", runGameStoreReadOnlyTests],
   ["realtime", runRealtimeTests],
   ["syncVersioning", runSyncVersioningTests],
-  ["editViewOnly", runEditViewOnlyTests]
+  ["editViewOnly", runEditViewOnlyTests],
+  ["highlightsScroll", runHighlightsScrollTests]
 ];
 
 const main = async () => {

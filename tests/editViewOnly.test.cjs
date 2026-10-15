@@ -31,7 +31,7 @@ const runEditViewOnlyTests = () => {
   // 4) View only schreibgeschuetzt: Store blockiert (siehe gameStoreReadOnly), Verlauf ohne Bearbeiten/Loeschen/Undo.
   assert.equal(m.isGameWriteBlocked(m.setGameAccessModeInState({}, running.id, 'view'), running.id, { gameId: running.id, tv: false }), true);
   assert.equal(m.isGameWriteBlocked(m.setGameAccessModeInState({}, running.id, 'edit'), running.id, { gameId: running.id, tv: true }), true);
-  assert.match(page, /\{!isReadOnly \? \(\s*<div className="button-row button-row--compact event-editor__actions">/);
+  assert.match(page, /\{!isReadOnly && event.kind !== "highlight" \? \(\s*<div className="button-row button-row--compact event-editor__actions">/);
   assert.match(page, /\{!isReadOnly \? \(\s*<div className="button-row button-row--compact">\s*<button[^>]*\s*type="button"\s*className="ghost-button compact-button"\s*onClick=\{\(\) => void handleUndoLastEvent\(\)\}/);
   // 5) Menue wie ueberall (Main, Neues Spiel, Statistik), verschwindet im Full screen.
   assert.deepEqual(m.getViewOnlyMenuLabels(done).navigation, ['Main', 'Neues Spiel', 'Statistik']);

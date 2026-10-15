@@ -11,6 +11,7 @@ const {
   shouldOpenGameViewOnly,
   shouldShowSpectatorTv,
   shouldShowClosedGameTv,
+  shouldShowViewOnly,
   getTvModeHash
 } = require("../.test-dist/utils/gameAccessMode.js");
 const {
@@ -35,7 +36,17 @@ const runGameAccessModeTests = () => {
   assert.equal(shouldShowSpectatorTv(completedGame, null, true), false);
   assert.equal(shouldShowClosedGameTv(completedGame, null), true, "Klick in der Liste -> TV");
   assert.equal(shouldShowClosedGameTv(completedGame, "view"), true, "?tv=1 bzw. Zuschauer -> TV");
-  assert.equal(shouldShowClosedGameTv(completedGame, "edit"), false, "nur nach Passwort-Entsperren in die Bearbeitung");
+  // Unlock-Bug 15.10.: abgeschlossen + "edit" zeigte die alte Nur-Lesen-Ansicht. Jetzt bleibt es View only,
+  // bis das Spiel wirklich wieder offen ist.
+  assert.equal(shouldShowClosedGameTv(completedGame, "edit"), true, "abgeschlossen + edit -> weiter View only, keine alte Ansicht");
+  assert.equal(shouldShowViewOnly(completedGame, "edit"), true, "abgeschlossen nie alte Ansicht");
+  assert.equal(shouldShowViewOnly(runningGame, "edit"), false, "offen + edit -> Edit-Ansicht");
+  // Alte Links fuehren zu View only.
+  for (const legacy of [`#/game/${completedGame.id}/overview`, `#/game/${completedGame.id}?mode=view`, `#/game/${completedGame.id}?view=1`, `#/game/${completedGame.id}?readonly=1`]) {
+    assert.equal(getGameRouteAccess(legacy).tv, true, legacy);
+  }
+  assert.equal(getGameRouteAccess(`#/game/${completedGame.id}`, "?mode=view").tv, true);
+  assert.equal(getGameRouteAccess(`#/game/${completedGame.id}`).tv, false);
   assert.equal(shouldShowClosedGameTv(runningGame, null), false, "laufende Spiele unveraendert");
   assert.equal(shouldShowClosedGameTv(runningGame, "view"), false);
   assert.equal(shouldShowClosedGameTv(undefined, null), false);

@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildTvEventFeed = exports.getDeficitInfo = exports.TV_EVENT_LIMIT = void 0;
+exports.buildTvEventFeed = exports.getDeficitInfo = exports.TV_FEED_SCROLL_LIMIT = exports.TV_EVENT_LIMIT = void 0;
 const gameCalculations_1 = require("./gameCalculations");
 const time_1 = require("./time");
 exports.TV_EVENT_LIMIT = 8;
+// View only: Ereignisliste scrollbar, bis zu so vielen Eintraegen.
+exports.TV_FEED_SCROLL_LIMIT = 500;
 const getDeficitInfo = (game) => {
     const [a, b] = game.players.map(p => (0, gameCalculations_1.getPlayerComparableTotalScore)(game, p.id));
     const remainingRounds = Math.max(0, 5 - (0, gameCalculations_1.getCurrentRoundNumber)(game));
@@ -17,10 +19,12 @@ const getDeficitInfo = (game) => {
 };
 exports.getDeficitInfo = getDeficitInfo;
 const signed = (n) => `${n < 0 ? "−" : "+"}${Math.abs(n)}`;
-const buildTvEventFeed = (game, limit = exports.TV_EVENT_LIMIT) => {
+// highlights: abgeleitete Highlights (deriveGameHighlights), erscheinen als eigene Ereignisart.
+const buildTvEventFeed = (game, limit = exports.TV_EVENT_LIMIT, highlights = []) => {
     const name = (id) => game.players.find(p => p.id === id)?.name ?? "Spieler";
     const round = (n) => n ? `Runde ${n} · ` : "";
     const events = [
+        ...highlights.map(h => ({ id: h.id, createdAt: h.createdAt, kind: "highlight", text: `${h.title}: ${h.subtitle}` })),
         ...game.scoreEvents.map(e => ({ ...e, text: `${round(e.roundNumber)}${name(e.playerId)}: ${signed(e.value)} ${e.scoreType === "primary" ? "Primär" : e.scoreType === "secondary" ? "Sekundär" : e.scoreType === "challenge" ? "Herausforderung" : "VP"}` })),
         ...game.commandPointEvents.map(e => ({ ...e, text: `${round(e.roundNumber)}${name(e.playerId)}: ${signed(e.cpType === "spent" ? -e.value : e.value)} CP` })),
         ...game.noteEvents.map(e => ({ ...e, text: `${name(e.playerId)}: ${e.note}` }))
@@ -57,7 +61,7 @@ const buildTvEventFeed = (game, limit = exports.TV_EVENT_LIMIT) => {
         events.push({ id: e.id, createdAt: e.createdAt, text });
     }
     return events.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id))
-        .slice(0, Math.min(exports.TV_EVENT_LIMIT, Math.max(0, Math.floor(limit))))
-        .map(e => ({ id: e.id, createdAt: e.createdAt, text: e.text, time: (0, time_1.formatClockTime)(e.createdAt) }));
+        .slice(0, Math.max(0, Math.floor(limit)))
+        .map(e => ({ id: e.id, createdAt: e.createdAt, text: e.text, time: (0, time_1.formatClockTime)(e.createdAt), ...(e.kind ? { kind: e.kind } : {}) }));
 };
 exports.buildTvEventFeed = buildTvEventFeed;
