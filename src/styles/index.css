@@ -3764,3 +3764,17 @@ body:has(.tv-game) .modal-backdrop { z-index: 1100; }
 .floating-menu__item { font-size: 1rem; }
 /* View only: gleiches festes Menue wie ueberall; im Vollbild ausgeblendet (wie bisher). */
 :root:fullscreen .floating-menu--tv, :fullscreen .floating-menu--tv { display: none; }
+
+/* Benachrichtigungen (Push Stufe a) */
+.notifications-backdrop { z-index: 1200; }
+.notifications-card { width: min(100%, 30rem); }
+.push-hint { display: grid; gap: .45rem; padding: .75rem .85rem; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 14px; background: var(--bg-soft); }
+.push-hint p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.35; }
+.push-hint--denied, .push-hint--unsupported, .push-hint--insecure { border-left-color: #f59e0b; }
+.push-hint .primary-button { justify-self: start; }
+.notifications-switch { display: flex; align-items: center; gap: .6rem; padding: .6rem .2rem; cursor: pointer; }
+.notifications-switch input { width: 1.2rem; height: 1.2rem; accent-color: var(--accent); }
+.notifications-list h3 { margin: 0; font-size: 1rem; }
+.notifications-row { display: flex; justify-content: space-between; align-items: center; gap: .6rem; padding: .55rem .65rem; border: 1px solid var(--border); border-radius: 12px; background: rgba(30, 41, 59, .6); }
+.notifications-row p { margin: .1rem 0 0; font-size: .82rem; }
+.notifications-device { font-size: .78rem; }

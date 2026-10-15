@@ -16,6 +16,7 @@ const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
 const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
+const { runPushATests } = require("./pushA.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -35,7 +36,8 @@ const suites = [
   ["realtime", runRealtimeTests],
   ["syncVersioning", runSyncVersioningTests],
   ["editViewOnly", runEditViewOnlyTests],
-  ["highlightsScroll", runHighlightsScrollTests]
+  ["highlightsScroll", runHighlightsScrollTests],
+  ["pushA", runPushATests]
 ];
 
 const main = async () => {

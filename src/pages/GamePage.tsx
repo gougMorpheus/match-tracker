@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { openNotificationsOverview, updatePushFollowSettings, usePushFollowSettings } from "../pwa/pushFollowStore";
+import { isFollowingGame, setGameFollowed } from "../utils/pushFollow";
 import { GameMetaFields } from "../components/GameMetaFields";
 import { GameOverview } from "../components/GameOverview";
 import { GamePlayerFields } from "../components/GamePlayerFields";
@@ -322,6 +324,19 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const viewOnlyTv = shouldShowViewOnly(game, accessMode, forceTv);
   // Abgeschlossenes Spiel in View only: Menue bietet "Entsperren" (Passwort).
   const closedTv = shouldShowClosedGameTv(game, accessMode);
+  // Folgen (Push Stufe a): nur lokal pro Geraet, nach dem Einschalten Hinweis zur Verfuegbarkeit.
+  const pushFollowSettings = usePushFollowSettings();
+  const followingGame = isFollowingGame(pushFollowSettings, game.id);
+  const followMenuItems = [
+    {
+      label: followingGame ? "Nicht mehr folgen" : "Folgen",
+      onClick: () => {
+        updatePushFollowSettings((current) => setGameFollowed(current, game.id, !followingGame));
+        if (!followingGame) openNotificationsOverview("hint");
+      }
+    },
+    { label: "Benachrichtigungen", onClick: () => openNotificationsOverview() }
+  ];
   const [gameForm, setGameForm] = useState<CreateGameInput>(createGameFormState(game));
 
   const allTurns = useMemo(
@@ -1336,6 +1351,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
                   { label: "Notizen", onClick: () => setNotesOpen(true) },
                   { label: "Einstellungen", onClick: openGameSettings },
+                  ...followMenuItems,
                   ...(!isReadOnly ? [isClosed
                     ? {
                         label: "Spiel wieder eroeffnen",
@@ -1385,6 +1401,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     { label: "Verlauf", onClick: () => { setEntriesOpen(true); } },
                     { label: "Notizen", onClick: () => { setNotesOpen(true); } },
                     { label: "Einstellungen", onClick: () => { openGameSettings(); } },
+                    ...followMenuItems,
                     // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
                     ...(closedTv ? [{ label: "Entsperren", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
                   ]

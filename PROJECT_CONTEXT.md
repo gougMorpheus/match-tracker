@@ -132,3 +132,10 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - `.tv-events__list` ist scrollbar (overflow-y auto, Scrollbar unsichtbar, `tabIndex=0`).
 - Menue: `FloatingMenu fixed` rendert per Portal; Seiten geben nur Sections an (Navigation: Main, Neues Spiel, Statistik; danach Optionen). Keine Unterzeilen.
 - Abgeschlossene Spiele: immer View only. Die alte Nur-Lesen-Uebersicht gibt es nicht mehr. Entsperren: Passwort -> Modus edit -> `reopenGame` -> nur wenn danach offen, Edit (Timer gestoppt); sonst View only + Meldung. Alte Links (`/overview`, `?mode=view` usw.) -> View only.
+
+## PWA und Push-Ticker (Stufe a, 15.10.2026)
+
+- Manifest `public/manifest.webmanifest`, Icons `public/icons/` (Generator `scripts/generate-icons.py`), Service Worker aus `src/pwa/sw.template.js` (Vite-Plugin in `vite.config.mjs` schreibt `dist/sw.js` mit Build-Kennung), Registrierung `src/pwa/registerServiceWorker.ts` (nur PROD).
+- SW cacht nur die App-Huelle desselben Hosts. Supabase (fremder Host), `version.json`, `sw.js` laufen nie ueber den SW-Cache.
+- Folgen: `src/utils/pushFollow.ts` (reine Logik), `src/pwa/pushFollowStore.ts` (localStorage + Hook), UI `src/components/NotificationsCenter.tsx`, Hinweise `src/utils/pushSupport.ts` (`PUSH_DELIVERY_AVAILABLE = false`).
+- Stufe (b) geplant: Abo-Tabelle in Supabase (device_id, game_id, auto_follow, push subscription), DB-Trigger auf neue Events -> Netlify Function -> Web-Push per VAPID (Schluessel nur als Netlify-Umgebungsvariable). Dann `pushManager.subscribe` im Client und Sync der localStorage-Struktur.
