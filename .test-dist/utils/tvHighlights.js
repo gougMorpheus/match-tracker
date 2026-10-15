@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HIGHLIGHT_ICON = exports.deriveGameHighlights = exports.getGameAsOf = exports.detectTvHighlights = exports.HIGHLIGHT_RULES = exports.createTvSnapshot = void 0;
+exports.HIGHLIGHT_ICON = exports.deriveScoreLeadHighlights = exports.deriveGameHighlights = exports.getGameAsOf = exports.detectTvHighlights = exports.HIGHLIGHT_RULES = exports.createTvSnapshot = void 0;
 const gameCalculations_1 = require("./gameCalculations");
 const headToHead_1 = require("./headToHead");
 const gameState_1 = require("./gameState");
@@ -127,6 +127,9 @@ const deriveGameHighlights = (game, rules = exports.HIGHLIGHT_RULES) => {
         if (prev.phaseKey === next.phaseKey)
             continue;
         for (const h of (0, exports.detectTvHighlights)(prev, next, asOf, rules)) {
+            // Fuehrungswechsel/Ausgleich kommen aus deriveScoreLeadHighlights (pro Punkte-Event).
+            if (SCORE_DRIVEN_KINDS.has(h.kind))
+                continue;
             if (seen.has(h.id))
                 continue;
             seen.add(h.id);
@@ -135,7 +138,43 @@ const deriveGameHighlights = (game, rules = exports.HIGHLIGHT_RULES) => {
         next.lastLeaderId = next.leaderId ?? prev.lastLeaderId;
         prev = next;
     }
-    return result;
+    return [...result, ...(0, exports.deriveScoreLeadHighlights)(game)]
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 };
 exports.deriveGameHighlights = deriveGameHighlights;
+// Fehlerbild 15.10.: Fuehrungswechsel innerhalb eines Zugs fehlten, weil der Stand nur an Phasengrenzen
+// verglichen wurde. Jetzt: Stand nach JEDEM (nicht widerrufenen) Punkte-Event. Widerrufene Events (Undo)
+// sind schon aus game.scoreEvents entfernt, negative Korrekturen gehen in die Summe ein.
+const SCORE_DRIVEN_KINDS = new Set(["lead-change", "equalizer"]);
+const deriveScoreLeadHighlights = (game) => {
+    const events = [...game.scoreEvents].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id));
+    const result = [];
+    let leader = null;
+    let lastLeader = null;
+    for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        // Mehrere Events mit identischem Zeitstempel als einen Schritt werten.
+        if (i + 1 < events.length && events[i + 1].createdAt === event.createdAt)
+            continue;
+        const until = Date.parse(event.createdAt);
+        const partial = { ...game, legacyScoreTotals: {}, scoreEvents: events.filter(e => Date.parse(e.createdAt) <= until) };
+        const total = game.players.map(p => (0, gameCalculations_1.getPlayerComparableTotalScore)(partial, p.id) ?? 0);
+        const now = total[0] === total[1] ? null : total[0] > total[1] ? 0 : 1;
+        const label = `${total[0]} : ${total[1]} VP`;
+        const meta = { createdAt: event.createdAt, roundNumber: event.roundNumber, turnNumber: event.turnNumber };
+        if (now !== null && lastLeader !== null && now !== lastLeader) {
+            const player = game.players[now];
+            result.push({ id: `highlight:lead-change:${event.id}`, kind: "lead-change", title: "Führungswechsel",
+                subtitle: `${player.name} übernimmt die Führung · ${label}`, playerId: player.id, ...meta });
+        }
+        else if (now === null && leader !== null) {
+            result.push({ id: `highlight:equalizer:${event.id}`, kind: "equalizer", title: "Ausgleich", subtitle: label, ...meta });
+        }
+        leader = now;
+        if (now !== null)
+            lastLeader = now;
+    }
+    return result;
+};
+exports.deriveScoreLeadHighlights = deriveScoreLeadHighlights;
 exports.HIGHLIGHT_ICON = "★";

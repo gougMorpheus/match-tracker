@@ -17,6 +17,7 @@ const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
 const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
 const { runPushATests } = require("./pushA.test.cjs");
+const { runLeadHighlightsTests } = require("./leadHighlights.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -37,7 +38,8 @@ const suites = [
   ["syncVersioning", runSyncVersioningTests],
   ["editViewOnly", runEditViewOnlyTests],
   ["highlightsScroll", runHighlightsScrollTests],
-  ["pushA", runPushATests]
+  ["pushA", runPushATests],
+  ["leadHighlights", runLeadHighlightsTests]
 ];
 
 const main = async () => {

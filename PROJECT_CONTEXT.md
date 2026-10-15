@@ -139,3 +139,5 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - SW cacht nur die App-Huelle desselben Hosts. Supabase (fremder Host), `version.json`, `sw.js` laufen nie ueber den SW-Cache.
 - Folgen: `src/utils/pushFollow.ts` (reine Logik), `src/pwa/pushFollowStore.ts` (localStorage + Hook), UI `src/components/NotificationsCenter.tsx`, Hinweise `src/utils/pushSupport.ts` (`PUSH_DELIVERY_AVAILABLE = false`).
 - Stufe (b) geplant: Abo-Tabelle in Supabase (device_id, game_id, auto_follow, push subscription), DB-Trigger auf neue Events -> Netlify Function -> Web-Push per VAPID (Schluessel nur als Netlify-Umgebungsvariable). Dann `pushManager.subscribe` im Client und Sync der localStorage-Struktur.
+
+- Highlights (Nachtrag 15.10.): Führungswechsel/Ausgleich für Liste/Verlauf pro Punkte-Event (`deriveScoreLeadHighlights`), übrige Highlights an Phasengrenzen. Die TV-Einblendung selbst prüft weiterhin nur an Phasengrenzen.

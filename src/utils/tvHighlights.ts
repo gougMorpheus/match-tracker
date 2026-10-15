@@ -128,12 +128,47 @@ export const deriveGameHighlights = (game: Game, rules = HIGHLIGHT_RULES): Deriv
     if (!prev) { prev = next; continue; }
     if (prev.phaseKey === next.phaseKey) continue;
     for (const h of detectTvHighlights(prev, next, asOf, rules)) {
+      // Fuehrungswechsel/Ausgleich kommen aus deriveScoreLeadHighlights (pro Punkte-Event).
+      if (SCORE_DRIVEN_KINDS.has(h.kind)) continue;
       if (seen.has(h.id)) continue;
       seen.add(h.id);
       result.push({ ...h, id: `highlight:${h.id}`, createdAt: at, roundNumber: getCurrentRoundNumber(asOf), turnNumber: getCurrentTurnNumber(asOf) });
     }
     next.lastLeaderId = next.leaderId ?? prev.lastLeaderId;
     prev = next;
+  }
+  return [...result, ...deriveScoreLeadHighlights(game)]
+    .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+};
+
+// Fehlerbild 15.10.: Fuehrungswechsel innerhalb eines Zugs fehlten, weil der Stand nur an Phasengrenzen
+// verglichen wurde. Jetzt: Stand nach JEDEM (nicht widerrufenen) Punkte-Event. Widerrufene Events (Undo)
+// sind schon aus game.scoreEvents entfernt, negative Korrekturen gehen in die Summe ein.
+const SCORE_DRIVEN_KINDS = new Set(["lead-change", "equalizer"]);
+export const deriveScoreLeadHighlights = (game: Game): DerivedHighlight[] => {
+  const events = [...game.scoreEvents].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id));
+  const result: DerivedHighlight[] = [];
+  let leader: number | null = null;
+  let lastLeader: number | null = null;
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    // Mehrere Events mit identischem Zeitstempel als einen Schritt werten.
+    if (i + 1 < events.length && events[i + 1].createdAt === event.createdAt) continue;
+    const until = Date.parse(event.createdAt);
+    const partial = { ...game, legacyScoreTotals: {}, scoreEvents: events.filter(e => Date.parse(e.createdAt) <= until) };
+    const total = game.players.map(p => getPlayerComparableTotalScore(partial, p.id) ?? 0);
+    const now = total[0] === total[1] ? null : total[0] > total[1] ? 0 : 1;
+    const label = `${total[0]} : ${total[1]} VP`;
+    const meta = { createdAt: event.createdAt, roundNumber: event.roundNumber, turnNumber: event.turnNumber };
+    if (now !== null && lastLeader !== null && now !== lastLeader) {
+      const player = game.players[now];
+      result.push({ id: `highlight:lead-change:${event.id}`, kind: "lead-change", title: "Führungswechsel",
+        subtitle: `${player.name} übernimmt die Führung · ${label}`, playerId: player.id, ...meta });
+    } else if (now === null && leader !== null) {
+      result.push({ id: `highlight:equalizer:${event.id}`, kind: "equalizer", title: "Ausgleich", subtitle: label, ...meta });
+    }
+    leader = now;
+    if (now !== null) lastLeader = now;
   }
   return result;
 };
