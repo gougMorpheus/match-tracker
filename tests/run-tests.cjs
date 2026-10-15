@@ -18,6 +18,7 @@ const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
 const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
 const { runPushATests } = require("./pushA.test.cjs");
 const { runLeadHighlightsTests } = require("./leadHighlights.test.cjs");
+const { runTvLeadPopupTests } = require("./tvLeadPopup.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -39,7 +40,8 @@ const suites = [
   ["editViewOnly", runEditViewOnlyTests],
   ["highlightsScroll", runHighlightsScrollTests],
   ["pushA", runPushATests],
-  ["leadHighlights", runLeadHighlightsTests]
+  ["leadHighlights", runLeadHighlightsTests],
+  ["tvLeadPopup", runTvLeadPopupTests]
 ];
 
 const main = async () => {

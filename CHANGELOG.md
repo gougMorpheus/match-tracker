@@ -5,6 +5,12 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-15
 
+### TV-Einblendung Führungswechsel/Ausgleich mitten im Zug, kompakte Ereigniszeilen mobil
+
+- Wunsch: Die große TV-Einblendung zeigte Führungswechsel/Ausgleich nur an Runden-/Zugstarts (Ursache: Effekt verglich nur Phasen-Snapshots). Jetzt dieselbe Logik wie Liste/Verlauf (PR #10, `deriveScoreLeadHighlights`) nach jedem gültigen Punkte-Event.
+- Undo nimmt die Einblendung sofort zurück (auch die gerade sichtbare). Undo mitten im Verlauf erzeugt keine Einblendungen für alte Events. Mehrere schnelle Punkte-Highlights: die sichtbare läuft zu Ende, nur das neueste wartet (kein Stau, kein Flackern).
+- Mobil: Zeilen in „Letzte Ereignisse“ richten sich nach dem Inhalt statt 1/8 der Listenhöhe; Desktop unverändert.
+
 ### Menü: „Notifications“ statt „Benachrichtigungen“
 
 - Wunsch Tim: Menüpunkt war zu breit. Umbenannt in Menü (Start, Statistik, Edit, View only), Dialogtitel und Hinweisen. Nur der Name der Browser-Einstellung („Benachrichtigungen“ → „Zulassen“) bleibt, weil Chrome/Edge ihn auf Deutsch so anzeigen.

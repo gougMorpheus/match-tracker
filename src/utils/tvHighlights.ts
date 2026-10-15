@@ -144,7 +144,7 @@ export const deriveGameHighlights = (game: Game, rules = HIGHLIGHT_RULES): Deriv
 // Fehlerbild 15.10.: Fuehrungswechsel innerhalb eines Zugs fehlten, weil der Stand nur an Phasengrenzen
 // verglichen wurde. Jetzt: Stand nach JEDEM (nicht widerrufenen) Punkte-Event. Widerrufene Events (Undo)
 // sind schon aus game.scoreEvents entfernt, negative Korrekturen gehen in die Summe ein.
-const SCORE_DRIVEN_KINDS = new Set(["lead-change", "equalizer"]);
+export const SCORE_DRIVEN_KINDS = new Set(["lead-change", "equalizer"]);
 export const deriveScoreLeadHighlights = (game: Game): DerivedHighlight[] => {
   const events = [...game.scoreEvents].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id));
   const result: DerivedHighlight[] = [];
@@ -173,3 +173,33 @@ export const deriveScoreLeadHighlights = (game: Game): DerivedHighlight[] => {
   return result;
 };
 export const HIGHLIGHT_ICON = "★";
+
+// TV-Einblendung fuer Fuehrungswechsel/Ausgleich mitten im Zug (gleiche Logik wie Liste/Verlauf).
+// - Neu sind nur Highlights, die beim letzten Stand noch nicht existierten (kein Nachspielen der Historie).
+// - Undo: Einblendungen, deren ausloesendes Event nicht mehr gilt, werden aus der Warteschlange entfernt
+//   (auch die gerade sichtbare).
+// - Kein Stau: von mehreren schnell aufeinanderfolgenden Punkte-Highlights wartet nur das neueste;
+//   die sichtbare Einblendung wird nicht ersetzt (kein Flackern). Warteschlange hoechstens 3 Eintraege.
+export const MAX_TV_HIGHLIGHT_QUEUE = 3;
+// knownEventIds: nur Highlights von Punkte-Events, die beim letzten Stand noch nicht existierten
+// (ein Undo mitten im Verlauf erzeugt so keine Einblendungen fuer alte Events).
+const sourceEventId = (h: TvHighlight) => h.id.replace(/^highlight:(lead-change|equalizer):/, "");
+export const findNewScoreLeadHighlights = <T extends TvHighlight>(seen: Set<string>, current: T[], knownEventIds: Set<string> | null = null): T[] =>
+  current.filter(h => !seen.has(h.id) && (!knownEventIds || !knownEventIds.has(sourceEventId(h))));
+export const getScoreEventIds = (game: Game): Set<string> => new Set(game.scoreEvents.map(e => e.id));
+export const reconcileTvHighlightQueue = <T extends TvHighlight>(queue: T[], validScoreIds: Set<string>): T[] => {
+  const next = queue.filter(h => !SCORE_DRIVEN_KINDS.has(h.kind) || validScoreIds.has(h.id));
+  return next.length === queue.length ? queue : next;
+};
+export const enqueueTvHighlights = <T extends TvHighlight>(queue: T[], incoming: T[]): T[] => {
+  if (!incoming.length) return queue;
+  const scoreIncoming = incoming.filter(h => SCORE_DRIVEN_KINDS.has(h.kind));
+  const other = incoming.filter(h => !SCORE_DRIVEN_KINDS.has(h.kind));
+  const [active, ...pending] = queue;
+  const latestScore = scoreIncoming.slice(-1);
+  const keptPending = latestScore.length ? pending.filter(h => !SCORE_DRIVEN_KINDS.has(h.kind)) : pending;
+  const merged = [...(active ? [active] : []), ...keptPending, ...other, ...latestScore];
+  if (merged.length <= MAX_TV_HIGHLIGHT_QUEUE) return merged;
+  // Aktive behalten, aelteste wartende verwerfen.
+  return [merged[0], ...merged.slice(merged.length - (MAX_TV_HIGHLIGHT_QUEUE - 1))];
+};

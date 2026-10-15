@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HIGHLIGHT_ICON = exports.deriveScoreLeadHighlights = exports.deriveGameHighlights = exports.getGameAsOf = exports.detectTvHighlights = exports.HIGHLIGHT_RULES = exports.createTvSnapshot = void 0;
+exports.enqueueTvHighlights = exports.reconcileTvHighlightQueue = exports.getScoreEventIds = exports.findNewScoreLeadHighlights = exports.MAX_TV_HIGHLIGHT_QUEUE = exports.HIGHLIGHT_ICON = exports.deriveScoreLeadHighlights = exports.SCORE_DRIVEN_KINDS = exports.deriveGameHighlights = exports.getGameAsOf = exports.detectTvHighlights = exports.HIGHLIGHT_RULES = exports.createTvSnapshot = void 0;
 const gameCalculations_1 = require("./gameCalculations");
 const headToHead_1 = require("./headToHead");
 const gameState_1 = require("./gameState");
@@ -128,7 +128,7 @@ const deriveGameHighlights = (game, rules = exports.HIGHLIGHT_RULES) => {
             continue;
         for (const h of (0, exports.detectTvHighlights)(prev, next, asOf, rules)) {
             // Fuehrungswechsel/Ausgleich kommen aus deriveScoreLeadHighlights (pro Punkte-Event).
-            if (SCORE_DRIVEN_KINDS.has(h.kind))
+            if (exports.SCORE_DRIVEN_KINDS.has(h.kind))
                 continue;
             if (seen.has(h.id))
                 continue;
@@ -145,7 +145,7 @@ exports.deriveGameHighlights = deriveGameHighlights;
 // Fehlerbild 15.10.: Fuehrungswechsel innerhalb eines Zugs fehlten, weil der Stand nur an Phasengrenzen
 // verglichen wurde. Jetzt: Stand nach JEDEM (nicht widerrufenen) Punkte-Event. Widerrufene Events (Undo)
 // sind schon aus game.scoreEvents entfernt, negative Korrekturen gehen in die Summe ein.
-const SCORE_DRIVEN_KINDS = new Set(["lead-change", "equalizer"]);
+exports.SCORE_DRIVEN_KINDS = new Set(["lead-change", "equalizer"]);
 const deriveScoreLeadHighlights = (game) => {
     const events = [...game.scoreEvents].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id));
     const result = [];
@@ -178,3 +178,37 @@ const deriveScoreLeadHighlights = (game) => {
 };
 exports.deriveScoreLeadHighlights = deriveScoreLeadHighlights;
 exports.HIGHLIGHT_ICON = "★";
+// TV-Einblendung fuer Fuehrungswechsel/Ausgleich mitten im Zug (gleiche Logik wie Liste/Verlauf).
+// - Neu sind nur Highlights, die beim letzten Stand noch nicht existierten (kein Nachspielen der Historie).
+// - Undo: Einblendungen, deren ausloesendes Event nicht mehr gilt, werden aus der Warteschlange entfernt
+//   (auch die gerade sichtbare).
+// - Kein Stau: von mehreren schnell aufeinanderfolgenden Punkte-Highlights wartet nur das neueste;
+//   die sichtbare Einblendung wird nicht ersetzt (kein Flackern). Warteschlange hoechstens 3 Eintraege.
+exports.MAX_TV_HIGHLIGHT_QUEUE = 3;
+// knownEventIds: nur Highlights von Punkte-Events, die beim letzten Stand noch nicht existierten
+// (ein Undo mitten im Verlauf erzeugt so keine Einblendungen fuer alte Events).
+const sourceEventId = (h) => h.id.replace(/^highlight:(lead-change|equalizer):/, "");
+const findNewScoreLeadHighlights = (seen, current, knownEventIds = null) => current.filter(h => !seen.has(h.id) && (!knownEventIds || !knownEventIds.has(sourceEventId(h))));
+exports.findNewScoreLeadHighlights = findNewScoreLeadHighlights;
+const getScoreEventIds = (game) => new Set(game.scoreEvents.map(e => e.id));
+exports.getScoreEventIds = getScoreEventIds;
+const reconcileTvHighlightQueue = (queue, validScoreIds) => {
+    const next = queue.filter(h => !exports.SCORE_DRIVEN_KINDS.has(h.kind) || validScoreIds.has(h.id));
+    return next.length === queue.length ? queue : next;
+};
+exports.reconcileTvHighlightQueue = reconcileTvHighlightQueue;
+const enqueueTvHighlights = (queue, incoming) => {
+    if (!incoming.length)
+        return queue;
+    const scoreIncoming = incoming.filter(h => exports.SCORE_DRIVEN_KINDS.has(h.kind));
+    const other = incoming.filter(h => !exports.SCORE_DRIVEN_KINDS.has(h.kind));
+    const [active, ...pending] = queue;
+    const latestScore = scoreIncoming.slice(-1);
+    const keptPending = latestScore.length ? pending.filter(h => !exports.SCORE_DRIVEN_KINDS.has(h.kind)) : pending;
+    const merged = [...(active ? [active] : []), ...keptPending, ...other, ...latestScore];
+    if (merged.length <= exports.MAX_TV_HIGHLIGHT_QUEUE)
+        return merged;
+    // Aktive behalten, aelteste wartende verwerfen.
+    return [merged[0], ...merged.slice(merged.length - (exports.MAX_TV_HIGHLIGHT_QUEUE - 1))];
+};
+exports.enqueueTvHighlights = enqueueTvHighlights;

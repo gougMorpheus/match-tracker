@@ -37,20 +37,20 @@ const runTvGameViewTests = () => {
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0, 'Initial load shows no historical highlights');
     assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Full screen']);
     const samePhase = structuredClone(base);
-    samePhase.scoreEvents.push({...samePhase.scoreEvents[0],id:'s2',playerId:base.players[1].id,value:12});
-    tree = render(TvGameView,samePhase);
-    assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0,'Scores alone do not trigger an overlay');
+    samePhase.scoreEvents.push({...samePhase.scoreEvents[0],id:'s2',playerId:base.players[1].id,value:12,createdAt:'2026-10-01T10:01:00Z'});
+    render(TvGameView,samePhase); tree = render(TvGameView,samePhase);
+    assert.equal(nodes(tree).find(n => n.props?.className === 'tv-highlight').props['data-kind'],'lead-change','Lead change mid-turn triggers an overlay');
     const next = structuredClone(samePhase);
     next.rounds[0].turns.push({id:'t2',roundNumber:1,turnNumber:2,playerId:next.players[1].id,timing:{pauses:[]}});
     render(TvGameView,next); tree = render(TvGameView,next);
-    assert.equal(nodes(tree).find(n => n.props?.className === 'tv-highlight').props['data-kind'],'lead-change');
+    assert.equal(nodes(tree).find(n => n.props?.className === 'tv-highlight').props['data-kind'],'lead-change','Active overlay stays (no flicker)');
     const advanceOverlay = () => {
       const entry = [...timers].find(([,t]) => t.ms === 4000);
       assert.ok(entry,'Overlay expires after four seconds'); timers.delete(entry[0]); entry[1].fn();
       return render(TvGameView,next);
     };
     tree = advanceOverlay();
-    assert.equal(nodes(tree).find(n => n.props?.className === 'tv-highlight').props['data-kind'],'challenge','Highlights appear sequentially');
+    assert.equal(nodes(tree).find(n => n.props?.className === 'tv-highlight').props['data-kind'],'challenge','Highlights appear sequentially, no duplicate lead change from the phase boundary');
     tree = advanceOverlay();
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0);
     render(TvGameView,structuredClone(next));
@@ -58,6 +58,14 @@ const runTvGameViewTests = () => {
     const reset = structuredClone(next); reset.id = 'other';
     render(TvGameView,reset); tree = render(TvGameView,reset);
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0,'Changing game resets the baseline');
+    // Undo: die Einblendung des zurueckgenommenen Punkte-Events verschwindet sofort.
+    const u0 = structuredClone(base); u0.id = 'undo';
+    render(TvGameView,u0);
+    const u1 = structuredClone(u0); u1.scoreEvents.push({...u1.scoreEvents[0],id:'u2',playerId:base.players[1].id,value:12,createdAt:'2026-10-01T10:02:00Z'});
+    render(TvGameView,u1); tree = render(TvGameView,u1);
+    assert.equal(nodes(tree).find(n => n.props?.className === 'tv-highlight').props['data-kind'],'lead-change');
+    render(TvGameView,structuredClone(u0)); tree = render(TvGameView,structuredClone(u0));
+    assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0,'Undo removes the lead-change overlay');
     assert.equal(JSON.stringify(base),before,'Rendering must not mutate game props');
     assert.ok(nodes(tree).find(n => n.props?.className === 'tv-phase__title'));
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-player__time').length, 2);
