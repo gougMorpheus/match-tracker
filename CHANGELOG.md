@@ -5,6 +5,13 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-15
 
+### Fix: Führungswechsel und Ausgleich innerhalb eines Zugs
+
+- Fehlerbild (Retest Pepper, Testspiel ZZ-A vs. ZZ-B): 5 Führungswechsel und 2 Ausgleiche, aber in „Letzte Ereignisse“ und Verlauf nur „★ ZZ-B gewinnt“.
+- Ursache (echte Events gelesen): alle 10 Punkte-Events lagen in Runde 1 / Zug 1 zwischen Zugstart und Spielende. `deriveGameHighlights` verglich den Stand nur an Phasengrenzen (Runden-/Zugstart, Spielende); dazwischen war 0 : 0 -> 19 : 21, also kein Wechsel (erste Führung zählt nicht).
+- Fix: `deriveScoreLeadHighlights` prüft den Stand nach jedem nicht widerrufenen Punkte-Event (Undo entfernt das Highlight, negative Korrekturen zählen; gleiche Zeitstempel = ein Schritt). Führungswechsel/Ausgleich aus den Phasengrenzen entfallen dafür. Zeit = auslösendes Event.
+
+
 ### Push-Ticker Stufe (a): installierbare PWA und Folgen pro Gerät (ohne DB)
 
 - PWA: `public/manifest.webmanifest` (standalone, start_url `/#/games`, Farben der App), Icons 192/512/maskable/apple-touch-icon und favicon, `public/_headers` (Manifest-MIME, sw.js no-cache) (`scripts/generate-icons.py`; ein eigenes Logo gab es im Repo nicht, live lief das Netlify-Standard-Favicon), iOS-Meta-Tags.
