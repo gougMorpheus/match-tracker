@@ -88,7 +88,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
                     onClick: () => void refreshGames(),
                     disabled: isLoading || isMutating
                   },
-                  { label: "Benachrichtigungen", onClick: () => openNotificationsOverview() }
+                  { label: "Notifications", onClick: () => openNotificationsOverview() }
                 ]
               }
             ]}

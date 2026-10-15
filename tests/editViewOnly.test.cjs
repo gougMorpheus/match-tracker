@@ -45,7 +45,7 @@ const runEditViewOnlyTests = () => {
   assert.match(store, /canReopenFromGamePage\(completed, openedHere/);
   assert.match(page, /await reopenGame\(game\.id\);\s*\/\/[^\n]*\n\s*await pauseActiveTimer\(game\.id\);/);
   // 7) Laufendes Spiel in View only: kein Entsperren/Edit im Menue.
-  assert.deepEqual(m.getViewOnlyMenuLabels(running).options, ['Verlauf', 'Notizen', 'Einstellungen', 'Folgen', 'Benachrichtigungen']);
+  assert.deepEqual(m.getViewOnlyMenuLabels(running).options, ['Verlauf', 'Notizen', 'Einstellungen', 'Folgen', 'Notifications']);
   assert.match(page, /\.\.\.\(closedTv \? \[\{ label: "Entsperren"/);
 };
 module.exports = { runEditViewOnlyTests };

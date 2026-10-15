@@ -12,7 +12,7 @@ import type { Game } from "../types/game";
 
 const gameLabel = (game: Game) => `${game.players[0].name} vs. ${game.players[1].name}`;
 
-// Uebersicht "Benachrichtigungen" (unter Optionen) und Hinweis nach "Folgen". Stufe a: nur lokal, kein Abo.
+// Uebersicht "Notifications" (unter Optionen) und Hinweis nach "Folgen". Stufe a: nur lokal, kein Abo.
 export const NotificationsCenter = () => {
   const { games } = useGameStore();
   const settings = usePushFollowSettings();
@@ -64,7 +64,7 @@ export const NotificationsCenter = () => {
       {hint.lines.map((line) => <p key={line}>{line}</p>)}
       {hint.canRequestPermission ? (
         <button type="button" className="primary-button compact-button" onClick={() => void requestPermission()}>
-          Benachrichtigungen erlauben
+          Notifications erlauben
         </button>
       ) : null}
     </div>
@@ -72,10 +72,10 @@ export const NotificationsCenter = () => {
 
   return (
     <div className="modal-backdrop notifications-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setMode(null); }}>
-      <div className="modal-card notifications-card" role="dialog" aria-modal="true" aria-label={mode === "hint" ? "Hinweis Benachrichtigungen" : "Benachrichtigungen"}>
+      <div className="modal-card notifications-card" role="dialog" aria-modal="true" aria-label={mode === "hint" ? "Hinweis Notifications" : "Notifications"}>
         <div className="stack">
           <div className="list-row">
-            <h2>{mode === "hint" ? "Spiel gefolgt" : "Benachrichtigungen"}</h2>
+            <h2>{mode === "hint" ? "Spiel gefolgt" : "Notifications"}</h2>
             <button type="button" className="ghost-button compact-button" onClick={() => setMode(null)}>Schliessen</button>
           </div>
           {mode === "hint" ? (
