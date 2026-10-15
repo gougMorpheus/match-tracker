@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface FloatingMenuItem {
   label: string;
@@ -17,15 +18,35 @@ interface FloatingMenuProps {
   sections: FloatingMenuSection[];
   fixed?: boolean;
   ariaLabel?: string;
+  className?: string;
 }
 
 export const FloatingMenu = ({
   sections,
   fixed = false,
-  ariaLabel = "Navigation"
+  ariaLabel = "Navigation",
+  className = ""
 }: FloatingMenuProps) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  // Fixe Menues werden per Portal an <body> (bzw. das Vollbild-Element) gehaengt, damit
+  // Vorfahren mit backdrop-filter/transform (Spiel-Header, TV-Ansicht) weder Position
+  // noch Schriftgroesse veraendern. So sieht das Menue auf allen Seiten gleich aus.
+  const [portalTarget, setPortalTarget] = useState<Element | null>(() =>
+    fixed && typeof document !== "undefined" ? getMenuPortalTarget() : null
+  );
+
+  useEffect(() => {
+    if (!fixed) return;
+    const update = () => setPortalTarget(getMenuPortalTarget());
+    update();
+    document.addEventListener("fullscreenchange", update);
+    document.addEventListener("webkitfullscreenchange", update);
+    return () => {
+      document.removeEventListener("fullscreenchange", update);
+      document.removeEventListener("webkitfullscreenchange", update);
+    };
+  }, [fixed]);
 
   useEffect(() => {
     if (!open) {
@@ -54,8 +75,8 @@ export const FloatingMenu = ({
     };
   }, [open]);
 
-  return (
-    <div ref={menuRef} className={`floating-menu ${fixed ? "floating-menu--fixed" : ""}`}>
+  const menu = (
+    <div ref={menuRef} className={`floating-menu ${fixed ? "floating-menu--fixed" : ""} ${className}`.trim()}>
       <button
         type="button"
         className="ghost-button compact-button floating-menu__trigger"
@@ -97,4 +118,11 @@ export const FloatingMenu = ({
       ) : null}
     </div>
   );
+  return fixed && portalTarget ? createPortal(menu, portalTarget) : menu;
+};
+
+const getMenuPortalTarget = (): Element => {
+  const doc = document as Document & { webkitFullscreenElement?: Element | null };
+  const fullscreenElement = doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+  return fullscreenElement && fullscreenElement !== document.documentElement ? fullscreenElement : document.body;
 };

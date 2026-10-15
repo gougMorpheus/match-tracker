@@ -125,3 +125,10 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - View-only-Menue (`getViewOnlyMenuLabels`): Main, Neues Spiel, Statistik; Verlauf, Notizen, Einstellungen (nur lesen); "Entsperren" nur bei abgeschlossenen Spielen. Menue im Full screen ausgeblendet.
 - Entsperren: Passwort (derzeit nur Client-Pruefung) -> Modus "edit" -> `reopenGame` (erlaubt per `canReopenFromGamePage`) -> Timer gestoppt.
 - Serverseitig keine Sperre (RPCs per Publishable Key fuer alle). Vorschlag mit bcrypt-Hash, Edit-Token und Triggern: `supabase/proposed/` (nicht ausgefuehrt).
+
+## Highlights, Scroll, Menue, Entsperren (15.10.2026)
+
+- Highlights werden nur abgeleitet: `deriveGameHighlights(game)` in `src/utils/tvHighlights.ts` rechnet an jeder Phasengrenze (Rundenstart, Zugstart, Spielende) den Spielstand nach (`getGameAsOf`) und wendet `detectTvHighlights` an. IDs `highlight:*`, nie in der DB, nie editierbar. Anzeige in `TvEventFeed` (Klasse `tv-event--highlight`) und im Verlauf (`kind: "highlight"`).
+- `.tv-events__list` ist scrollbar (overflow-y auto, Scrollbar unsichtbar, `tabIndex=0`).
+- Menue: `FloatingMenu fixed` rendert per Portal; Seiten geben nur Sections an (Navigation: Main, Neues Spiel, Statistik; danach Optionen). Keine Unterzeilen.
+- Abgeschlossene Spiele: immer View only. Die alte Nur-Lesen-Uebersicht gibt es nicht mehr. Entsperren: Passwort -> Modus edit -> `reopenGame` -> nur wenn danach offen, Edit (Timer gestoppt); sonst View only + Meldung. Alte Links (`/overview`, `?mode=view` usw.) -> View only.

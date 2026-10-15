@@ -1,17 +1,19 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { TV_EVENT_LIMIT, type TvFeedEvent } from "../utils/tvDashboard";
+import { HIGHLIGHT_ICON } from "../utils/tvHighlights";
 
 interface FeedRow { event: TvFeedEvent; leaving: boolean; top?: number }
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export const TvEventFeed = ({ feed, gameId }: { feed: TvFeedEvent[]; gameId: string }) => {
+// limit: aktive Zeilen; die Liste scrollt (Touch, Mausrad, Tastatur) ohne sichtbaren Scrollbalken.
+export const TvEventFeed = ({ feed, gameId, limit = TV_EVENT_LIMIT }: { feed: TvFeedEvent[]; gameId: string; limit?: number }) => {
   const list = useRef<HTMLDivElement>(null);
-  const [rows, setRows] = useState<FeedRow[]>(() => feed.slice(0, TV_EVENT_LIMIT).map(event => ({ event, leaving: false })));
+  const [rows, setRows] = useState<FeedRow[]>(() => feed.slice(0, limit).map(event => ({ event, leaving: false })));
   const positions = useRef(new Map<string, number>());
   const removalTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const trackedGame = useRef(gameId);
   useLayoutEffect(() => {
-    const activeFeed = feed.slice(0, TV_EVENT_LIMIT);
+    const activeFeed = feed.slice(0, limit);
     const changedGame = trackedGame.current !== gameId;
     trackedGame.current = gameId;
     const activeIds = new Set(activeFeed.map(e => e.id));
@@ -38,7 +40,7 @@ export const TvEventFeed = ({ feed, gameId }: { feed: TvFeedEvent[]; gameId: str
     }
     setRows([...activeFeed.map(event => ({ event, leaving: false })), ...leaving]);
     // Only feed changes reconcile rows; the animation commit below measures them.
-  }, [feed, gameId]);
+  }, [feed, gameId, limit]);
   useLayoutEffect(() => {
     const element = list.current;
     if (!element) return;
@@ -61,10 +63,10 @@ export const TvEventFeed = ({ feed, gameId }: { feed: TvFeedEvent[]; gameId: str
     removalTimers.current.forEach(clearTimeout);
     removalTimers.current.clear();
   }, []);
-  return <div ref={list} className="tv-events tv-events__list">
+  return <div ref={list} className="tv-events tv-events__list" tabIndex={0} role="log" aria-label="Letzte Ereignisse">
     {rows.map(({ event, leaving, top }) => <div key={event.id} data-event-id={event.id}
-      className={`tv-event${leaving ? " tv-event--leaving" : ""}`} style={leaving ? { top } : undefined}>
-      <time dateTime={event.createdAt}>{event.time}</time><span title={event.text}>{event.text}</span>
+      className={`tv-event${event.kind === "highlight" ? " tv-event--highlight" : ""}${leaving ? " tv-event--leaving" : ""}`} style={leaving ? { top } : undefined}>
+      <time dateTime={event.createdAt}>{event.time}</time>{event.kind === "highlight" ? <b className="tv-event__icon" aria-label="Highlight">{HIGHLIGHT_ICON}</b> : null}<span title={event.text}>{event.text}</span>
     </div>)}
     {!rows.length && <p className="tv-empty">Noch keine Ereignisse</p>}
   </div>;

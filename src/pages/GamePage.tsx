@@ -45,13 +45,13 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
+import { HIGHLIGHT_ICON, deriveGameHighlights } from "../utils/tvHighlights";
 import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowClosedGameTv, shouldShowViewOnly } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
 
 interface GamePageProps {
   gameId: string;
   onBack: () => void;
-  forceOverview?: boolean;
   forceTv?: boolean;
 }
 
@@ -64,13 +64,15 @@ type EditableEventFilterType =
   | "secondary"
   | "challenge"
   | "legacy-total"
-  | "note";
+  | "note"
+  | "highlight";
 
 interface EditableEventItem {
   id: string;
   playerId?: string;
   playerName: string;
-  kind: "cp" | "score" | "note" | "time";
+  // "highlight": abgeleitet (deriveGameHighlights), nie gespeichert, nicht bearbeitbar/loeschbar.
+  kind: "cp" | "score" | "note" | "time" | "highlight";
   eventType: Exclude<EditableEventFilterType, "all">;
   label: string;
   value?: number;
@@ -242,7 +244,7 @@ export const GamePage = (props: GamePageProps) => {
   return <LoadedGamePage key={props.gameId} {...props} game={game} />;
 };
 
-const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false, game }: GamePageProps & { game: Game }) => {
+const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps & { game: Game }) => {
   const {
     games,
     getGame,
@@ -431,6 +433,18 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
               roundNumber: event.roundNumber,
               turnNumber: event.turnNumber,
               createdAt: event.createdAt
+            })),
+            ...deriveGameHighlights(game).map((highlight) => ({
+              id: highlight.id,
+              playerId: highlight.playerId,
+              playerName: `${HIGHLIGHT_ICON} Highlight`,
+              kind: "highlight" as const,
+              eventType: "highlight" as const,
+              label: highlight.title,
+              note: highlight.subtitle,
+              roundNumber: highlight.roundNumber,
+              turnNumber: highlight.turnNumber,
+              createdAt: highlight.createdAt
             }))
           ].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         : [],
@@ -632,7 +646,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
   const isReadOnly = viewOnlyActive;
   const writeDisabled = isMutating || isReadOnly;
   const canNavigateTurns = !isMutating;
-  const showOverview = isClosed || isReadOnly || forceOverview;
+  const showOverview = isClosed || isReadOnly;
   const isPaused = isTurnPaused(selectedTurn);
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
@@ -797,7 +811,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
   };
 
   const openEditor = async (event: EditableEventItem) => {
-    if (isReadOnly) {
+    if (isReadOnly || event.kind === "highlight") {
       return;
     }
 
@@ -969,7 +983,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
   };
 
   const handleDeleteEvent = async (event: EditableEventItem) => {
-    if (isReadOnly) {
+    if (isReadOnly || event.kind === "highlight") {
       return;
     }
 
@@ -1021,7 +1035,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
       // Erst nach korrektem Passwort: Bearbeiten freigeben und TV-Link verlassen (sonst blockiert die Route das Schreiben).
       if (closedTv) {
         const url = new URL(window.location.href);
-        url.searchParams.delete("tv");
+        ["tv", "mode", "view", "readonly"].forEach((key) => url.searchParams.delete(key));
         url.hash = `/game/${game.id}`;
         window.history.replaceState(null, "", url);
         setGameAccessMode(game.id, "edit");
@@ -1032,10 +1046,15 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
       // Nachtraegliche Korrektur: Timer bleibt gestoppt.
       await pauseActiveTimer(game.id);
       closeReopenDialog();
-      if (forceOverview) {
-        window.location.hash = `/game/${game.id}`;
+      // Nur wenn das Spiel danach wirklich offen ist, bleibt Edit aktiv. Sonst zurueck zu View only.
+      const reopened = getGame(game.id);
+      if (!reopened || isGameCompletedForDisplay(reopened)) {
+        setGameAccessMode(game.id, "view");
+        setReopenPasswordError("Spiel konnte nicht wieder eroeffnet werden. Es bleibt abgeschlossen (View only).");
+        return;
       }
     } catch (error) {
+      setGameAccessMode(game.id, "view");
       setReopenPasswordError(error instanceof Error ? error.message : "Spiel konnte nicht wieder eroeffnet werden.");
     }
   };
@@ -1348,6 +1367,8 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
           fullscreenDocument
           menu={
             <FloatingMenu
+              fixed
+              className="floating-menu--tv"
               ariaLabel="Spielmenue"
               sections={[
                 {
@@ -1365,7 +1386,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
                     { label: "Notizen", onClick: () => { setNotesOpen(true); } },
                     { label: "Einstellungen", onClick: () => { openGameSettings(); } },
                     // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
-                    ...(closedTv ? [{ label: "Entsperren", detail: "Passwort, danach Edit", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
+                    ...(closedTv ? [{ label: "Entsperren", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
                   ]
                 }
               ]}
@@ -1651,9 +1672,9 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
           </article>
         ) : null}
 
-        {viewOnlyTv ? null : showOverview ? (
-          <GameOverview game={game} />
-        ) : isSetupScreen ? (
+        {/* Die alte Nur-Lesen-Uebersicht gibt es nicht mehr: abgeschlossen/View only => TV-Ansicht,
+            laufend ohne Modus => nur der Auswahldialog. */}
+        {viewOnlyTv || showOverview ? null : isSetupScreen ? (
           <div className="stack">
             <article className="scoreboard setup-scoreboard is-emphasized">
               <div className="scoreboard__head">
@@ -2293,6 +2314,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
                     <option value="cp-gained">CP +</option>
                     <option value="cp-spent">CP -</option>
                     <option value="note">Notizen</option>
+                    <option value="highlight">Highlights</option>
                   </select>
                 </label>
               </div>
@@ -2301,7 +2323,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
                   {filteredEditableEvents.map((event) => (
                     <article
                       key={event.id}
-                      className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}`}
+                      className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}${event.kind === "highlight" ? " event-list__row--highlight" : ""}`}
                     >
                       <div className="event-editor__meta">
                         <div className="event-editor__summary">
@@ -2313,7 +2335,7 @@ const LoadedGamePage = ({ gameId, onBack, forceOverview = false, forceTv = false
                         <span className="event-editor__stamp">
                           {formatClockTimeWithSeconds(event.createdAt)}
                         </span>
-                        {!isReadOnly ? (
+                        {!isReadOnly && event.kind !== "highlight" ? (
                         <div className="button-row button-row--compact event-editor__actions">
                           <button
                             type="button"

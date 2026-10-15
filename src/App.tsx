@@ -12,6 +12,21 @@ type Route =
   | { view: "stats" }
   | { view: "game"; gameId: string; mode?: "overview"; tv?: boolean };
 
+// Alte Links auf die frühere Nur-Lesen-Ansicht (/overview, ?mode=view, ?view=1, ?readonly=1) auf View only umleiten.
+const normalizeLegacyGameHash = () => {
+  const [path, query = ""] = window.location.hash.replace(/^#/, "").split("?");
+  const parts = path.split("/");
+  const isLegacy = (params: URLSearchParams) =>
+    params.get("mode") === "view" || params.get("view") === "1" || params.get("readonly") === "1";
+  const legacy = parts[1] === "game" && parts[2] &&
+    (parts[3] === "overview" || isLegacy(new URLSearchParams(query)) || isLegacy(new URLSearchParams(window.location.search)));
+  if (!legacy) return;
+  const url = new URL(window.location.href);
+  ["mode", "view", "readonly"].forEach((key) => url.searchParams.delete(key));
+  url.hash = `/game/${parts[2]}?tv=1`;
+  window.history.replaceState(null, "", url);
+};
+
 const parseHashRoute = (hash: string): Route => {
   const normalized = hash.replace(/^#/, "").split("?")[0];
   const { tv } = getGameRouteAccess(hash, window.location.search);
@@ -55,10 +70,16 @@ const navigate = (route: Route) => {
 };
 
 const App = () => {
-  const [route, setRoute] = useState<Route>(() => parseHashRoute(window.location.hash));
+  const [route, setRoute] = useState<Route>(() => {
+    normalizeLegacyGameHash();
+    return parseHashRoute(window.location.hash);
+  });
 
   useEffect(() => {
-    const handleHashChange = () => setRoute(parseHashRoute(window.location.hash));
+    const handleHashChange = () => {
+      normalizeLegacyGameHash();
+      setRoute(parseHashRoute(window.location.hash));
+    };
     window.addEventListener("hashchange", handleHashChange);
 
     if (!window.location.hash) {
@@ -89,7 +110,6 @@ const App = () => {
       {route.view === "game" ? (
         <GamePage
           gameId={route.gameId}
-          forceOverview={route.mode === "overview"}
           forceTv={route.tv}
           onBack={() => navigate({ view: "games" })}
         />

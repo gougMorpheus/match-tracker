@@ -3741,3 +3741,26 @@ button.stats-table__row.is-active {
 body:has(.tv-game) .modal-backdrop { z-index: 1100; }
 /* View only: Menue oben rechts verschwindet im Full screen. */
 :root:fullscreen .tv-game__menu, .tv-game:fullscreen .tv-game__menu { display: none; }
+
+/* Ereignisliste View only: scrollbar per Touch/Mausrad/Tastatur, ohne sichtbaren Scrollbalken (auch im Full screen). */
+.tv-events__list { overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+.tv-events__list::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.tv-events__list:focus-visible { outline: 2px solid var(--border); outline-offset: 2px; }
+.tv-event { flex-shrink: 0; }
+.tv-event--highlight { height: auto; min-height: 12.5%; padding: .25em 0; }
+.tv-event--highlight span { color: var(--accent, #f5c542); font-weight: 600; }
+.tv-event__icon { color: var(--accent, #f5c542); font-weight: 700; }
+.event-list__row--highlight { border-left: 3px solid var(--accent, #f5c542); }
+
+/* Menue einheitlich: feste Basisgroesse, unabhaengig von TV-Skalierung oder Header-Kontext. */
+.floating-menu {
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.floating-menu__item { font-size: 1rem; }
+/* View only: gleiches festes Menue wie ueberall; im Vollbild ausgeblendet (wie bisher). */
+:root:fullscreen .floating-menu--tv, :fullscreen .floating-menu--tv { display: none; }

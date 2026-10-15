@@ -4,9 +4,9 @@ import { TvEventFeed } from "./TvEventFeed";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { useGameStore } from "../store/GameStore";
 import { getPlayerColors } from "../data/factionColors";
-import { buildTvEventFeed, getDeficitInfo } from "../utils/tvDashboard";
+import { TV_FEED_SCROLL_LIMIT, buildTvEventFeed, getDeficitInfo } from "../utils/tvDashboard";
 import { getGameOutcome, getHeadToHead, getPlayerWinRate } from "../utils/headToHead";
-import { createTvSnapshot, detectTvHighlights, type TvSnapshot, type TvHighlight } from "../utils/tvHighlights";
+import { createTvSnapshot, deriveGameHighlights, detectTvHighlights, type TvSnapshot, type TvHighlight } from "../utils/tvHighlights";
 import { getNowIso, formatDuration } from "../utils/time";
 import type { Game } from "../types/game";
 import {
@@ -167,7 +167,9 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
   const record = getHeadToHead(games, game.players[0].name, game.players[1].name, exclude);
   const rates = game.players.map(p => getPlayerWinRate(games, p.name, exclude));
   const currentRound = getCurrentRoundNumber(game);
-  const feed = useMemo(() => buildTvEventFeed(game), [game]);
+  // Ereignisliste: alle Ereignisse inkl. abgeleiteter Highlights, scrollbar.
+  const derivedHighlights = useMemo(() => deriveGameHighlights(game), [game]);
+  const feed = useMemo(() => buildTvEventFeed(game, TV_FEED_SCROLL_LIMIT, derivedHighlights), [game, derivedHighlights]);
   const latestNote = game.noteEvents.filter(e => e.note.trim()).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
   const playerName = (id: string) => game.players.find(p => p.id === id)?.name ?? "–";
   const roundData = Array.from({ length: 5 }, (_, r) => game.players.map(p => ({
@@ -251,7 +253,7 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
           </dl>{latestNote && <p className="tv-mission__note" title={latestNote.note}>Notiz: {latestNote.note}</p>}</div>
         </section>
         <section className="tv-panel tv-events-panel"><h2>Letzte Ereignisse <span>neueste zuerst</span></h2>
-          <TvEventFeed feed={feed} gameId={game.id} />
+          <TvEventFeed feed={feed} gameId={game.id} limit={TV_FEED_SCROLL_LIMIT} />
         </section>
       </main>
       {menu ? <div className="tv-game__menu">{menu}</div> : null}

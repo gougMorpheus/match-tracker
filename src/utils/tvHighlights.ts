@@ -3,6 +3,7 @@ import { getCurrentRoundNumber, getCurrentTurnNumber, getPlayerComparableTotalSc
   getPlayerComparablePrimaryScore, getPlayerComparableSecondaryScore, getPlayerRoundScoreTotal,
   getPlayerTurnDurationTotalMs, getTurnDurationMs } from "./gameCalculations";
 import { getGameOutcome } from "./headToHead";
+import { syncDerivedGameState } from "./gameState";
 
 export interface TvSnapshot {
   phaseKey: string; round: number; completed: boolean; winnerId: string | null;
@@ -98,3 +99,42 @@ export const HIGHLIGHT_RULES: HighlightRule[] = [
 ];
 export const detectTvHighlights = (prev: TvSnapshot, next: TvSnapshot, game: Game, rules = HIGHLIGHT_RULES): TvHighlight[] =>
   prev.phaseKey === next.phaseKey ? [] : rules.flatMap(rule => rule(prev, next, game));
+
+// Abgeleitete Highlights fuer Ereignisliste und Verlauf: werden aus den bestehenden (nicht widerrufenen) Events
+// berechnet, nie gespeichert. Ablauf: Spielstand an jeder Phasengrenze (Runden-/Zugstart, Spielende) rekonstruieren
+// und dieselben HIGHLIGHT_RULES wie die TV-Einblendung anwenden. Undo/Gegenereignisse wirken dadurch automatisch.
+export interface DerivedHighlight extends TvHighlight { createdAt: string; roundNumber?: number; turnNumber?: number }
+const PHASE_ACTIONS = new Set(["round-start", "turn-start", "game-end"]);
+export const getGameAsOf = (game: Game, iso: string): Game => {
+  const until = Date.parse(iso);
+  const keep = <T extends { createdAt: string }>(items: T[]) => items.filter(e => Date.parse(e.createdAt) <= until);
+  const timeEvents = keep(game.timeEvents);
+  const ended = timeEvents.some(e => e.action === "game-end");
+  return syncDerivedGameState({ ...game, timeEvents, scoreEvents: keep(game.scoreEvents),
+    commandPointEvents: keep(game.commandPointEvents), noteEvents: keep(game.noteEvents),
+    endedAt: ended ? game.endedAt : undefined, finishReason: ended ? game.finishReason : undefined,
+    // Altdaten-Summen ohne Zeitstempel gehoeren zum Endstand.
+    legacyScoreTotals: ended ? game.legacyScoreTotals : {} });
+};
+export const deriveGameHighlights = (game: Game, rules = HIGHLIGHT_RULES): DerivedHighlight[] => {
+  const boundaries = [...new Set(game.timeEvents.filter(e => PHASE_ACTIONS.has(e.action)).map(e => e.createdAt))]
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+  const result: DerivedHighlight[] = [];
+  const seen = new Set<string>();
+  let prev: TvSnapshot | null = null;
+  for (const at of boundaries) {
+    const asOf = getGameAsOf(game, at);
+    const next = createTvSnapshot(asOf, asOf.endedAt ?? at);
+    if (!prev) { prev = next; continue; }
+    if (prev.phaseKey === next.phaseKey) continue;
+    for (const h of detectTvHighlights(prev, next, asOf, rules)) {
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      result.push({ ...h, id: `highlight:${h.id}`, createdAt: at, roundNumber: getCurrentRoundNumber(asOf), turnNumber: getCurrentTurnNumber(asOf) });
+    }
+    next.lastLeaderId = next.leaderId ?? prev.lastLeaderId;
+    prev = next;
+  }
+  return result;
+};
+export const HIGHLIGHT_ICON = "★";
