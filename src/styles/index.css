@@ -3778,3 +3778,9 @@ body:has(.tv-game) .modal-backdrop { z-index: 1100; }
 .notifications-row { display: flex; justify-content: space-between; align-items: center; gap: .6rem; padding: .55rem .65rem; border: 1px solid var(--border); border-radius: 12px; background: rgba(30, 41, 59, .6); }
 .notifications-row p { margin: .1rem 0 0; font-size: .82rem; }
 .notifications-device { font-size: .78rem; }
+
+/* Mobil: Zeilen in "Letzte Ereignisse" nach Inhalt statt 1/8 der Listenhoehe; Liste mit fester Hoehe scrollt. Desktop unveraendert. */
+@media (orientation: portrait), (max-width: 900px), (max-height: 500px) {
+  .tv-events__list { flex: none; height: min(60vh, 440px); min-height: 240px; }
+  .tv-event, .tv-event--highlight { height: auto; min-height: 36px; padding: .35em 0; }
+}

@@ -6,7 +6,8 @@ import { useGameStore } from "../store/GameStore";
 import { getPlayerColors } from "../data/factionColors";
 import { TV_FEED_SCROLL_LIMIT, buildTvEventFeed, getDeficitInfo } from "../utils/tvDashboard";
 import { getGameOutcome, getHeadToHead, getPlayerWinRate } from "../utils/headToHead";
-import { createTvSnapshot, deriveGameHighlights, detectTvHighlights, type TvSnapshot, type TvHighlight } from "../utils/tvHighlights";
+import { createTvSnapshot, deriveGameHighlights, deriveScoreLeadHighlights, detectTvHighlights, enqueueTvHighlights,
+  findNewScoreLeadHighlights, getScoreEventIds, reconcileTvHighlightQueue, SCORE_DRIVEN_KINDS, type TvSnapshot, type TvHighlight } from "../utils/tvHighlights";
 import { getNowIso, formatDuration } from "../utils/time";
 import type { Game } from "../types/game";
 import {
@@ -37,6 +38,8 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
   const snapshot = useRef<TvSnapshot | null>(null);
   const shown = useRef(new Set<string>());
   const trackedGame = useRef(game.id);
+  const leadSeen = useRef<Set<string> | null>(null);
+  const leadSeenEvents = useRef<Set<string> | null>(null);
   useEffect(() => {
     // Anchor highlights to the synchronized phase timestamp. Display timers still
     // use the live server clock; network/render delays must not change thresholds.
@@ -51,15 +54,28 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
       trackedGame.current = game.id;
       snapshot.current = null;
       shown.current.clear();
+      leadSeen.current = null;
       setHighlightQueue([]);
     }
     if (!snapshot.current) { snapshot.current = next; return; }
     if (snapshot.current.phaseKey === next.phaseKey) return;
-    const highlights = detectTvHighlights(snapshot.current, next, game).filter(h => !shown.current.has(h.id));
+    // Fuehrungswechsel/Ausgleich kommen aus dem Punkte-Event-Effekt unten (keine Doppelten).
+    const highlights = detectTvHighlights(snapshot.current, next, game).filter(h => !shown.current.has(h.id) && !SCORE_DRIVEN_KINDS.has(h.kind));
     highlights.forEach(h => shown.current.add(h.id));
     next.lastLeaderId = next.leaderId ?? snapshot.current.lastLeaderId;
     snapshot.current = next;
-    if (highlights.length) setHighlightQueue(queue => [...queue, ...highlights]);
+    if (highlights.length) setHighlightQueue(queue => enqueueTvHighlights(queue, highlights));
+  }, [game]);
+  // Fuehrungswechsel/Ausgleich nach jedem gueltigen Punkte-Event (auch mitten im Zug), Undo entfernt sie.
+  useEffect(() => {
+    const lead = deriveScoreLeadHighlights(game);
+    const ids = new Set(lead.map(h => h.id));
+    const eventIds = getScoreEventIds(game);
+    if (!leadSeen.current) { leadSeen.current = ids; leadSeenEvents.current = eventIds; return; }
+    const fresh = findNewScoreLeadHighlights(leadSeen.current, lead, leadSeenEvents.current);
+    lead.forEach(h => leadSeen.current?.add(h.id));
+    leadSeenEvents.current = eventIds;
+    setHighlightQueue(queue => enqueueTvHighlights(reconcileTvHighlightQueue(queue, ids), fresh));
   }, [game]);
   const activeHighlight = highlightQueue[0];
   useEffect(() => {
