@@ -329,13 +329,13 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const followingGame = isFollowingGame(pushFollowSettings, game.id);
   const followMenuItems = [
     {
-      label: followingGame ? "Nicht mehr folgen" : "Folgen",
+      label: followingGame ? "Entfolgen" : "Folgen",
       onClick: () => {
         updatePushFollowSettings((current) => setGameFollowed(current, game.id, !followingGame));
         if (!followingGame) openNotificationsOverview("hint");
       }
     },
-    { label: "Benachrichtigungen", onClick: () => openNotificationsOverview() }
+    { label: "Notifications", onClick: () => openNotificationsOverview() }
   ];
   const [gameForm, setGameForm] = useState<CreateGameInput>(createGameFormState(game));
 

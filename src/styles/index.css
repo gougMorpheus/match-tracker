@@ -3765,7 +3765,7 @@ body:has(.tv-game) .modal-backdrop { z-index: 1100; }
 /* View only: gleiches festes Menue wie ueberall; im Vollbild ausgeblendet (wie bisher). */
 :root:fullscreen .floating-menu--tv, :fullscreen .floating-menu--tv { display: none; }
 
-/* Benachrichtigungen (Push Stufe a) */
+/* Notifications (Push Stufe a) */
 .notifications-backdrop { z-index: 1200; }
 .notifications-card { width: min(100%, 30rem); }
 .push-hint { display: grid; gap: .45rem; padding: .75rem .85rem; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 14px; background: var(--bg-soft); }

@@ -59,9 +59,14 @@ const runPushATests = () => {
   assert.equal(s.getPushHint("ask").canRequestPermission, true);
   assert.equal(s.getPushHint("ios-install").canRequestPermission, false);
   for (const status of ["ios-install", "unsupported", "insecure", "denied", "ask", "granted"]) {
-    assert.match(s.getPushHint(status).lines.join(" "), /Benachrichtigungen kommen bald/, `ehrlich: ${status}`);
+    assert.match(s.getPushHint(status).lines.join(" "), /Notifications kommen bald/, `ehrlich: ${status}`);
   }
   assert.equal(s.PUSH_DELIVERY_AVAILABLE, false);
+  // Umbenennung 15.10.: "Notifications" statt "Benachrichtigungen" (nur der Browser-Einstellungsname bleibt).
+  for (const file of ["src/components/NotificationsCenter.tsx", "src/pages/GamePage.tsx", "src/pages/StatsPage.tsx", "src/pages/GamesPage.tsx", "src/utils/gameAccessMode.ts"]) {
+    assert.doesNotMatch(read(file), /Benachrichtigungen/, file);
+  }
+  assert.equal((read("src/utils/pushSupport.ts").match(/Benachrichtigungen/g) || []).length, 1);
 
   // Kein Fake-Abo: kein pushManager.subscribe im Client.
   for (const file of ["src/components/NotificationsCenter.tsx", "src/pwa/registerServiceWorker.ts", "src/pwa/pushFollowStore.ts"]) {
@@ -90,7 +95,7 @@ const runPushATests = () => {
   assert.match(read("src/pwa/registerServiceWorker.ts"), /import\.meta\.env\.PROD/);
 
   // Menues: Benachrichtigungen unter Optionen ueberall, Folgen im Spiel (Edit + View only).
-  for (const page of ["GamesPage", "StatsPage", "GamePage"]) assert.match(read(`src/pages/${page}.tsx`), /label: "Benachrichtigungen"/, page);
+  for (const page of ["GamesPage", "StatsPage", "GamePage"]) assert.match(read(`src/pages/${page}.tsx`), /label: "Notifications"/, page);
   assert.equal((read("src/pages/GamePage.tsx").match(/\.\.\.followMenuItems/g) || []).length, 2);
 };
 

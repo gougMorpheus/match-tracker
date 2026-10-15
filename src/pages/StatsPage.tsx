@@ -1347,7 +1347,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                 label: "Optionen",
                 items: [
                   { label: "Update", onClick: () => void refreshGames(), disabled: isLoading },
-                  { label: "Benachrichtigungen", onClick: () => openNotificationsOverview() }
+                  { label: "Notifications", onClick: () => openNotificationsOverview() }
                 ]
               }
             ]}

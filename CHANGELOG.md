@@ -5,6 +5,12 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-15
 
+### Menü: „Notifications“ statt „Benachrichtigungen“
+
+- Wunsch Tim: Menüpunkt war zu breit. Umbenannt in Menü (Start, Statistik, Edit, View only), Dialogtitel und Hinweisen. Nur der Name der Browser-Einstellung („Benachrichtigungen“ → „Zulassen“) bleibt, weil Chrome/Edge ihn auf Deutsch so anzeigen.
+- „Nicht mehr folgen“ brach im Menü um; heißt jetzt „Entfolgen“. Geprüft bei 375 px und Desktop: alle Menüpunkte einzeilig.
+
+
 ### Fix: Führungswechsel und Ausgleich innerhalb eines Zugs
 
 - Fehlerbild (Retest Pepper, Testspiel ZZ-A vs. ZZ-B): 5 Führungswechsel und 2 Ausgleiche, aber in „Letzte Ereignisse“ und Verlauf nur „★ ZZ-B gewinnt“.
