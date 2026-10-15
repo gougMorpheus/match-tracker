@@ -7,7 +7,7 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ### Push-Ticker Stufe (a): installierbare PWA und Folgen pro Gerät (ohne DB)
 
-- PWA: `public/manifest.webmanifest` (standalone, start_url `/#/games`, Farben der App), Icons 192/512/maskable/apple-touch-icon und favicon (`scripts/generate-icons.py`; ein eigenes Logo gab es im Repo nicht, live lief das Netlify-Standard-Favicon), iOS-Meta-Tags.
+- PWA: `public/manifest.webmanifest` (standalone, start_url `/#/games`, Farben der App), Icons 192/512/maskable/apple-touch-icon und favicon, `public/_headers` (Manifest-MIME, sw.js no-cache) (`scripts/generate-icons.py`; ein eigenes Logo gab es im Repo nicht, live lief das Netlify-Standard-Favicon), iOS-Meta-Tags.
 - Service Worker (`src/pwa/sw.template.js`, beim Build als `/sw.js` mit Build-Kennung): Navigation network-first, `/assets` cache-first, fremde Hosts (Supabase-API/Realtime), `version.json` und `sw.js` nie gecacht. Neuer Build => neuer Cache, `skipWaiting` + `clients.claim`, alte Caches geloescht; Update-Pruefung bei Sichtbarwerden. `push`- und `notificationclick`-Handler vorbereitet (Klick oeffnet das Spiel in View only).
 - Folgen pro Gerät (localStorage `match-tracker.push-follow.v1`, `deviceId` UUID, Schema 1): Menuepunkt „Folgen“/„Nicht mehr folgen“ im Spiel (Edit und View only), „Benachrichtigungen“ unter Optionen auf allen Seiten mit Liste der gefolgten Spiele und „Neuen Spielen automatisch folgen“ (nur nach dem Einschalten angelegte, bewusst entfolgte bleiben aus).
 - Hinweise (iOS ohne Installation, Berechtigung blockiert, Browser ohne Push, nur https) und ehrlich „Benachrichtigungen kommen bald“. Berechtigung kann erfragt werden; kein Push-Abo (kommt mit Stufe b).

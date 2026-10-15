@@ -86,6 +86,7 @@ const runPushATests = () => {
   assert.match(sw, /addEventListener\("notificationclick"/);
   assert.match(sw, /\?tv=1/, "Klick oeffnet View only");
   assert.match(read("vite.config.mjs"), /fileName: "sw\.js"/);
+  assert.match(read("public/_headers"), /manifest\+json/);
   assert.match(read("src/pwa/registerServiceWorker.ts"), /import\.meta\.env\.PROD/);
 
   // Menues: Benachrichtigungen unter Optionen ueberall, Folgen im Spiel (Edit + View only).
