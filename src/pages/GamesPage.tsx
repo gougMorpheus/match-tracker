@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { openNotificationsOverview } from "../pwa/pushFollowStore";
 import { GameCard } from "../components/GameCard";
 import { Layout } from "../components/Layout";
 import { seedGames } from "../data/seedGames";
@@ -86,7 +87,8 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
                     label: "Update",
                     onClick: () => void refreshGames(),
                     disabled: isLoading || isMutating
-                  }
+                  },
+                  { label: "Benachrichtigungen", onClick: () => openNotificationsOverview() }
                 ]
               }
             ]}

@@ -40,7 +40,7 @@ exports.shouldShowClosedGameTv = shouldShowClosedGameTv;
 // Menue der View-only-Ansicht: gleiche Navigation wie ueberall, Entsperren nur bei abgeschlossenem Spiel.
 const getViewOnlyMenuLabels = (game) => ({
     navigation: ["Main", "Neues Spiel", "Statistik"],
-    options: ["Verlauf", "Notizen", "Einstellungen", ...((0, exports.isGameCompletedForDisplay)(game) ? ["Entsperren"] : [])]
+    options: ["Verlauf", "Notizen", "Einstellungen", "Folgen", "Benachrichtigungen", ...((0, exports.isGameCompletedForDisplay)(game) ? ["Entsperren"] : [])]
 });
 exports.getViewOnlyMenuLabels = getViewOnlyMenuLabels;
 // Entsperren (Passwort) bei abgeschlossenem Spiel: nur im Modus "edit" darf die eigene Seite wieder eroeffnen.

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { openNotificationsOverview } from "../pwa/pushFollowStore";
 import { Layout } from "../components/Layout";
 import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
@@ -1344,7 +1345,10 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               },
               {
                 label: "Optionen",
-                items: [{ label: "Update", onClick: () => void refreshGames(), disabled: isLoading }]
+                items: [
+                  { label: "Update", onClick: () => void refreshGames(), disabled: isLoading },
+                  { label: "Benachrichtigungen", onClick: () => openNotificationsOverview() }
+                ]
               }
             ]}
           />
