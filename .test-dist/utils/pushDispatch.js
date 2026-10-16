@@ -1,12 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runPushDispatch = exports.toPushPayload = void 0;
+exports.runPushDispatch = exports.toPushPayload = exports.isZzOnlyGame = void 0;
 // Ablauf der Netlify Function push-dispatch (ohne Netz-Details, damit testbar):
 // 1) Spiel + sichtbare Events laden  2) Meldungen fuer das ausloesende Event ableiten (pushHighlights.ts =
 // dieselbe Ableitung wie die Anzeige)  3) ERST in der Dedupe-Tabelle eintragen (claim, Unique(game_id, highlight_key))
 // 4) nur gewonnene Meldungen senden  5) Abos mit 404/410 entfernen.
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 const pushHighlights_1 = require("./pushHighlights");
+// Testspiele: alle Spielernamen beginnen mit "ZZ" -> kein Push (kein Claim, keine Dedupe-Zeile, kein Versand).
+// "Statistik: Nicht zaehlen" allein ist KEIN Ausschlussgrund; Spiele mit mindestens einem echten Spieler werden gepusht.
+const isZzOnlyGame = (row) => {
+    const names = [row.player1_name, row.player2_name].map((n) => (n ?? "").trim());
+    return names.every((n) => n.startsWith("ZZ"));
+};
+exports.isZzOnlyGame = isZzOnlyGame;
 const toPushPayload = (m) => JSON.stringify({ title: m.title, body: m.body, gameId: m.gameId, tag: `${m.gameId}:${m.key}`, url: m.url });
 exports.toPushPayload = toPushPayload;
 const runPushDispatch = async (gameId, eventId, deps) => {
@@ -16,6 +23,8 @@ const runPushDispatch = async (gameId, eventId, deps) => {
         return empty("no-game");
     if ((0, supabaseGameMapping_1.isSupabaseGameDeleted)(loaded.row))
         return empty("deleted");
+    if ((0, exports.isZzOnlyGame)(loaded.row))
+        return empty("test-game");
     const game = (0, pushHighlights_1.buildGameFromRows)(loaded.row, loaded.events);
     const messages = (0, pushHighlights_1.selectPushMessagesForEvent)(game, eventId, (deps.now ?? Date.now)());
     if (!messages.length)

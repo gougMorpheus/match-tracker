@@ -3,6 +3,11 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Push: reine ZZ-Testspiele lösen keinen Push aus
+- Fehlerbild: Prod-Live-Checks mit ZZ-Testspielen schickten „Spiel gestartet“ und Rundenabschluss an echte Abos.
+- Ursache: push-dispatch kannte keinen Ausschluss für Testspiele.
+- Jetzt: `isZzOnlyGame` (`src/utils/pushDispatch.ts`): beginnen alle Spielernamen mit „ZZ“, endet der Dispatch mit Status `test-game` vor dem Claim – kein Eintrag in push_sent_highlights, kein Versand. „Statistik: Nicht zählen“ allein schließt nicht aus; gemischte Spiele und echte Spieler werden weiter gepusht. Keine Schemaänderung. Test `tests/pushZz.test.cjs`.
+
 ## 2026-10-16 – Aufstellung: kein „Timer gestoppt“ von selbst; feste Reihenfolge bei gleichem Zeitstempel
 - Fehlerbild 1: Kurz nach „Spiel anlegen“ erschien in der Aufstellung ohne Eingabe „Timer gestoppt – Der Timer wurde angehalten“, ohne Verlaufseintrag; die Aufstellungszeit lief nicht weiter (in der Rundenphase nicht).
 - Ursache 1: `createGame` (GameStore) speicherte nur die Spielzeile (mt_save_game). Die lokal erzeugten Start-Events (game-start, setup-start) standen nicht in der Sync-Queue. Der erste Abgleich nach dem Speichern (Realtime + Pull, `mergeRemoteWithPending`) ersetzt das Spiel durch den Serverstand und behält nur Events aus der Queue – die laufende Aufstellung wurde zu „Bereit“, der Timer-Hinweis zeigte „gestoppt“. setup-start kam erst bei erneutem „Timer an“, game-start erst beim ersten „Weiter“ in die DB. Nicht die Zug-Auswahl aus PR #19.
