@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
 import { getSameTimeRank } from "../utils/eventGrouping";
+import { resolveSelectedTurnKey, SETUP_TURN_KEY } from "../utils/turnSelection";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
 import { FloatingMenu } from "../components/FloatingMenu";
@@ -108,7 +109,7 @@ const SCORE_LIMITS: Record<ScoreType, number[]> = {
   "legacy-total": []
 };
 const COMBINED_PRIMARY_SECONDARY_LIMITS = [90];
-const SETUP_TURN_KEY = "setup";
+
 const SETUP_TURN_REF = {
   roundNumber: 0,
   turnNumber: 0
@@ -336,6 +337,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const previousRoundRef = useRef<number | null>(null);
   const previousTimerStateRef = useRef<string | null>(null);
   const snapToLatestTurnRef = useRef(false);
+  const previousLatestTurnKeyRef = useRef<string | null>(null);
   const redoHoldTimerRef = useRef<number | null>(null);
   const redoHoldTriggeredRef = useRef(false);
   const timeoutHoldTimerRef = useRef<number | null>(null);
@@ -580,29 +582,18 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     }
 
     const latestKey = latestTurn ? `${latestTurn.roundNumber}:${latestTurn.turnNumber}` : null;
-    setSelectedTurnKey((current) => {
-      if (!latestKey) {
-        return null;
-      }
-
-      if (snapToLatestTurnRef.current) {
-        snapToLatestTurnRef.current = false;
-        return latestKey;
-      }
-
-      if (!current) {
-        return latestKey;
-      }
-
-      if (
-        current === SETUP_TURN_KEY &&
-        game.timeEvents.some((event) => event.action === "setup-start")
-      ) {
-        return current;
-      }
-
-      return allTurns.some((turn) => turn.key === current) ? current : latestKey;
-    });
+    const previousLatestKey = previousLatestTurnKeyRef.current;
+    previousLatestTurnKeyRef.current = latestKey;
+    const snapToLatest = snapToLatestTurnRef.current;
+    if (latestKey) snapToLatestTurnRef.current = false;
+    setSelectedTurnKey((current) => resolveSelectedTurnKey({
+      current,
+      previousLatestKey,
+      latestKey,
+      turnKeys: allTurns.map((turn) => turn.key),
+      snapToLatest,
+      setupStarted: game.timeEvents.some((event) => event.action === "setup-start")
+    }));
   }, [allTurns, game, latestTurn]);
 
   useEffect(() => {
