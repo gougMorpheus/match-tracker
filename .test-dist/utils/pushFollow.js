@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pruneDeletedFollows = exports.getFollowedGameIds = exports.applyAutoFollow = exports.setAutoFollowNew = exports.toggleGameFollowed = exports.setGameFollowed = exports.isFollowingGame = exports.savePushFollowSettings = exports.loadPushFollowSettings = exports.parsePushFollowSettings = exports.createPushFollowSettings = exports.PUSH_SETTINGS_KEY = void 0;
+exports.urlBase64ToUint8Array = exports.getPushFollowSyncKey = exports.getPushFollowRpcArgs = exports.pruneDeletedFollows = exports.getFollowedGameIds = exports.applyAutoFollow = exports.setAutoFollowNew = exports.toggleGameFollowed = exports.setGameFollowed = exports.isFollowingGame = exports.savePushFollowSettings = exports.loadPushFollowSettings = exports.parsePushFollowSettings = exports.createPushFollowSettings = exports.PUSH_SETTINGS_KEY = void 0;
 const id_1 = require("./id");
 // Folge-Einstellungen pro Geraet (Stufe a: nur localStorage, kein Login).
 // Stufe (b) synchronisiert diese Struktur spaeter per device_id in die DB (Tabelle fuer Abos),
@@ -127,3 +127,25 @@ const pruneDeletedFollows = (settings, existingGameIds, at = nowIso()) => {
     return { ...settings, follows, updatedAt: at };
 };
 exports.pruneDeletedFollows = pruneDeletedFollows;
+// Stufe (b): Argumente fuer mt_push_subscribe / mt_push_set_follows (Server kennt nur IDs, Auto-Follow und Ausnahmen).
+const getPushFollowRpcArgs = (settings) => ({
+    p_device_id: settings.deviceId,
+    p_auto_follow: settings.autoFollowNew,
+    p_auto_follow_since: settings.autoFollowNew ? settings.autoFollowSince : null,
+    p_followed: (0, exports.getFollowedGameIds)(settings).slice(0, 500),
+    p_unfollowed: Object.keys(settings.unfollowed).slice(-2000)
+});
+exports.getPushFollowRpcArgs = getPushFollowRpcArgs;
+// Fingerabdruck fuer "muss neu synchronisiert werden" (ohne Zeitstempel der Eintraege).
+const getPushFollowSyncKey = (settings) => {
+    const a = (0, exports.getPushFollowRpcArgs)(settings);
+    return JSON.stringify([a.p_device_id, a.p_auto_follow, a.p_auto_follow_since, [...a.p_followed].sort(), [...a.p_unfollowed].sort()]);
+};
+exports.getPushFollowSyncKey = getPushFollowSyncKey;
+// Web-Push-Schluessel (base64url) -> Uint8Array fuer pushManager.subscribe.
+const urlBase64ToUint8Array = (value) => {
+    const padded = (value + "=".repeat((4 - (value.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = typeof atob === "function" ? atob(padded) : Buffer.from(padded, "base64").toString("binary");
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+};
+exports.urlBase64ToUint8Array = urlBase64ToUint8Array;

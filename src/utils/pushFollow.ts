@@ -141,3 +141,25 @@ export const pruneDeletedFollows = (settings: PushFollowSettings, existingGameId
   for (const id of gone) delete follows[id];
   return { ...settings, follows, updatedAt: at };
 };
+
+// Stufe (b): Argumente fuer mt_push_subscribe / mt_push_set_follows (Server kennt nur IDs, Auto-Follow und Ausnahmen).
+export const getPushFollowRpcArgs = (settings: PushFollowSettings) => ({
+  p_device_id: settings.deviceId,
+  p_auto_follow: settings.autoFollowNew,
+  p_auto_follow_since: settings.autoFollowNew ? settings.autoFollowSince : null,
+  p_followed: getFollowedGameIds(settings).slice(0, 500),
+  p_unfollowed: Object.keys(settings.unfollowed).slice(-2000)
+});
+
+// Fingerabdruck fuer "muss neu synchronisiert werden" (ohne Zeitstempel der Eintraege).
+export const getPushFollowSyncKey = (settings: PushFollowSettings): string => {
+  const a = getPushFollowRpcArgs(settings);
+  return JSON.stringify([a.p_device_id, a.p_auto_follow, a.p_auto_follow_since, [...a.p_followed].sort(), [...a.p_unfollowed].sort()]);
+};
+
+// Web-Push-Schluessel (base64url) -> Uint8Array fuer pushManager.subscribe.
+export const urlBase64ToUint8Array = (value: string): Uint8Array => {
+  const padded = (value + "=".repeat((4 - (value.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = typeof atob === "function" ? atob(padded) : Buffer.from(padded, "base64").toString("binary");
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+};

@@ -53,28 +53,26 @@ const runPushATests = () => {
   assert.equal(s.getPushStatus(env({ permission: "denied" })), "denied");
   assert.equal(s.getPushStatus(env({ permission: "granted" })), "granted");
   assert.equal(s.getPushStatus(env()), "ask");
-  // Push noch nicht live: genau ein Hinweis, kein "blockiert", keine Berechtigungsabfrage.
+  // Stufe (b) live: echte Statushinweise, "blockiert" erlaubt, kein "naechster Schritt" mehr.
+  assert.equal(s.PUSH_DELIVERY_AVAILABLE, true);
   for (const status of ["ios-install", "unsupported", "insecure", "denied", "ask", "granted"]) {
-    const h = s.getPushHint(status, false, "hint");
-    assert.deepEqual(h.lines, ["Du folgst dem Spiel. Benachrichtigungen aufs Handy kommen in einem nächsten Schritt."], `ein Hinweis: ${status}`);
-    assert.equal(h.title, ""); assert.equal(h.canRequestPermission, false);
-    assert.doesNotMatch(s.getPushHint(status).lines.join(" "), /blockiert|kommen bald/);
-    assert.equal(s.getPushHint(status).lines.length, 1);
+    assert.doesNotMatch(JSON.stringify(s.getPushHint(status)), /nächsten Schritt|kommen bald/);
+    assert.equal(s.getPushHint(status, false, "hint").lines[0], "Du folgst dem Spiel.");
+    assert.ok(s.getPushHint(status).title, `Titel: ${status}`);
   }
-  // Wenn Push live ist: Statushinweise.
-  assert.match(s.getPushHint("ios-install", false, "overview", true).lines.join(" "), /Zum Home-Bildschirm/);
-  assert.match(s.getPushHint("denied", false, "overview", true).title, /blockiert/);
-  assert.match(s.getPushHint("denied", false, "overview", true).lines.join(" "), /Zulassen/);
-  assert.match(s.getPushHint("denied", true, "overview", true).lines.join(" "), /Einstellungen → Mitteilungen/);
-  assert.equal(s.getPushHint("ask", false, "overview", true).canRequestPermission, true);
-  assert.equal(s.getPushHint("ios-install", false, "overview", true).canRequestPermission, false);
-  assert.equal(s.PUSH_DELIVERY_AVAILABLE, false);
+  assert.match(s.getPushHint("ios-install").lines.join(" "), /Zum Home-Bildschirm/);
+  assert.match(s.getPushHint("denied").title, /blockiert/);
+  assert.match(s.getPushHint("denied").lines.join(" "), /Zulassen/);
+  assert.match(s.getPushHint("denied", true).lines.join(" "), /Einstellungen → Mitteilungen/);
+  assert.equal(s.getPushHint("ask").canRequestPermission, true);
+  assert.equal(s.getPushHint("ios-install").canRequestPermission, false);
+  assert.doesNotMatch(read("src/components/NotificationsCenter.tsx"), /nächsten Schritt/);
   // Umbenennung 15.10.: "Notifications" statt "Benachrichtigungen" (nur der Browser-Einstellungsname bleibt).
   for (const file of ["src/components/NotificationsCenter.tsx", "src/pages/GamePage.tsx", "src/pages/StatsPage.tsx", "src/pages/GamesPage.tsx", "src/utils/gameAccessMode.ts"]) {
     assert.doesNotMatch(read(file), /Benachrichtigungen/, file);
   }
-  // pushSupport: Browser-Einstellungsname + Wortlaut von Tim im Hinweis ("Benachrichtigungen aufs Handy").
-  assert.equal((read("src/utils/pushSupport.ts").match(/Benachrichtigungen/g) || []).length, 3);
+  // pushSupport: nur noch der Browser-Einstellungsname (der Stufe-a-Hinweis "aufs Handy ... naechster Schritt" ist weg).
+  assert.equal((read("src/utils/pushSupport.ts").match(/Benachrichtigungen/g) || []).length, 1);
 
   // Kein Fake-Abo: kein pushManager.subscribe im Client.
   for (const file of ["src/components/NotificationsCenter.tsx", "src/pwa/registerServiceWorker.ts", "src/pwa/pushFollowStore.ts"]) {

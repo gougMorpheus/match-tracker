@@ -2803,6 +2803,19 @@ button.stats-table__row.is-active {
   font-size: 0.64rem;
 }
 
+/* Touch: Tippflaeche Bearbeiten/Loeschen (Verlauf "Einzeln") mindestens 44 x 44 px (WCAG 2.5.5 / Apple HIG).
+   Schrift bleibt klein; Desktop (Maus) unveraendert 26 px. */
+@media (pointer: coarse) {
+  .event-editor__actions {
+    gap: 0.3rem;
+  }
+  .event-editor__actions .compact-button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.25rem 0.55rem;
+  }
+}
+
 .timer-adjust-list {
   display: grid;
   gap: 0;
