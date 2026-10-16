@@ -553,6 +553,9 @@ const fetchEventsForGameIds = async (gameIds: string[]): Promise<SupabaseEventRe
       .in("game_id", gameIds)
       .order("occurred_at", { ascending: true })
       .order("created_at", { ascending: true })
+      // Eindeutiger Tiebreaker: Ohne ihn ist die Reihenfolge bei gleichem Zeitstempel nicht stabil, und das
+      // Seiten-Laden (range) übersprang bzw. verdoppelte Events an Seitengrenzen (abhängig von der Gesamtzahl).
+      .order("id", { ascending: true })
       .range(from, to);
 
     if (error) {

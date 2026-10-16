@@ -67,6 +67,12 @@ const runStatsExcludeTests = () => {
   assert.equal(gc.isGameExcludedFromStats(includeGame), false);
   const partial = clone(real[0]); partial.statsEligibilityOverrides = { areas: { time: "exclude" } };
   assert.equal(gc.isGameExcludedFromStats(partial), false);
+
+  // Seiten-Laden der Events braucht einen eindeutigen Tiebreaker (sonst fehlende/doppelte Events an Seitengrenzen,
+  // beobachtet am 16.10.: 9e2234ac und 6821b02a je 1 Event fehlend + 1 doppelt, sobald ZZ-Spiele die Gesamtzahl verschoben).
+  const repo = fs.readFileSync(path.join(__dirname, "..", "src/services/gamesRepository.ts"), "utf8");
+  const fetchFn = repo.slice(repo.indexOf("const fetchEventsForGameIds"), repo.indexOf(".range(from, to)"));
+  assert.match(fetchFn, /\.order\("occurred_at"[^)]*\)\s*\.order\("created_at"[^)]*\)[\s\S]*\.order\("id", \{ ascending: true \}\)\s*$/);
 };
 
 module.exports = { runStatsExcludeTests };
