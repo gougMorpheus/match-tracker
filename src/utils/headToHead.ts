@@ -1,11 +1,12 @@
 import type { Game } from "../types/game";
-import { getPlayerComparableTotalScore } from "./gameCalculations";
+import { getPlayerComparableTotalScore, isGameExcludedFromStats } from "./gameCalculations";
 
 export const normalizePlayerName = (name: string): string => name.trim().replace(/\s+/g, " ").toLowerCase();
 export interface GameOutcome { winnerId: string | null; draw: boolean }
 // Only completed, non-interrupted/non-abandoned games count. Explicit draws and
 // concessions take precedence; otherwise comparable total VP decide. Draws count
-// as rated games, but never as wins. Statistics overrides do not alter this record.
+// as rated games, but never as wins. Area/turn overrides do not alter this record;
+// games flagged „Statistik: Nicht zählen“ are skipped entirely by the aggregates below.
 export const getGameOutcome = (game: Game): GameOutcome | null => {
   if (game.status !== "completed" || game.finishReason === "interrupted" || game.finishReason === "abandoned") return null;
   if (game.finishReason === "draw") return { winnerId: null, draw: true };
@@ -20,7 +21,7 @@ export const getHeadToHead = (games: Game[], nameA: string, nameB: string, exclu
   const a = normalizePlayerName(nameA), b = normalizePlayerName(nameB);
   if (!a || !b || a === b) return { winsA, winsB, draws, games: 0 };
   for (const game of games) {
-    if (game.id === excludeGameId) continue;
+    if (game.id === excludeGameId || isGameExcludedFromStats(game)) continue;
     const pa = game.players.find(p => normalizePlayerName(p.name) === a);
     const pb = game.players.find(p => normalizePlayerName(p.name) === b);
     const outcome = getGameOutcome(game);
@@ -35,7 +36,7 @@ export const getPlayerWinRate = (games: Game[], name: string, excludeGameId?: st
   let wins = 0, ratedGames = 0;
   const normalized = normalizePlayerName(name);
   for (const game of games) {
-    if (game.id === excludeGameId || !normalized) continue;
+    if (game.id === excludeGameId || !normalized || isGameExcludedFromStats(game)) continue;
     const matches = game.players.filter(p => normalizePlayerName(p.name) === normalized);
     const outcome = getGameOutcome(game);
     if (matches.length !== 1 || !outcome) continue;

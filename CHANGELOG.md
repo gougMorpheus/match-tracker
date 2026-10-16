@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – „Statistik: Nicht zählen“ nimmt Spiele komplett aus der Statistik
+- Fehlerbild: Nicht gelöschte „Nicht zählen“-Spiele (z. B. ZZ-Testspiele) tauchten in den „vs …“-Filtern (Spieler und Armeen) und der Datumsauswahl der Statistik auf und verschoben einzelne Werte (u. a. Spielzähler und Ø-Dauer in einer Detailansicht, Anzahl der Werte bei „Rundendauer über Zeit“). Ursache: Die Statistikseite baute Filteroptionen und Datumsliste aus allen Spielen; nur die Aggregate liefen über `prepareGamesForStats`.
+- Jetzt: `isGameExcludedFromStats` / `removeExcludedStatsGames` (gameCalculations.ts). Die Statistikseite arbeitet nur noch mit Spielen ohne das Flag; `prepareGameForStats` gibt für sie immer `null` zurück, auch wenn Bereichs-Overrides etwas einschließen würden. Bilanz und Siegquote (TV-Ansicht, headToHead.ts) überspringen sie ebenfalls.
+- Events laden: `fetchEventsForGameIds` sortiert zusätzlich nach `id`. Fehlerbild: Beim seitenweisen Laden (je 100) fehlten an Seitengrenzen einzelne Events, andere kamen doppelt, sobald mehrere Events denselben Zeitstempel hatten (z. B. Rundenende/Rundenstart/Zugstart). Welche Events betroffen waren, hing von der Gesamtzahl ab – deshalb verschoben auch „Nicht zählen“-Spiele die Statistik echter Spiele (am 16.10. je 1 Event in 9e2234ac und 6821b02a; u. a. Runde 4: 9 statt 10 Spiele). Nur Anzeige/Lesen, in der DB fehlte nichts.
+- Spiele mit `auto`/`include` oder nur einzelnen Bereichs-Overrides sind unverändert. Test `tests/statsExclude.test.cjs` mit 16 echten Spielen: Statistik mit und ohne zusätzliche Nicht-zählen-Spiele identisch.
+
 ## 2026-10-16 – Retest Pepper 2: Match öffnen, erste Führung als ★, Öffnen aus Notifications, Reihenfolge
 - „Match öffnen …“ steht jetzt bei jedem laufenden Spiel im Menü, in Edit und in View only. Fehlerbild vorher: Der Punkt erschien nur in View only und nur, wenn auf diesem Gerät „View only“ gemerkt war (Bundle 6ad1cc5c war korrekt live).
 - Führung: Die erste Führung im Spiel (z. B. 0 : 0 → 1 : 0) ist jetzt ein ★-Highlight „Führung · … geht in Führung“ und wird gepusht (gleiche Funktion `deriveScoreLeadHighlights` für Liste, Verlauf, TV-Einblendung und Push). Fehlerbild vorher: Nur echte Wechsel (anderer Führender als zuletzt) waren ★; die erste Führung stand nur als Punktezeile da. Wieder-Führung desselben Spielers nach Ausgleich bleibt ohne ★ (der Ausgleich selbst ist ★).
