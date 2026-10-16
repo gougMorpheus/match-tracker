@@ -15,7 +15,9 @@ import {
   type SyncRpcResult
 } from "../utils/syncVersioning";
 import { getServerNow } from "../utils/serverClock";
-import { loadHeldGames, recordSyncConflict, saveHeldGames } from "../utils/localSync";
+import { loadHeldGames, recordSyncConflict, saveHeldGames,
+  decideAfterGameSave
+} from "../utils/localSync";
 import {
   createContext,
   useCallback,
@@ -876,6 +878,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
 
       let droppedConflicts = 0;
+      const gameResends = new Map<string, number>();
       while (queueRef.current.length) {
         const nextItem = queueRef.current.find((item) => !isGameViewOnly(item.gameId));
         if (!nextItem) {
@@ -933,8 +936,23 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
 
           if (nextItem.type === "upsert-game") {
+            const sentFingerprint = getGameSnapshotFingerprint(currentGame);
             applyResult(rowOnly(await syncRepository.saveGame(currentGame, base.version, canWrite)));
-            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId);
+            const latestGame = gamesRef.current.find((game) => game.id === nextItem.gameId);
+            const resends = gameResends.get(nextItem.gameId) ?? 0;
+            const decision = decideAfterGameSave(sentFingerprint, latestGame ? getGameSnapshotFingerprint(latestGame) : null, resends);
+            if (decision === "resend") {
+              // Waehrend des Speicherns lokal geaendert: Eintrag bleibt (Basisversion wurde mitgezogen) und geht erneut raus.
+              gameResends.set(nextItem.gameId, resends + 1);
+              continue;
+            }
+            if (decision === "defer") {
+              setSyncStatus("pending");
+              scheduleSyncRetry();
+              return false;
+            }
+            removeQueueItem(nextItem.id);
             continue;
           }
 

@@ -31,6 +31,7 @@ const { runPushAboTests } = require("./pushAbo.test.cjs");
 const { runAufstellungOrderTests } = require("./aufstellungOrder.test.cjs");
 const { runPushZzTests } = require("./pushZz.test.cjs");
 const { runAbgleichAutoCpTests } = require("./abgleichAutoCp.test.cjs");
+const { runSpielzeileNachsendenTests } = require("./spielzeileNachsenden.test.cjs");
 
 const suites = [
   ["pushAbo", runPushAboTests],
@@ -66,7 +67,8 @@ const suites = [
   ["turnSelection", runTurnSelectionTests],
   ["aufstellungOrder", runAufstellungOrderTests],
   ["pushZz", runPushZzTests],
-  ["abgleichAutoCp", runAbgleichAutoCpTests]
+  ["abgleichAutoCp", runAbgleichAutoCpTests],
+  ["spielzeileNachsenden", runSpielzeileNachsendenTests]
 ];
 
 const main = async () => {

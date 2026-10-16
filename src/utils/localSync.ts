@@ -293,3 +293,15 @@ export const saveHeldGames = (games: Record<string, Game>): void => {
     window.localStorage.removeItem?.(HELD_GAMES_KEY);
   }
 };
+
+// Spielzeile nach erfolgreichem Speichern: Hat sich die lokale Spielzeile seit dem Absenden geaendert (z. B. "Weiter"
+// waehrend eines langsamen Speicherns -> neue Auto-CP-Markierung), wurde ein neues "upsert-game" als doppelt verworfen.
+// Dann den Eintrag behalten und erneut senden, bis der gespeicherte Stand dem lokalen entspricht.
+// Schutz gegen Endlosschleifen: hoechstens MAX_GAME_RESENDS Nachsendungen je Durchgang, danach spaeter erneut versuchen.
+export const MAX_GAME_RESENDS = 5;
+export type SavedGameDecision = "done" | "resend" | "defer";
+export const decideAfterGameSave = (sentFingerprint: string, currentFingerprint: string | null, resends: number,
+  maxResends = MAX_GAME_RESENDS): SavedGameDecision => {
+  if (currentFingerprint === null || currentFingerprint === sentFingerprint) return "done";
+  return resends < maxResends ? "resend" : "defer";
+};
