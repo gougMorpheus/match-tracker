@@ -307,7 +307,7 @@ const normalizeStatsEligibilityOverrides = (value) => {
     };
 };
 const syncDerivedGameState = (game) => {
-    const orderedTimeEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(game.timeEvents);
+    const orderedTimeEvents = [...game.timeEvents];
     const hasTimeEvents = orderedTimeEvents.length > 0;
     const endedAt = getFirstGameEndAt(orderedTimeEvents) ?? game.endedAt;
     const rounds = buildRoundsFromTimeEvents(orderedTimeEvents, endedAt);

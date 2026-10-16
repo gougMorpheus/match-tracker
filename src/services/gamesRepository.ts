@@ -1032,7 +1032,7 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
     scoreEvents,
     commandPointEvents,
     noteEvents,
-    timeEvents: orderTimeEventsForEvaluation(timeEvents)
+    timeEvents
   };
 };
 
