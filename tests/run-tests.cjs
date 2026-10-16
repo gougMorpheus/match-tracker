@@ -26,6 +26,7 @@ const { runRetestTests } = require("./retest.test.cjs");
 const { runPushBTests } = require("./pushB.test.cjs");
 const { runAbcTests, runRetest2Tests } = require("./abc.test.cjs");
 const { runStatsExcludeTests } = require("./statsExclude.test.cjs");
+const { runTurnSelectionTests } = require("./turnSelection.test.cjs");
 
 const suites = [
   ["statsExclude", runStatsExcludeTests],
@@ -56,7 +57,8 @@ const suites = [
   ["retest", runRetestTests],
   ["pushB", runPushBTests],
   ["abc", runAbcTests],
-  ["retest2", runRetest2Tests]
+  ["retest2", runRetest2Tests],
+  ["turnSelection", runTurnSelectionTests]
 ];
 
 const main = async () => {

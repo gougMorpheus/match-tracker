@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Timer: Zug-Auswahl folgt dem neuen Zug (Timer an nach Neustart, „Timer gestoppt“ von selbst)
+- Fehlerbild: Nach Browser-Neustart schrieb „Timer an“ turn-pause für den laufenden Zug (R1Z2) und turn-resume für den alten (R1Z1). Zweitens erschien im Editor „Timer gestoppt – Der Timer wurde angehalten“, ohne dass jemand gestoppt hatte (kein Pause-Event in der DB).
+- Ursache: Die Zug-Auswahl (`selectedTurnKey`, GamePage) blieb auf dem bisher neuesten Zug stehen, wenn ein neuer Zug nicht auf diesem Gerät entstand (App startet aus veraltetem lokalem Stand und bekommt dann den neueren Serverstand, oder ein anderes Gerät drückt „Weiter“). Der alte, beendete Zug wurde als „Gestoppt“ angezeigt (daher der Hinweis), und „Timer an“ setzte ihn fort.
+- Jetzt (`resolveSelectedTurnKey`, `src/utils/turnSelection.ts`): Wer auf dem bisher neuesten Zug stand, folgt dem neuen neuesten Zug. Bewusste Auswahl älterer Züge (Zurück) und die Aufstellung bleiben erhalten. Timer-Logik unverändert; nach „Weiter“ startet der Zug weiterhin pausiert („Zug noch nicht gestartet“). Test `tests/turnSelection.test.cjs`.
+- Echte Spiele: 70 auffällige pause/resume-Paare in 22 Spielen bleiben unverändert (Entscheidung Cosy/Tim).
+
 ## 2026-10-16 – „Statistik: Nicht zählen“ nimmt Spiele komplett aus der Statistik
 - Fehlerbild: Nicht gelöschte „Nicht zählen“-Spiele (z. B. ZZ-Testspiele) tauchten in den „vs …“-Filtern (Spieler und Armeen) und der Datumsauswahl der Statistik auf und verschoben einzelne Werte (u. a. Spielzähler und Ø-Dauer in einer Detailansicht, Anzahl der Werte bei „Rundendauer über Zeit“). Ursache: Die Statistikseite baute Filteroptionen und Datumsliste aus allen Spielen; nur die Aggregate liefen über `prepareGamesForStats`.
 - Jetzt: `isGameExcludedFromStats` / `removeExcludedStatsGames` (gameCalculations.ts). Die Statistikseite arbeitet nur noch mit Spielen ohne das Flag; `prepareGameForStats` gibt für sie immer `null` zurück, auch wenn Bereichs-Overrides etwas einschließen würden. Bilanz und Siegquote (TV-Ansicht, headToHead.ts) überspringen sie ebenfalls.
