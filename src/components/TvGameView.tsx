@@ -186,7 +186,6 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
   // Ereignisliste: alle Ereignisse inkl. abgeleiteter Highlights, scrollbar.
   const derivedHighlights = useMemo(() => deriveGameHighlights(game), [game]);
   const feed = useMemo(() => buildTvEventFeed(game, TV_FEED_SCROLL_LIMIT, derivedHighlights), [game, derivedHighlights]);
-  const latestNote = game.noteEvents.filter(e => e.note.trim()).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
   const playerName = (id: string) => game.players.find(p => p.id === id)?.name ?? "–";
   const roundData = Array.from({ length: 5 }, (_, r) => game.players.map(p => ({
     primary: game.scoreDetailLevel === "full" ? getPlayerRoundScoreTotal(game, p.id, r + 1, "primary") : null,
@@ -270,7 +269,7 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
             {game.players.some(p => p.id === game.startingPlayerId) && <div><dt>Startspieler</dt><dd>{playerName(game.startingPlayerId)}</dd></div>}
             {game.players.some(p => p.id === game.defenderPlayerId) && <div><dt>Angreifer / Verteidiger</dt><dd>{game.players.find(p => p.id !== game.defenderPlayerId)?.name} / {playerName(game.defenderPlayerId)}</dd></div>}
             {game.players.filter(p => p.army.detachment.trim()).map(p => <div key={p.id}><dt>{p.name} · Detachment</dt><dd>{p.army.detachment}</dd></div>)}
-          </dl>{latestNote && <p className="tv-mission__note" title={latestNote.note}>Notiz: {latestNote.note}</p>}</div>
+          </dl></div>
         </section>
         <section className="tv-panel tv-events-panel"><h2>Letzte Ereignisse <span>neueste zuerst</span></h2>
           <TvEventFeed feed={feed} gameId={game.id} limit={TV_FEED_SCROLL_LIMIT} />

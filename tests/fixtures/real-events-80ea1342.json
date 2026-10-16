@@ -1,0 +1,1082 @@
+[
+{
+"id": "6db303ea-4edc-408b-916f-c43ba6d8bcf1",
+"created_at": "2026-05-18T13:35:11.414+00:00",
+"event_type": "game-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "7a15e49c-fc12-4c9c-9fff-d25c52a2b898",
+"created_at": "2026-05-18T13:35:11.414+00:00",
+"event_type": "setup-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "e457d2a6-3ad5-4f46-91ff-4bd92f82d9a1",
+"created_at": "2026-05-18T13:35:15.158+00:00",
+"event_type": "setup-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "08682338-6759-4837-aaa8-83dd470ef56b",
+"created_at": "2026-05-18T13:43:38.53+00:00",
+"event_type": "setup-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "e34ef430-87b7-46d0-b8af-008f76bc1338",
+"created_at": "2026-05-18T14:01:35.301+00:00",
+"event_type": "setup-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "296bf5ea-24ea-4ab6-9808-691b12a6baf0",
+"created_at": "2026-05-18T14:01:41.087+00:00",
+"event_type": "round-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": null
+},
+{
+"id": "49ead74f-35a0-4c68-ba81-fbcc7fbd10e0",
+"created_at": "2026-05-18T14:01:41.087+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "711dfe34-b1af-4229-9b65-632ecfd500a3",
+"created_at": "2026-05-18T14:01:41.087+00:00",
+"event_type": "setup-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "7a8ed391-efb8-4833-8c33-9f2bd33d2fde",
+"created_at": "2026-05-18T14:01:41.087+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "c80cf7a6-6b25-4093-a1d5-d9bd6bcf3326",
+"created_at": "2026-05-18T14:01:41.087+00:00",
+"event_type": "turn-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "f0fbfe0c-8e51-47e8-a130-ff40563d3555",
+"created_at": "2026-05-18T14:01:41.087+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "6b3b15b8-407f-4494-b394-0bf8a4358988",
+"created_at": "2026-05-18T14:21:47.472+00:00",
+"event_type": "score-secondary",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "f8bc0ba2-7040-44e7-aa4e-736d662a9d3e",
+"created_at": "2026-05-18T14:21:48.004+00:00",
+"event_type": "score-secondary",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "a333295f-022f-4a52-ad78-1769e32ecfd7",
+"created_at": "2026-05-18T14:21:56.005+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "4cf45dd8-0389-45d6-9271-c92632fab8df",
+"created_at": "2026-05-18T14:22:02.192+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "875a30b2-e761-431e-93e1-c1a92d6fb072",
+"created_at": "2026-05-18T14:22:02.192+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "a66f56b1-70a4-4c35-80f5-98c6dd110b54",
+"created_at": "2026-05-18T14:22:02.192+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "cbcdcbde-6c05-4f4c-a245-9132fbabc42b",
+"created_at": "2026-05-18T14:22:02.192+00:00",
+"event_type": "turn-start",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "d30e2bd0-7d88-40ee-aa0d-aff60c49eba3",
+"created_at": "2026-05-18T14:22:02.192+00:00",
+"event_type": "turn-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "55c1f019-1e2d-4d89-98d5-73a8a9076b9d",
+"created_at": "2026-05-18T14:22:21.328+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "372201e5-a410-4ff5-81ed-78940c7e4e75",
+"created_at": "2026-05-18T14:22:29.129+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "6ffcd121-ba02-4436-9679-1e507bc98621",
+"created_at": "2026-05-18T14:22:29.129+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "52fff3fc-b618-46e9-ab36-139c276de043",
+"created_at": "2026-05-18T14:22:35.281+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "7d941d37-e7bc-460a-86c2-15c369703425",
+"created_at": "2026-05-18T14:22:35.281+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "7a87824d-6033-40d3-9eb8-4612b6f1bb8a",
+"created_at": "2026-05-18T14:22:36.996+00:00",
+"event_type": "cp-spent",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "4e381f2f-67ad-4dfe-baba-6fbebca1c095",
+"created_at": "2026-05-18T14:22:37.63+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "565feaed-0271-40de-827a-e56820d170b1",
+"created_at": "2026-05-18T14:22:37.63+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "5f460935-2813-4766-8c55-334695e188ec",
+"created_at": "2026-05-18T14:23:33.222+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "f062a02d-a253-4072-ac72-cdec96bb58f9",
+"created_at": "2026-05-18T14:23:33.222+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "28daab43-a189-4db3-9ff9-533423b4c05c",
+"created_at": "2026-05-18T14:23:33.74+00:00",
+"event_type": "setup-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "298df3ac-00be-4d61-b49a-1b6ac3a8afd1",
+"created_at": "2026-05-18T14:23:33.74+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "b8a68a37-fc7d-475f-bda6-2568a3042bb6",
+"created_at": "2026-05-18T14:23:35.457+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "d41040e3-58d4-4913-86ac-8ac3b2a41093",
+"created_at": "2026-05-18T14:23:35.457+00:00",
+"event_type": "setup-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+},
+{
+"id": "067bccbd-bda2-403b-ae87-bcfc568c90b0",
+"created_at": "2026-05-18T14:23:40.122+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "924ad5c9-3c0e-4d6d-8d5a-b36763db2865",
+"created_at": "2026-05-18T14:23:40.122+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": 1
+},
+{
+"id": "e21601f5-9a93-4ba6-ad54-bde3edc884bb",
+"created_at": "2026-05-18T14:26:12.614+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "6f473c49-c7d7-4afe-a97a-65a0bba662d5",
+"created_at": "2026-05-18T14:26:41.202+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "ab2203a0-7ce4-4a3b-bf41-5633af4bf7b5",
+"created_at": "2026-05-18T14:27:00.826+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "4059a59c-980e-492e-a0aa-36a18353e8c0",
+"created_at": "2026-05-18T14:27:07.01+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "3f1af681-2153-4025-86e5-c48eb9c663cc",
+"created_at": "2026-05-18T14:33:19.994+00:00",
+"event_type": "cp-spent",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "3be91dd2-99f1-43ba-bb43-456ef588795c",
+"created_at": "2026-05-18T14:47:01.083+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "487fc667-7fe8-4953-a04c-fc5571c2d4de",
+"created_at": "2026-05-18T14:51:06.039+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "1907ef14-a1e9-40e0-ba0f-3720497fe179",
+"created_at": "2026-05-18T14:51:26.109+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "4dc0bc0f-8e30-4a74-b370-92f693f400d5",
+"created_at": "2026-05-18T14:51:26.109+00:00",
+"event_type": "turn-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": 1,
+"turn_number": 2
+},
+{
+"id": "859122da-2de9-4e9d-bd20-d40328fb1491",
+"created_at": "2026-05-18T14:51:26.109+00:00",
+"event_type": "turn-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "8ff86add-9e31-4dcb-a08b-586003214c2b",
+"created_at": "2026-05-18T14:51:26.109+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "9102bb48-8381-402b-80ba-f952199495a9",
+"created_at": "2026-05-18T14:51:26.109+00:00",
+"event_type": "round-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": null
+},
+{
+"id": "e1f1307a-fcdb-4655-ae0d-93eb354d5927",
+"created_at": "2026-05-18T14:51:26.109+00:00",
+"event_type": "round-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 1,
+"turn_number": null
+},
+{
+"id": "84e10668-f196-479a-813c-955c4572aabe",
+"created_at": "2026-05-18T15:05:11.126+00:00",
+"event_type": "cp-spent",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "67ef52c7-85fb-4016-aa04-19e872cc1f11",
+"created_at": "2026-05-18T15:06:03.396+00:00",
+"event_type": "cp-spent",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "0ffa7be9-f6bb-4e6f-8d40-eec934f7e087",
+"created_at": "2026-05-18T15:06:13.916+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "1177a13d-66b2-4117-83be-7de4c5e8dc41",
+"created_at": "2026-05-18T15:06:13.916+00:00",
+"event_type": "turn-start",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "2d7b9b1b-de2f-45e8-b3eb-5c3e7e08ec5f",
+"created_at": "2026-05-18T15:06:13.916+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "64487db0-e1db-43b6-afd4-a891f22f2dae",
+"created_at": "2026-05-18T15:06:13.916+00:00",
+"event_type": "turn-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "51ef3b01-a9d0-4548-81b2-bcdde2ee5ab2",
+"created_at": "2026-05-18T15:06:59.726+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "ab853550-5b18-4c04-ba94-abed421945e5",
+"created_at": "2026-05-18T15:06:59.726+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "7cc482e7-29bf-4f07-a391-4f2bcdf44540",
+"created_at": "2026-05-18T15:07:00.374+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "23032eb8-2500-4023-830e-113ecbdf5658",
+"created_at": "2026-05-18T15:09:50.994+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "8d1b9caa-fe9f-4f0c-acc0-8792758ee0ab",
+"created_at": "2026-05-18T15:09:50.994+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "207bd7c8-a88f-4723-98d0-d97cf8f0ca5c",
+"created_at": "2026-05-18T15:09:54.714+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "4338cc14-b0fa-4fd2-bc31-0c3b03758c8b",
+"created_at": "2026-05-18T15:09:54.714+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "a0a3d023-e11e-473e-a172-16ccb00e0c0c",
+"created_at": "2026-05-18T15:09:56.616+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "d15f5830-ee29-4fb4-a52e-8070387ec7bf",
+"created_at": "2026-05-18T15:09:56.616+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "bf2939b4-b460-4d46-b1da-ee6b013f19c5",
+"created_at": "2026-05-18T15:09:58.165+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "f1bcf536-7ff0-4eb5-8b9f-455a8ac523e8",
+"created_at": "2026-05-18T15:09:58.165+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "acc2ed81-0d66-4151-9297-a0aeb1916a7e",
+"created_at": "2026-05-18T15:18:29.891+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "c9353ac0-7418-4afc-8d43-01079b376d28",
+"created_at": "2026-05-18T15:33:53.909+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "f2cb9db2-93fa-4f24-98db-5c5b302e029e",
+"created_at": "2026-05-18T15:37:49.499+00:00",
+"event_type": "score-primary",
+"player_slot": 1,
+"value_number": 2,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "cfd6a2d8-4fc0-43c2-9e44-4e836b7cd31b",
+"created_at": "2026-05-18T15:37:51.998+00:00",
+"event_type": "score-secondary",
+"player_slot": 1,
+"value_number": 4,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "da4adb05-e534-44fb-a04f-344682af8020",
+"created_at": "2026-05-18T15:38:26.536+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "59407440-8860-4df6-8e68-a163527be77e",
+"created_at": "2026-05-18T15:38:43.704+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "9dfaee3d-d86a-40d6-a030-02a91b411ce2",
+"created_at": "2026-05-18T15:38:43.704+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": 1
+},
+{
+"id": "4d82eb1e-f16e-426a-83b3-894234a03d5b",
+"created_at": "2026-05-18T15:47:14.757+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "f93f429d-0d2b-4e5b-9cf8-0f0ce478dc62",
+"created_at": "2026-05-18T15:57:15.491+00:00",
+"event_type": "cp-spent",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "d1835614-b500-4759-bffd-050c88f1967e",
+"created_at": "2026-05-18T16:04:00.933+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "1b4f2026-fb3e-4358-9c96-3bbe3ae67980",
+"created_at": "2026-05-18T16:09:01.018+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "554f8e1f-35c5-4804-97e3-412f54c17fba",
+"created_at": "2026-05-18T16:09:01.465+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "1d85c28b-d948-47de-b51e-ac02b7ff7237",
+"created_at": "2026-05-18T16:09:45.227+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "92d614ee-9339-4792-b226-a4541ddc915c",
+"created_at": "2026-05-18T16:09:45.227+00:00",
+"event_type": "round-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": null
+},
+{
+"id": "97043e12-574c-450c-b6af-74a06ec205c1",
+"created_at": "2026-05-18T16:09:45.227+00:00",
+"event_type": "turn-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "b1fcb1a2-3b06-412b-a2bd-cadb93e14adf",
+"created_at": "2026-05-18T16:09:45.227+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "b7148751-f1be-415b-98ee-21977b7d0c2d",
+"created_at": "2026-05-18T16:09:45.227+00:00",
+"event_type": "round-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 2,
+"turn_number": null
+},
+{
+"id": "df295fa8-7858-44e8-9717-b02738f5211b",
+"created_at": "2026-05-18T16:09:45.227+00:00",
+"event_type": "turn-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "930d709f-5073-4a3a-aef4-73d6e70119b3",
+"created_at": "2026-05-18T16:10:27.605+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "b0b3bc4c-2a41-44e7-9a9e-43ec0218df70",
+"created_at": "2026-05-18T16:10:27.605+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "dfa6c1af-789f-4d23-92ea-3b6e4f1fbceb",
+"created_at": "2026-05-18T16:14:32.349+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "fcc197ac-a483-4b94-b550-1caad0309288",
+"created_at": "2026-05-18T16:14:32.349+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "8bec1f0d-41f3-4e1a-874c-5e312182ded1",
+"created_at": "2026-05-18T16:30:35.451+00:00",
+"event_type": "cp-spent",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "a4c45f98-ac5c-406f-b0fc-1366a0ae932d",
+"created_at": "2026-05-18T16:36:44.404+00:00",
+"event_type": "cp-spent",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "1c3c1513-6895-42c6-8e0e-ca6805b58ca3",
+"created_at": "2026-05-18T16:48:30.202+00:00",
+"event_type": "score-secondary",
+"player_slot": 1,
+"value_number": 5,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "3742d738-debb-4903-bed8-f7cfec4e24eb",
+"created_at": "2026-05-18T16:49:09.994+00:00",
+"event_type": "score-primary",
+"player_slot": 1,
+"value_number": 2,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "491489b2-af2b-4a78-9275-f0518ade2171",
+"created_at": "2026-05-18T16:49:46.082+00:00",
+"event_type": "score-primary",
+"player_slot": 1,
+"value_number": 2,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "40e5185b-b6b1-429d-b8a0-a7cf32fbf0b3",
+"created_at": "2026-05-18T16:49:51.068+00:00",
+"event_type": "turn-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "9414f8e9-7080-443a-911c-b13bc0e00a58",
+"created_at": "2026-05-18T16:49:51.068+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "a52fe84c-a520-452a-92e7-f9ee98a4f522",
+"created_at": "2026-05-18T16:49:51.068+00:00",
+"event_type": "turn-start",
+"player_slot": 2,
+"value_number": null,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "f1d66df3-c4f1-4c15-8af6-21ef5b08f70a",
+"created_at": "2026-05-18T16:49:51.068+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "e275ae12-7671-43f1-9836-e97f5bb18bf1",
+"created_at": "2026-05-18T16:50:27.941+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "eb8e402f-309f-4057-a049-00ea6c7489ac",
+"created_at": "2026-05-18T16:50:27.941+00:00",
+"event_type": "turn-resume",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "19af6cef-31b2-40a4-81a8-a7a9fd01393f",
+"created_at": "2026-05-18T16:50:44.459+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "39969a6b-77d1-444c-846a-422d674852c7",
+"created_at": "2026-05-18T16:50:44.459+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "573a2be6-24d3-4601-be4f-244df283abdc",
+"created_at": "2026-05-18T16:50:44.459+00:00",
+"event_type": "turn-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "8a90e318-d4da-47dd-9358-0d8b13e1652b",
+"created_at": "2026-05-18T16:50:44.459+00:00",
+"event_type": "turn-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "ecf21a55-e4d6-4387-a55d-6cd462c00f45",
+"created_at": "2026-05-18T16:50:44.459+00:00",
+"event_type": "round-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": 3,
+"turn_number": null
+},
+{
+"id": "fdd53b0e-67df-4bd0-a7a8-c235494cf8fb",
+"created_at": "2026-05-18T16:50:44.459+00:00",
+"event_type": "round-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": null
+},
+{
+"id": "774dd8e3-8367-489f-bbed-cfe89e0b935e",
+"created_at": "2026-05-20T09:01:40.59+00:00",
+"event_type": "turn-resume",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "c0acc1ff-0851-493e-8d25-daf8514d54d2",
+"created_at": "2026-05-20T09:01:40.59+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 3,
+"turn_number": 1
+},
+{
+"id": "5e454eb8-e5a2-4cbf-ab5a-9dc03dcae111",
+"created_at": "2026-05-20T09:01:46.257+00:00",
+"event_type": "turn-pause",
+"player_slot": 2,
+"value_number": null,
+"round_number": 2,
+"turn_number": 2
+},
+{
+"id": "1efeef07-a96d-4133-ac18-0ece381aa7d0",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "turn-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "22e79ae9-6e7a-463f-9abb-1041bebf4874",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "turn-pause",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "50e4d2f7-da9c-4d62-a67c-61555e294218",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "round-start",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": null
+},
+{
+"id": "80da63cd-7f38-4087-814c-8ed28993425c",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "cp-gained",
+"player_slot": 1,
+"value_number": 1,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "98ebfec9-fe85-4a79-954f-d386eaabb4e6",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "round-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": 3,
+"turn_number": null
+},
+{
+"id": "d68151bf-88ef-454a-9fec-bd37efc61e5c",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "cp-gained",
+"player_slot": 2,
+"value_number": 1,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "da52f68b-0471-4adc-8f8f-b257a3b7afab",
+"created_at": "2026-05-20T09:02:28.381+00:00",
+"event_type": "turn-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "4d0be95a-f595-4f83-b816-feb71f173da8",
+"created_at": "2026-05-20T09:02:53.656+00:00",
+"event_type": "score-primary",
+"player_slot": 2,
+"value_number": 5,
+"round_number": 3,
+"turn_number": 2
+},
+{
+"id": "431a8f62-cb44-40f9-87de-72daf14d0048",
+"created_at": "2026-05-20T09:17:19.834+00:00",
+"event_type": "round-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": null
+},
+{
+"id": "b063f4e7-562a-4eaf-852e-8847f79a2817",
+"created_at": "2026-05-20T09:17:19.834+00:00",
+"event_type": "turn-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "2bbbefac-c9de-486f-98d1-294309ea8106",
+"created_at": "2026-05-29T13:15:39.485+00:00",
+"event_type": "round-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": null
+},
+{
+"id": "a22a6c4a-18bc-4662-8b3d-7bff21d0878c",
+"created_at": "2026-05-29T13:15:39.485+00:00",
+"event_type": "turn-end",
+"player_slot": 1,
+"value_number": null,
+"round_number": 4,
+"turn_number": 1
+},
+{
+"id": "314596a4-a9b0-4dd5-9a43-25bb4bcd4397",
+"created_at": "2026-10-15T12:29:17.023692+00:00",
+"event_type": "game-end",
+"player_slot": 2,
+"value_number": null,
+"round_number": null,
+"turn_number": null
+}
+]

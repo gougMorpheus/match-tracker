@@ -3785,3 +3785,8 @@ body:has(.tv-game) .modal-backdrop { z-index: 1100; }
   .tv-events__list { flex: none; height: min(60vh, 440px); min-height: 240px; }
   .tv-event, .tv-event--highlight { height: auto; min-height: 36px; padding: .35em 0; }
 }
+
+/* Kurze Bestaetigung "Link kopiert" (Menue "Link teilen"); ueber TV-Ansicht und Vollbild. */
+.share-notice { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 3000; max-width: calc(100vw - 32px);
+  padding: .6em 1.1em; border-radius: 999px; background: var(--bg-raised); color: var(--text); border: 1px solid var(--accent);
+  box-shadow: var(--shadow); font-size: 1rem; overflow-wrap: anywhere; pointer-events: none; }

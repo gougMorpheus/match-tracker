@@ -17,7 +17,10 @@ const runEditViewOnlyTests = () => {
   // 1) View only = TV-Ansicht, kein "TV-Modus verlassen", Full screen bleibt; Scoreboard im Edit oeffnet View only.
   assert.match(tv, /"Full screen verlassen" : "Full screen"/);
   assert.doesNotMatch(tv, /verlassen<\/button>|onExit\(\)/);
-  assert.match(page, /label: "Scoreboard",\s*onClick: openViewOnly/);
+  // 15.10./16.10.: Scoreboard-Menuepunkt entfernt (Schritt 1c), Link teilen in beiden Menues.
+  assert.doesNotMatch(page, /label: "Scoreboard"/);
+  assert.equal((page.match(/label: "Link teilen", onClick: \(\) => \{ void handleShareLink\(\); \}/g) || []).length, 2);
+  assert.doesNotMatch(page, /label: "Notizen"/);
   // 2) Laufendes Spiel: Dialog Edit / View only; Edit = normale Ansicht.
   assert.equal(m.shouldAskGameAccessMode(running, null), true);
   assert.equal(m.shouldShowViewOnly(running, 'edit'), false);
@@ -45,7 +48,7 @@ const runEditViewOnlyTests = () => {
   assert.match(store, /canReopenFromGamePage\(completed, openedHere/);
   assert.match(page, /await reopenGame\(game\.id\);\s*\/\/[^\n]*\n\s*await pauseActiveTimer\(game\.id\);/);
   // 7) Laufendes Spiel in View only: kein Entsperren/Edit im Menue.
-  assert.deepEqual(m.getViewOnlyMenuLabels(running).options, ['Verlauf', 'Notizen', 'Einstellungen', 'Folgen', 'Notifications']);
+  assert.deepEqual(m.getViewOnlyMenuLabels(running).options, ['Verlauf', 'Link teilen', 'Einstellungen', 'Folgen', 'Notifications']);
   assert.match(page, /\.\.\.\(closedTv \? \[\{ label: "Entsperren"/);
 };
 module.exports = { runEditViewOnlyTests };

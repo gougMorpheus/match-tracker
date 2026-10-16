@@ -19,6 +19,8 @@ const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
 const { runPushATests } = require("./pushA.test.cjs");
 const { runLeadHighlightsTests } = require("./leadHighlights.test.cjs");
 const { runTvLeadPopupTests } = require("./tvLeadPopup.test.cjs");
+const { runEventGroupingTests } = require("./eventGrouping.test.cjs");
+const { runSchritt1Tests } = require("./schritt1.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -41,7 +43,9 @@ const suites = [
   ["highlightsScroll", runHighlightsScrollTests],
   ["pushA", runPushATests],
   ["leadHighlights", runLeadHighlightsTests],
-  ["tvLeadPopup", runTvLeadPopupTests]
+  ["tvLeadPopup", runTvLeadPopupTests],
+  ["eventGrouping", runEventGroupingTests],
+  ["schritt1", runSchritt1Tests]
 ];
 
 const main = async () => {
