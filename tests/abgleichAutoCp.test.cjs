@@ -24,7 +24,8 @@ const runAbgleichAutoCpTests = async () => {
   assert.ok(pull.includes("if (isPullOutdated(pullStartGeneration, writeGenerationRef.current))") && pull.includes("return pullPendingRef.current(attempt + 1)"), "verwerfen + sofort neu laden");
   assert.ok(pull.includes("keepLocallyCreatedGames(mergeRemoteWithPending("));
   const flush = store.slice(store.indexOf("const flushSyncQueue = useCallback"), store.indexOf("flushSyncQueueRef.current = flushSyncQueue;"));
-  assert.equal((flush.match(/removeQueueItem\(nextItem\.id\)/g) || []).length, (flush.match(/bumpWriteGeneration\(nextItem\.gameId\); removeQueueItem\(nextItem\.id\)/g) || []).length, "jedes eigene Schreiben zaehlt");
+  assert.equal((flush.match(/removeQueueItem\(nextItem\.id\)/g) || []).length - 1, (flush.match(/bumpWriteGeneration\(nextItem\.gameId\); removeQueueItem\(nextItem\.id\)/g) || []).length, "jedes eigene Schreiben zaehlt");
+  assert.ok(/saveGame\(currentGame, base\.version, canWrite\)\)\);\s*bumpWriteGeneration\(nextItem\.gameId\);/.test(flush), "Spielzeile: Zaehler nach dem Speichern");
   const create = store.slice(store.indexOf("const createGame = useCallback"), store.indexOf("const createGame = useCallback") + 1500);
   assert.ok(create.indexOf("bumpWriteGeneration(createdGame.id)") > 0 && create.indexOf("bumpWriteGeneration(createdGame.id)") < create.indexOf("enqueueGameUpsert(createdGame.id)"), "lokales Anlegen zaehlt");
 

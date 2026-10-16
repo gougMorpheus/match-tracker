@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Spielzeile nach langsamem Speichern nachsenden
+- Fehlerbild: Wurde „Weiter“ gedrückt, während die Spielzeile noch gespeichert wurde, fehlte der Auto-CP-Merker (`notes.optionsMeta.autoCommandPointAwards`) in der DB, obwohl die CP-Events gespeichert waren. Die Anzeige bündelte dann nicht als „(auto CP each)“.
+- Ursache: `enqueueSyncQueueItem` überspringt ein neues `upsert-game`, solange schon eines für das Spiel in der Queue steht – auch wenn dieses gerade gesendet wird. Nach dem Speichern wurde der Eintrag entfernt; die Änderung während des Speicherns ging nie raus.
+- Jetzt: Nach erfolgreichem Speichern vergleicht `flushSyncQueue` den Fingerabdruck der gesendeten mit der aktuellen lokalen Spielzeile (`decideAfterGameSave`). Abweichung → Eintrag bleibt, sofort erneut senden (mit mitgezogener Version), max. 5× pro Durchlauf, danach Retry statt Endlosschleife. Keine Schemaänderung.
+- Tests `tests/spielzeileNachsenden.test.cjs` (langsames `mt_save_game`, Änderung währenddessen).
+
 ## 2026-10-16 – Abgleich nach dem Anlegen, Auto-CP nach Zug Start, Bearbeiten ohne Pause
 - Fehlerbild 1: Direkt nach „Spiel anlegen“ kurz „Spiel nicht gefunden“, bis neu geladen wurde.
 - Ursache 1: Ein Abgleich (15-s-Polling, Realtime, Tab-Wechsel), der VOR dem Speichern gelesen hatte, kam NACH dem Leeren der Queue zurück. Das neue Spiel fehlte in der Antwort und stand nicht mehr in der Queue – `mergeRemoteWithPending` verwarf es.

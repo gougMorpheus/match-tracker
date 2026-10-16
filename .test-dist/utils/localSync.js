@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveHeldGames = exports.loadHeldGames = exports.recordSyncConflict = exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
+exports.decideAfterGameSave = exports.MAX_GAME_RESENDS = exports.saveHeldGames = exports.loadHeldGames = exports.recordSyncConflict = exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
 const id_1 = require("./id");
 const gameState_1 = require("./gameState");
 const supabaseErrors_1 = require("./supabaseErrors");
@@ -190,3 +190,14 @@ const saveHeldGames = (games) => {
     }
 };
 exports.saveHeldGames = saveHeldGames;
+// Spielzeile nach erfolgreichem Speichern: Hat sich die lokale Spielzeile seit dem Absenden geaendert (z. B. "Weiter"
+// waehrend eines langsamen Speicherns -> neue Auto-CP-Markierung), wurde ein neues "upsert-game" als doppelt verworfen.
+// Dann den Eintrag behalten und erneut senden, bis der gespeicherte Stand dem lokalen entspricht.
+// Schutz gegen Endlosschleifen: hoechstens MAX_GAME_RESENDS Nachsendungen je Durchgang, danach spaeter erneut versuchen.
+exports.MAX_GAME_RESENDS = 5;
+const decideAfterGameSave = (sentFingerprint, currentFingerprint, resends, maxResends = exports.MAX_GAME_RESENDS) => {
+    if (currentFingerprint === null || currentFingerprint === sentFingerprint)
+        return "done";
+    return resends < maxResends ? "resend" : "defer";
+};
+exports.decideAfterGameSave = decideAfterGameSave;
