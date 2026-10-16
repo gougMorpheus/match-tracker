@@ -3,6 +3,11 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Kleinigkeiten: Match öffnen merken, Enter im Namensfeld, „+ Spieler“
+- „Match öffnen“ (Edit / View only) wird pro Spiel und Gerät gemerkt (localStorage `match-tracker.access-mode.v1`, `src/utils/accessModeMemory.ts`). Fehlerbild vorher: Nach jedem Neuladen fragte der Dialog erneut, weil die Wahl nur im Arbeitsspeicher lag. Gilt nur für laufende Spiele; View-only-Links (?tv=1) und der Passwortschutz (Entsperren) bleiben unverändert. Wer „View only“ gewählt hat, findet im Menü „Match öffnen …“, um neu zu wählen.
+- Enter im Feld „Neuen Namen eingeben“ übernimmt den Namen und springt zum nächsten Feld. Fehlerbild vorher: Enter schickte das ganze Formular ab (Standardverhalten eines Eingabefelds im Formular).
+- Das „+“ neben dem Spielerfeld heißt jetzt „+ Spieler“, mit Tooltip „Neuen Spieler anlegen (Namen eingeben)“. Passt bei 375 px.
+
 ## 2026-10-16 – Stufe (b): echte Web-Push-Meldungen + Touch-Ziele im Verlauf
 - Push: Neues Event → DB-Trigger (pg_net) → Netlify Function `push-dispatch` → Web-Push (VAPID) an alle Geräte, die dem Spiel folgen (manuell oder Auto-Follow für neue Spiele). Gemeldet: Spielstart, Führungswechsel, Ausgleich, Herausforderungskarten, Zeit-Duell, Zeit-Meilensteine, Rundenabschluss, Spielende. Tipp auf die Meldung öffnet das Spiel in View only.
 - Gleiche Meldungen wie in der App: Die Function nutzt dieselbe Abbildung (`supabaseGameMapping.ts`, aus `gamesRepository.ts` herausgelöst, Ausgabe identisch) und dieselbe Highlight-Ableitung (`deriveGameHighlights`). Test an 16 echten Spielen.
