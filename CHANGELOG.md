@@ -3,6 +3,15 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Stufe (b): echte Web-Push-Meldungen + Touch-Ziele im Verlauf
+- Push: Neues Event → DB-Trigger (pg_net) → Netlify Function `push-dispatch` → Web-Push (VAPID) an alle Geräte, die dem Spiel folgen (manuell oder Auto-Follow für neue Spiele). Gemeldet: Spielstart, Führungswechsel, Ausgleich, Herausforderungskarten, Zeit-Duell, Zeit-Meilensteine, Rundenabschluss, Spielende. Tipp auf die Meldung öffnet das Spiel in View only.
+- Gleiche Meldungen wie in der App: Die Function nutzt dieselbe Abbildung (`supabaseGameMapping.ts`, aus `gamesRepository.ts` herausgelöst, Ausgabe identisch) und dieselbe Highlight-Ableitung (`deriveGameHighlights`). Test an 16 echten Spielen.
+- Dedupe: Tabelle `push_sent_highlights` mit Unique(game_id, highlight_key); erst eintragen, dann senden. Parallel getestet (genau ein Versand). Undo zieht nichts zurück und pusht nicht erneut.
+- Fehlertolerant: Ist die Function nicht erreichbar, wird das Event trotzdem gespeichert (getestet).
+- Notifications-Dialog: echte Zustände („Notifications erlaubt“, „Notifications sind blockiert“ mit Hinweis, Abo-Status, „Erneut versuchen“), der Text „kommen in einem nächsten Schritt“ entfällt.
+- Verlauf „Einzeln (n)“: Bearbeiten/Löschen auf Touch-Geräten mindestens 44 × 44 px (vorher 26 px hoch). Desktop unverändert.
+- Migration `supabase/migrations/20261016_02_web_push.sql`, Rollback `20261016_02_web_push.rollback.sql`. Backup `/home/box/ops/backup/match-tracker-2026-10-16-vor-push-b/`.
+
 ## 2026-10-16 – Retest-Fixes (Pepper, 6ad1a84a)
 - Zuschaueransicht: Aufstellung pausiert bzw. pausierter Zugstart heißt „Zug noch nicht gestartet“ (vorher „Pausiert“). Echte Pausen mitten im Zug bleiben „Pausiert“. Zusätzlich gilt die feste Reihenfolge bei gleichem Zeitstempel jetzt auch für die Aufstellung (game-/setup-start vor setup-pause).
 - Full screen ist immer sichtbar (vorher nach 3,5 s ohne Bewegung ausgeblendet, auf Touch nur nach Tippen sichtbar).
