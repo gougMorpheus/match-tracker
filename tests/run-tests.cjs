@@ -25,8 +25,11 @@ const { runTimeEventOrderTests } = require("./timeEventOrder.test.cjs");
 const { runRetestTests } = require("./retest.test.cjs");
 const { runPushBTests } = require("./pushB.test.cjs");
 const { runAbcTests, runRetest2Tests } = require("./abc.test.cjs");
+const { runAbcTests } = require("./abc.test.cjs");
+const { runStatsExcludeTests } = require("./statsExclude.test.cjs");
 
 const suites = [
+  ["statsExclude", runStatsExcludeTests],
   ["factionColors", runFactionColorsTests],
   ["tvEventFeed", runTvEventFeedTests],
   ["tvGameView", runTvGameViewTests],

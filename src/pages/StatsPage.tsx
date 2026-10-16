@@ -11,6 +11,7 @@ import {
   createDeploymentLeaders,
   createPlayerTurnDurationAggregates,
   createInitialGameFilters,
+  removeExcludedStatsGames,
   createMatchupAggregates,
   createMissionLeaders,
   createPlayerAggregates,
@@ -1000,7 +1001,9 @@ const createScenarioSummaries = (
 };
 
 export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
-  const { games, isLoading, errorMessage, clearError, refreshGames } = useGameStore();
+  const { games: allGames, isLoading, errorMessage, clearError, refreshGames } = useGameStore();
+  // „Nicht zählen“-Spiele existieren für die Statistik nicht (auch nicht in Filtern, „vs …“, Datumsauswahl).
+  const games = useMemo(() => removeExcludedStatsGames(allGames), [allGames]);
   const [filters, setFilters] = useState(createInitialGameFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [openSections, setOpenSections] = useState(defaultOpenSections);

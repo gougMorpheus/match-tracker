@@ -358,8 +358,14 @@ const hasStatsTurnKey = (
 export const isStatsEligibleGame = (game: Game): boolean =>
   STATS_AREAS.some((area) => hasEffectiveArea(game, area));
 
+// „Statistik: Nicht zählen“ (statsEligibilityMode = exclude) nimmt ein Spiel komplett aus der Statistik:
+// keine Filter-/„vs …“-Einträge, keine Durchschnitte, Charts, Rekorde oder Spielzähler – auch nicht über
+// Einzel-Overrides von Bereichen oder Zügen.
+export const isGameExcludedFromStats = (game: Game): boolean => game.statsEligibilityMode === "exclude";
+export const removeExcludedStatsGames = <T extends Game>(games: T[]): T[] => games.filter((game) => !isGameExcludedFromStats(game));
+
 export const prepareGameForStats = (game: Game): Game | null => {
-  if (!isStatsEligibleGame(game)) {
+  if (isGameExcludedFromStats(game) || !isStatsEligibleGame(game)) {
     return null;
   }
 

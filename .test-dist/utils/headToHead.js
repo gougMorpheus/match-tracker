@@ -6,7 +6,8 @@ const normalizePlayerName = (name) => name.trim().replace(/\s+/g, " ").toLowerCa
 exports.normalizePlayerName = normalizePlayerName;
 // Only completed, non-interrupted/non-abandoned games count. Explicit draws and
 // concessions take precedence; otherwise comparable total VP decide. Draws count
-// as rated games, but never as wins. Statistics overrides do not alter this record.
+// as rated games, but never as wins. Area/turn overrides do not alter this record;
+// games flagged „Statistik: Nicht zählen“ are skipped entirely by the aggregates below.
 const getGameOutcome = (game) => {
     if (game.status !== "completed" || game.finishReason === "interrupted" || game.finishReason === "abandoned")
         return null;
@@ -28,7 +29,7 @@ const getHeadToHead = (games, nameA, nameB, excludeGameId) => {
     if (!a || !b || a === b)
         return { winsA, winsB, draws, games: 0 };
     for (const game of games) {
-        if (game.id === excludeGameId)
+        if (game.id === excludeGameId || (0, gameCalculations_1.isGameExcludedFromStats)(game))
             continue;
         const pa = game.players.find(p => (0, exports.normalizePlayerName)(p.name) === a);
         const pb = game.players.find(p => (0, exports.normalizePlayerName)(p.name) === b);
@@ -49,7 +50,7 @@ const getPlayerWinRate = (games, name, excludeGameId) => {
     let wins = 0, ratedGames = 0;
     const normalized = (0, exports.normalizePlayerName)(name);
     for (const game of games) {
-        if (game.id === excludeGameId || !normalized)
+        if (game.id === excludeGameId || !normalized || (0, gameCalculations_1.isGameExcludedFromStats)(game))
             continue;
         const matches = game.players.filter(p => (0, exports.normalizePlayerName)(p.name) === normalized);
         const outcome = (0, exports.getGameOutcome)(game);
