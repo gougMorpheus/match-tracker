@@ -3,6 +3,17 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16
+
+### Schritt 1: Hinweis, Full screen, Umlaute, Zugstart, Bündelung, Link teilen, ohne Notizen/Scoreboard
+
+- Notifications: Solange Push nicht live ist, steht nur noch ein Hinweis da („Du folgst dem Spiel. Benachrichtigungen aufs Handy kommen in einem nächsten Schritt.“). Fehlerbild vorher: „blockiert“ und „kommen bald“ standen widersprüchlich untereinander (Statushinweis plus Bald-Text). Statushinweise (blockiert, Home-Bildschirm …) erst mit `PUSH_DELIVERY_AVAILABLE`.
+- Full screen: Ursache: Button war absolut unten rechts über dem Dashboard positioniert (Desktop über der letzten Ereigniszeile, mobil fixed über der Spielerzeit von Spieler B). Jetzt im Fluss der Mitte-Kachel, belegt eigenen Platz.
+- Umlaute/ß in allen sichtbaren Texten (nur String-Literale/JSX-Text per AST, Code-Bezeichner und DB-Werte unverändert).
+- Zuschaueransicht: „Zug noch nicht gestartet“ statt „Pausiert 00:00:00“, wenn der Zug nach „Weiter“ aus der Aufstellung (gewollt) pausiert ist und noch keine Zugzeit lief. Timer-Logik unverändert.
+- Letzte Ereignisse und Verlauf bündeln (nur Anzeige, `src/utils/eventGrouping.ts`): Auto-CP im Zugwechsel „(auto CP each)“, pro Zug und Spieler ein CP-Eintrag (+x / −y) und je SP-Art ein Eintrag; Highlights bleiben eigene Zeilen. Verlauf: gebündelte Zeile mit „Einzeln (n)“, darunter die Einzel-Events mit Bearbeiten/Löschen. Undo wirkt weiter auf das letzte Einzel-Event.
+- Menü im Spiel (Edit und View only): „Link teilen“ (Direktlink `#/game/<id>?tv=1`, kopieren + „Link kopiert“, mobil zusätzlich Teilen-Dialog). „Scoreboard“ und „Notizen“ entfernt; Notizen werden nirgends mehr angezeigt oder eingegeben. Vorhandene Notiz-Daten bleiben in der DB; das Bearbeiten eines Events übernimmt die vorhandene Notiz unverändert.
+
 ## 2026-10-15
 
 ### TV-Einblendung Führungswechsel/Ausgleich mitten im Zug, kompakte Ereigniszeilen mobil

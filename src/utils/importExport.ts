@@ -25,7 +25,7 @@ export const parseImportedGames = (rawContent: string): GameImportPayload => {
   if (Array.isArray(parsed)) {
     const games = parsed.filter(looksLikeGame);
     if (games.length !== parsed.length) {
-      throw new Error("Die Datei enthaelt ungueltige Spieleintraege.");
+      throw new Error("Die Datei enthält ungültige Spieleinträge.");
     }
 
     return { games };
@@ -34,13 +34,13 @@ export const parseImportedGames = (rawContent: string): GameImportPayload => {
   if (isObject(parsed) && Array.isArray(parsed.games)) {
     const games = parsed.games.filter(looksLikeGame);
     if (games.length !== parsed.games.length) {
-      throw new Error("Die Datei enthaelt ungueltige Spieleintraege.");
+      throw new Error("Die Datei enthält ungültige Spieleinträge.");
     }
 
     return { games };
   }
 
-  throw new Error("Die Datei hat kein gueltiges Match-Tracker-Format.");
+  throw new Error("Die Datei hat kein gültiges Match-Tracker-Format.");
 };
 
 export const exportGamesAsJson = (games: Game[]): void => {

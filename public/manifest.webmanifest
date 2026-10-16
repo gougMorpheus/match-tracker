@@ -2,7 +2,7 @@
   "id": "/",
   "name": "40K Match-Tracker",
   "short_name": "Match-Tracker",
-  "description": "Mobile-first Match Tracker fuer Warhammer- und Tabletop-Spiele.",
+  "description": "Mobile-first Match Tracker für Warhammer- und Tabletop-Spiele.",
   "lang": "de",
   "start_url": "/#/games",
   "scope": "/",

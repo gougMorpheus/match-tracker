@@ -47,6 +47,8 @@ import {
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
+import { buildSpectatorLink, shareResultMessage, shareSpectatorLink } from "../utils/shareLink";
+import { AUTO_CP_SUFFIX, formatCpGroup, formatScoreValue, groupDisplayEvents } from "../utils/eventGrouping";
 import { HIGHLIGHT_ICON, deriveGameHighlights } from "../utils/tvHighlights";
 import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowClosedGameTv, shouldShowViewOnly } from "../utils/gameAccessMode";
 import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
@@ -83,6 +85,10 @@ interface EditableEventItem {
   roundNumber?: number;
   turnNumber?: number;
   createdAt: string;
+  // Fuer die Anzeige-Buendelung (eventGrouping).
+  timeAction?: string;
+  cpType?: "gained" | "spent";
+  scoreType?: string;
 }
 
 interface ScoreLimitWarning {
@@ -109,7 +115,7 @@ const STATS_ELIGIBILITY_AREAS: StatsEligibilityArea[] = ["result", "scoring", "c
 const STATS_ELIGIBILITY_TURN_AREAS: Exclude<StatsEligibilityArea, "result">[] = ["scoring", "cp", "time"];
 
 const statsEligibilityStatusLabel = (status: "included" | "excluded" | "partial"): string =>
-  status === "included" ? "zaehlt" : status === "partial" ? "teilweise" : "zaehlt nicht";
+  status === "included" ? "zählt" : status === "partial" ? "teilweise" : "zählt nicht";
 
 const normalizeStatsEligibilityDraft = (value: StatsEligibilityOverrides): StatsEligibilityOverrides => {
   const areas = Object.fromEntries(
@@ -242,7 +248,7 @@ export const GamePage = (props: GamePageProps) => {
     if (props.forceTv) setGameAccessMode(props.gameId, "view");
   }, [props.forceTv, props.gameId, setGameAccessMode]);
   if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
-    subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfuegbar."} />;
+    subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfügbar."} />;
   return <LoadedGamePage key={props.gameId} {...props} game={game} />;
 };
 
@@ -395,6 +401,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               kind: "time" as const,
               eventType: "time" as const,
               label: getTimeEventActionLabel(event.action),
+              timeAction: event.action,
               displayValue: undefined,
               roundNumber: event.roundNumber,
               turnNumber: event.turnNumber,
@@ -408,6 +415,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               eventType:
                 (event.cpType === "gained" ? "cp-gained" : "cp-spent") as EditableEventItem["eventType"],
               label: event.cpType === "gained" ? "CP +" : "CP -",
+              cpType: event.cpType,
               value: event.value,
               displayValue: Math.abs(event.value),
               note: event.note,
@@ -430,20 +438,9 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                       ? "Challenge"
                       : "Gesamt"
               } ${event.value < 0 ? "-" : "+"}`,
+              scoreType: event.scoreType,
               value: event.value,
               displayValue: Math.abs(event.value),
-              note: event.note,
-              roundNumber: event.roundNumber,
-              turnNumber: event.turnNumber,
-              createdAt: event.createdAt
-            })),
-            ...game.noteEvents.map((event) => ({
-              id: event.id,
-              playerId: event.playerId,
-              playerName: game.players.find((player) => player.id === event.playerId)?.name ?? "-",
-              kind: "note" as const,
-              eventType: "note" as const,
-              label: "Notiz",
               note: event.note,
               roundNumber: event.roundNumber,
               turnNumber: event.turnNumber,
@@ -474,6 +471,9 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       }),
     [editableEvents, entryFilterPlayerId, entryFilterType]
   );
+  // Anzeige-Buendelung im Verlauf (Events bleiben einzeln gespeichert und einzeln bearbeitbar ueber "Einzeln").
+  const groupedEditableEvents = useMemo(() => groupDisplayEvents(filteredEditableEvents, game.autoCommandPointAwards), [filteredEditableEvents, game.autoCommandPointAwards]);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const undoActionLabel = getUndoActionLabel(gameId);
   const redoActionLabel = getRedoActionLabel(gameId);
   const undoLabel = undoActionLabel ? `Undo: ${undoActionLabel}` : "Undo";
@@ -666,7 +666,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
   const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
-  const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Laeuft" : "Gestoppt";
+  const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Läuft" : "Gestoppt";
   const timerStateKey = isClosed ? "closed" : timeoutActive ? "timeout" : isTimerRunning ? "running" : "stopped";
 
   useEffect(() => {
@@ -691,13 +691,13 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     const nextNotice =
       timerStateKey === "running"
         ? {
-            title: "Timer laeuft",
-            message: "Der Timer wurde gestartet und zaehlt weiter."
+            title: "Timer läuft",
+            message: "Der Timer wurde gestartet und zählt weiter."
           }
         : timerStateKey === "timeout"
           ? {
               title: "Time-out aktiv",
-              message: "Die Spielzeit laeuft weiter, die Spielerzeit ist pausiert."
+              message: "Die Spielzeit läuft weiter, die Spielerzeit ist pausiert."
             }
           : {
               title: "Timer gestoppt",
@@ -958,7 +958,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       closeDeleteDialog();
       onBack();
     } catch (error) {
-      setDeletePasswordError(error instanceof Error ? error.message : "Spiel konnte nicht geloescht werden.");
+      setDeletePasswordError(error instanceof Error ? error.message : "Spiel konnte nicht gelöscht werden.");
     }
   };
 
@@ -1002,7 +1002,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       return;
     }
 
-    if (!window.confirm("Eintrag wirklich loeschen?")) {
+    if (!window.confirm("Eintrag wirklich löschen?")) {
       return;
     }
 
@@ -1065,12 +1065,12 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       const reopened = getGame(game.id);
       if (!reopened || isGameCompletedForDisplay(reopened)) {
         setGameAccessMode(game.id, "view");
-        setReopenPasswordError("Spiel konnte nicht wieder eroeffnet werden. Es bleibt abgeschlossen (View only).");
+        setReopenPasswordError("Spiel konnte nicht wieder eröffnet werden. Es bleibt abgeschlossen (View only).");
         return;
       }
     } catch (error) {
       setGameAccessMode(game.id, "view");
-      setReopenPasswordError(error instanceof Error ? error.message : "Spiel konnte nicht wieder eroeffnet werden.");
+      setReopenPasswordError(error instanceof Error ? error.message : "Spiel konnte nicht wieder eröffnet werden.");
     }
   };
 
@@ -1080,7 +1080,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     }
 
     closeEditor();
-    if (undoActionLabel.startsWith("Weiter") || undoActionLabel.startsWith("Zurueck")) {
+    if (undoActionLabel.startsWith("Weiter") || undoActionLabel.startsWith("Zurück")) {
       snapToLatestTurnRef.current = true;
     }
     await undoGameAction(game.id);
@@ -1092,13 +1092,31 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     }
 
     closeEditor();
-    if (redoActionLabel.startsWith("Weiter") || redoActionLabel.startsWith("Zurueck")) {
+    if (redoActionLabel.startsWith("Weiter") || redoActionLabel.startsWith("Zurück")) {
       snapToLatestTurnRef.current = true;
     }
     await redoGameAction(game.id);
   };
 
   // Scoreboard im Edit-Modus oeffnet die View-only-Ansicht; zurueck nur ueber Main -> Spiel -> Edit.
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = window.setTimeout(() => setShareNotice(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [shareNotice]);
+  const handleShareLink = async () => {
+    if (!game) return;
+    const url = buildSpectatorLink(window.location.origin, window.location.pathname, game.id);
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    const isMobile = Boolean(window.matchMedia?.("(pointer: coarse)").matches);
+    const result = await shareSpectatorLink(url, `${game.players[0].name} vs. ${game.players[1].name}`, {
+      clipboardWrite: nav.clipboard?.writeText ? (text) => nav.clipboard.writeText(text) : undefined,
+      share: typeof nav.share === "function" ? (data) => nav.share!(data) : undefined,
+      isMobile
+    });
+    setShareNotice(shareResultMessage(result, url));
+  };
   const openViewOnly = () => {
     setGameAccessMode(game.id, "view");
     window.location.hash = getTvModeHash(game.id);
@@ -1327,7 +1345,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
           </div>
           <FloatingMenu
             fixed
-            ariaLabel="Spielmenue"
+            ariaLabel="Spielmenü"
             sections={[
               {
                 label: "Navigation",
@@ -1340,21 +1358,13 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               {
                 label: "Optionen",
                 items: [
-                  ...(!showOverview
-                    ? [
-                        {
-                          label: "Scoreboard",
-                          onClick: openViewOnly
-                        }
-                      ]
-                    : []),
                   { label: "Verlauf", onClick: () => setEntriesOpen(true) },
-                  { label: "Notizen", onClick: () => setNotesOpen(true) },
+                  { label: "Link teilen", onClick: () => { void handleShareLink(); } },
                   { label: "Einstellungen", onClick: openGameSettings },
                   ...followMenuItems,
                   ...(!isReadOnly ? [isClosed
                     ? {
-                        label: "Spiel wieder eroeffnen",
+                        label: "Spiel wieder eröffnen",
                         onClick: handleRequestReopenGame,
                         disabled: writeDisabled
                       }
@@ -1365,7 +1375,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                         danger: true
                       },
                   {
-                    label: "Spiel loeschen",
+                    label: "Spiel löschen",
                     onClick: handleRequestDeleteGame,
                     disabled: writeDisabled,
                     danger: true
@@ -1385,7 +1395,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
             <FloatingMenu
               fixed
               className="floating-menu--tv"
-              ariaLabel="Spielmenue"
+              ariaLabel="Spielmenü"
               sections={[
                 {
                   label: "Navigation",
@@ -1399,7 +1409,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   label: "Optionen",
                   items: [
                     { label: "Verlauf", onClick: () => { setEntriesOpen(true); } },
-                    { label: "Notizen", onClick: () => { setNotesOpen(true); } },
+                    { label: "Link teilen", onClick: () => { void handleShareLink(); } },
                     { label: "Einstellungen", onClick: () => { openGameSettings(); } },
                     ...followMenuItems,
                     // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
@@ -1416,8 +1426,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
           <div className="modal-card">
             <div className="stack">
               <div>
-                <h2>Match oeffnen</h2>
-                <p className="muted-copy">Dieses Match laeuft noch.</p>
+                <h2>Match öffnen</h2>
+                <p className="muted-copy">Dieses Match läuft noch.</p>
               </div>
               <div className="button-row button-row--compact">
                 <button
@@ -1461,8 +1471,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               {scoreLimitWarning.playerName}: {scoreLimitWarning.scoreLabel} Limit erreicht
             </strong>
             <p>
-              {scoreLimitWarning.thresholds.join(" / ")} Punkte erreicht oder ueberschritten.
-              Bitte pruefen, ob das Limit erreicht ist.
+              {scoreLimitWarning.thresholds.join(" / ")} Punkte erreicht oder überschritten.
+              Bitte prüfen, ob das Limit erreicht ist.
             </p>
           </div>
           <span>{scoreLimitWarning.total} Pkt</span>
@@ -1478,7 +1488,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       {timeoutActive ? (
         <div className="timeout-banner" role="status">
           <strong>Time-out aktiv</strong>
-          <span>Spielzeit laeuft, Spielerzeit ist pausiert.</span>
+          <span>Spielzeit läuft, Spielerzeit ist pausiert.</span>
         </div>
       ) : null}
       {!viewOnlyActive && timerStateNotice ? (
@@ -1513,7 +1523,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   className="ghost-button compact-button"
                   onClick={closeOverviewWindow}
                 >
-                  Schliessen
+                  Schließen
                 </button>
               </div>
               <GameOverview game={game} />
@@ -1523,8 +1533,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       ) : null}
       {reopenPasswordOpen ? (
         <PasswordDialog
-          title="Spiel wieder eroeffnen"
-          confirmLabel="Wieder eroeffnen"
+          title="Spiel wieder eröffnen"
+          confirmLabel="Wieder eröffnen"
           value={reopenPassword}
           error={reopenPasswordError}
           disabled={isMutating}
@@ -1540,8 +1550,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       ) : null}
       {deletePasswordOpen ? (
         <PasswordDialog
-          title="Spiel loeschen"
-          confirmLabel="Spiel loeschen"
+          title="Spiel löschen"
+          confirmLabel="Spiel löschen"
           value={deletePassword}
           error={deletePasswordError}
           hint="Alle Events dieses Spiels werden dabei entfernt."
@@ -1571,7 +1581,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   className="ghost-button compact-button"
                   onClick={closeFinishDialog}
                 >
-                  Schliessen
+                  Schließen
                 </button>
               </div>
               <div className="button-row button-row--compact">
@@ -1633,7 +1643,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
           <div className="modal-card">
             <div className="stack">
               <div>
-                <h2>Startspieler auswaehlen</h2>
+                <h2>Startspieler auswählen</h2>
                 <p className="muted-copy">Vor Zug 1 muss feststehen, wer beginnt.</p>
               </div>
               <label className="field">
@@ -1644,7 +1654,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   autoFocus
                   onChange={(event) => setStartingPlayerPromptSlot(event.target.value as CreateGameInput["startingSlot"])}
                 >
-                  <option value="">Bitte auswaehlen</option>
+                  <option value="">Bitte auswählen</option>
                   <option value="player1">{game.players[0].name || "Spieler 1"}</option>
                   <option value="player2">{game.players[1].name || "Spieler 2"}</option>
                 </select>
@@ -1711,7 +1721,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     <span>Zeit</span>
                     <strong>{formatDuration(setupDurationMs)}</strong>
                   </div>
-                  <span className="scoreboard-stat__meta">Zaehlt zur Gesamtzeit</span>
+                  <span className="scoreboard-stat__meta">Zählt zur Gesamtzeit</span>
                 </div>
               </div>
             </article>
@@ -1726,31 +1736,6 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                 roundNumber={currentRoundNumber}
                 emphasized={activePlayerId === player.id}
                 defender={game.defenderPlayerId === player.id}
-                noteAction={
-                  <button
-                    type="button"
-                    className="ghost-button compact-button scoreboard__note-button"
-                    disabled={writeDisabled}
-                      onClick={() => {
-                        void (async () => {
-                          if (isTimerRunning) {
-                            await pauseActiveTimer(
-                              game.id,
-                              selectedTurn
-                                ? {
-                                    roundNumber: selectedTurn.roundNumber,
-                                    turnNumber: selectedTurn.turnNumber
-                                  }
-                                : undefined
-                            );
-                          }
-                          setNoteDialogPlayerId(player.id);
-                        })();
-                      }}
-                  >
-                    Notiz
-                  </button>
-                }
                 controls={
                   <QuickAdjustControls
                     player={player}
@@ -1844,42 +1829,6 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
         )}
       </section>
 
-      {noteDialogPlayerId ? (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="stack">
-              <div>
-                <h2>Notiz hinzufuegen</h2>
-                <p className="muted-copy">{selectedNotePlayer?.name ?? "Spieler"}</p>
-              </div>
-              <textarea
-                rows={4}
-                value={noteDraft}
-                disabled={writeDisabled}
-                onChange={(event) => setNoteDraft(event.target.value)}
-              />
-              <div className="button-row button-row--compact">
-                <button
-                  type="button"
-                  className="primary-button compact-button"
-                  disabled={writeDisabled || !noteDraft.trim()}
-                  onClick={() => void handleAddNote()}
-                >
-                  Speichern
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  disabled={writeDisabled}
-                  onClick={closeNoteDialog}
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {detailsOpen ? (
         <div className="modal-backdrop">
@@ -1908,7 +1857,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     className="ghost-button compact-button"
                     onClick={closeGameDetails}
                   >
-                    Schliessen
+                    Schließen
                   </button>
                 </div>
               </div>
@@ -1992,7 +1941,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                         <h2>Wertung Statistik</h2>
                       </div>
                       <p className="muted-copy">
-                        Wertung konnte fuer dieses Spiel nicht vollstaendig berechnet werden. Game-ID: {game.id}
+                        Wertung konnte für dieses Spiel nicht vollständig berechnet werden. Game-ID: {game.id}
                       </p>
                     </section>
                   )}
@@ -2029,7 +1978,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     <strong>{game.deployment || "-"}</strong>
                   </div>
                   <div>
-                    <span>Primaermission</span>
+                    <span>Primärmission</span>
                     <strong>{game.primaryMission || "-"}</strong>
                   </div>
                   <div>
@@ -2090,14 +2039,14 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               <div className="list-row">
                 <div>
                   <h2>Wertung Statistik bearbeiten</h2>
-                  <p className="muted-copy">Overrides veraendern nur die Statistikwertung, nicht die Rohdaten.</p>
+                  <p className="muted-copy">Overrides verändern nur die Statistikwertung, nicht die Rohdaten.</p>
                 </div>
                 <button
                   type="button"
                   className="ghost-button compact-button"
                   onClick={() => setStatsEligibilityEditorOpen(false)}
                 >
-                  Schliessen
+                  Schließen
                 </button>
               </div>
 
@@ -2131,7 +2080,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
 
               {statsEligibilityReport.turns.length ? (
                 <section className="card stack">
-                  <h3>Zuege</h3>
+                  <h3>Züge</h3>
                   <div className="event-list modal-list">
                     {statsEligibilityReport.turns.map((turn) => (
                       <div key={turn.key} className="event-list__item">
@@ -2161,7 +2110,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                                   <option value="exclude">Exclude</option>
                                 </select>
                                 <p className="muted-copy">
-                                  Auto: {decision.auto ? "zaehlt" : "zaehlt nicht"} · Effektiv: {decision.effective ? "zaehlt" : "zaehlt nicht"}
+                                  Auto: {decision.auto ? "zählt" : "zählt nicht"} · Effektiv: {decision.effective ? "zählt" : "zählt nicht"}
                                 </p>
                                 <p className="muted-copy">{decision.reasons.join(", ")}</p>
                               </label>
@@ -2196,67 +2145,15 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
         </div>
       ) : null}
 
-      {notesOpen ? (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="stack">
-              <div className="list-row">
-                <div>
-                  <h2>Notizen</h2>
-                  <p className="muted-copy">{game.noteEvents.length} Eintraege</p>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  onClick={() => setNotesOpen(false)}
-                >
-                  Schliessen
-                </button>
-              </div>
-              {game.noteEvents.length ? (
-                <div className="event-list modal-list">
-                  {game.noteEvents
-                    .slice()
-                    .reverse()
-                    .map((event) => {
-                      const playerName =
-                        game.players.find((player) => player.id === event.playerId)?.name ?? "-";
-                      return (
-                        <article
-                          key={event.id}
-                          className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}`}
-                        >
-                          <div className="event-editor__meta">
-                            <div className="event-editor__summary">
-                              <strong>{playerName}</strong>
-                              <p className="event-editor__context">
-                                R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
-                              </p>
-                            </div>
-                            <span className="event-editor__stamp">
-                              {formatClockTimeWithSeconds(event.createdAt)}
-                            </span>
-                          </div>
-                          <p className="event-list__detail">{event.note}</p>
-                        </article>
-                      );
-                    })}
-                </div>
-              ) : (
-                <p className="muted-copy">Noch keine Notizen.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
+      {shareNotice ? <div className="share-notice" role="status">{shareNotice}</div> : null}
       {entriesOpen ? (
         <div className="modal-backdrop">
           <div className="modal-card">
             <div className="stack">
               <div className="list-row">
                 <div>
-                  <h2>Eintraege</h2>
+                  <h2>Einträge</h2>
                   <p className="muted-copy">
                     {filteredEditableEvents.length} von {editableEvents.length} sichtbar
                   </p>
@@ -2269,7 +2166,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     setEntriesOpen(false);
                   }}
                 >
-                  Schliessen
+                  Schließen
                 </button>
               </div>
               {finishDialogError ? <p className="muted-copy">{finishDialogError}</p> : null}
@@ -2330,115 +2227,139 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     <option value="legacy-total">Gesamt</option>
                     <option value="cp-gained">CP +</option>
                     <option value="cp-spent">CP -</option>
-                    <option value="note">Notizen</option>
                     <option value="highlight">Highlights</option>
                   </select>
                 </label>
               </div>
               {filteredEditableEvents.length ? (
                 <div className="event-list event-list--editable modal-list">
-                  {filteredEditableEvents.map((event) => (
-                    <article
-                      key={event.id}
-                      className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}${event.kind === "highlight" ? " event-list__row--highlight" : ""}`}
-                    >
-                      <div className="event-editor__meta">
-                        <div className="event-editor__summary">
-                          <strong>{event.playerName}</strong>
-                          <p className="event-editor__context">
-                            {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
-                          </p>
-                        </div>
-                        <span className="event-editor__stamp">
-                          {formatClockTimeWithSeconds(event.createdAt)}
-                        </span>
-                        {!isReadOnly && event.kind !== "highlight" ? (
-                        <div className="button-row button-row--compact event-editor__actions">
-                          <button
-                            type="button"
-                            className="ghost-button compact-button"
-                            disabled={writeDisabled || isClosed}
-                            onClick={() => void openEditor(event)}
-                          >
-                            Bearbeiten
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-button compact-button"
-                            disabled={writeDisabled || isClosed}
-                            onClick={() => void handleDeleteEvent(event)}
-                          >
-                            Loeschen
-                          </button>
-                        </div>
-                        ) : null}
-                      </div>
-
-                      {editingEventId === event.id ? (
-                        <div className="event-editor__form">
-                          {event.kind === "time" ? (
-                            <input
-                              type="datetime-local"
-                              step={1}
-                              value={editingValue}
-                              disabled={writeDisabled}
-                              onChange={(editEvent) => setEditingValue(editEvent.target.value)}
-                            />
-                          ) : event.kind !== "note" ? (
-                            <input
-                              type="number"
-                              min={0}
-                              inputMode="numeric"
-                              value={editingValue}
-                              disabled={writeDisabled}
-                              onChange={(editEvent) => setEditingValue(editEvent.target.value)}
-                            />
-                          ) : null}
-                          {event.kind !== "time" ? (
-                            <textarea
-                              rows={2}
-                              value={editingNote}
-                              disabled={writeDisabled}
-                              onChange={(editEvent) => setEditingNote(editEvent.target.value)}
-                            />
-                          ) : null}
-                          <div className="button-row button-row--compact">
-                            <button
-                              type="button"
-                              className="primary-button compact-button"
-                              disabled={writeDisabled}
-                              onClick={() => void saveEditedEvent(event)}
-                            >
-                              Speichern
-                            </button>
+                  {(() => {
+                    const renderRow = (event: EditableEventItem, extraClass = "") => (
+                      <article
+                        key={event.id}
+                        className={`event-list__row ${getRoundSurfaceClassName(event.roundNumber)}${event.kind === "highlight" ? " event-list__row--highlight" : ""}${extraClass}`}
+                      >
+                        <div className="event-editor__meta">
+                          <div className="event-editor__summary">
+                            <strong>{event.playerName}</strong>
+                            <p className="event-editor__context">
+                              {event.label} | R{event.roundNumber ?? "-"} / Z{event.turnNumber ?? "-"}
+                            </p>
+                          </div>
+                          <span className="event-editor__stamp">
+                            {formatClockTimeWithSeconds(event.createdAt)}
+                          </span>
+                          {!isReadOnly && event.kind !== "highlight" ? (
+                          <div className="button-row button-row--compact event-editor__actions">
                             <button
                               type="button"
                               className="ghost-button compact-button"
-                              disabled={writeDisabled}
-                              onClick={closeEditor}
+                              disabled={writeDisabled || isClosed}
+                              onClick={() => void openEditor(event)}
                             >
-                              Abbrechen
+                              Bearbeiten
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-button compact-button"
+                              disabled={writeDisabled || isClosed}
+                              onClick={() => void handleDeleteEvent(event)}
+                            >
+                              Löschen
                             </button>
                           </div>
+                          ) : null}
                         </div>
-                      ) : (
-                        <p className="event-list__detail">
-                          {event.kind === "time"
-                            ? `Zeitpunkt ${formatClockTimeWithSeconds(event.createdAt)}`
-                            : typeof event.displayValue === "number"
-                            ? `${event.displayValue}`
-                            : event.note || "Keine Notiz"}
-                          {event.note && typeof event.displayValue === "number" ? ` | ${event.note}` : ""}
-                        </p>
-                      )}
-                    </article>
-                  ))}
+  
+                        {editingEventId === event.id ? (
+                          <div className="event-editor__form">
+                            {event.kind === "time" ? (
+                              <input
+                                type="datetime-local"
+                                step={1}
+                                value={editingValue}
+                                disabled={writeDisabled}
+                                onChange={(editEvent) => setEditingValue(editEvent.target.value)}
+                              />
+                            ) : event.kind !== "note" ? (
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                value={editingValue}
+                                disabled={writeDisabled}
+                                onChange={(editEvent) => setEditingValue(editEvent.target.value)}
+                              />
+                            ) : null}
+                            {/* Notizen werden nicht mehr angezeigt/bearbeitet; editingNote bleibt unveraendert, vorhandene Notiz bleibt erhalten. */}
+                            <div className="button-row button-row--compact">
+                              <button
+                                type="button"
+                                className="primary-button compact-button"
+                                disabled={writeDisabled}
+                                onClick={() => void saveEditedEvent(event)}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                type="button"
+                                className="ghost-button compact-button"
+                                disabled={writeDisabled}
+                                onClick={closeEditor}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="event-list__detail">
+                            {event.kind === "time"
+                              ? `Zeitpunkt ${formatClockTimeWithSeconds(event.createdAt)}`
+                              : typeof event.displayValue === "number"
+                              ? `${event.displayValue}`
+                              : event.kind === "highlight" ? event.note ?? "" : ""}
+                          </p>
+                        )}
+                      </article>
+                    );
+                    return groupedEditableEvents.map((group) => {
+                      const expandable = group.items.length > 1 || group.autoCp.length > 0;
+                      if (!expandable) return renderRow(group.first);
+                      const open = Boolean(expandedGroups[group.key]);
+                      const e = group.latest;
+                      const label = group.kind === "cp" ? formatCpGroup(group)
+                        : group.kind === "score" ? `${group.first.label.replace(/ [+-]$/, "")} ${formatScoreValue(group.scoreSum)}`
+                        : `${group.first.label}${AUTO_CP_SUFFIX}`;
+                      const count = group.items.length + group.autoCp.length;
+                      return (
+                        <div key={`group:${group.key}`} className="event-list__group">
+                          <article className={`event-list__row event-list__row--group ${getRoundSurfaceClassName(e.roundNumber)}`}>
+                            <div className="event-editor__meta">
+                              <div className="event-editor__summary">
+                                <strong>{group.first.playerName}</strong>
+                                <p className="event-editor__context">{label} | R{e.roundNumber ?? "-"} / Z{e.turnNumber ?? "-"}</p>
+                              </div>
+                              <span className="event-editor__stamp">{formatClockTimeWithSeconds(group.createdAt)}</span>
+                              <div className="button-row button-row--compact event-editor__actions">
+                                <button type="button" className="ghost-button compact-button" aria-expanded={open}
+                                  onClick={() => setExpandedGroups((current) => ({ ...current, [group.key]: !open }))}>
+                                  {open ? "Zuklappen" : `Einzeln (${count})`}
+                                </button>
+                              </div>
+                            </div>
+                            <p className="event-list__detail">{count} Einträge zusammengefasst</p>
+                          </article>
+                          {open ? [...group.items, ...group.autoCp].sort((l, r) => r.createdAt.localeCompare(l.createdAt)).map((item) => renderRow(item, " event-list__row--child")) : null}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               ) : (
                 <p className="muted-copy">
                   {editableEvents.length
-                    ? "Keine Eintraege passend zum aktuellen Filter."
-                    : "Noch keine editierbaren Eintraege."}
+                    ? "Keine Einträge passend zum aktuellen Filter."
+                    : "Noch keine editierbaren Einträge."}
                 </p>
               )}
             </div>
@@ -2475,7 +2396,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               onClick={() => void handleGoBack()}
               disabled={!canNavigateTurns || !canGoBack}
             >
-              Zurueck
+              Zurück
             </button>
             <div className="game-bottom-dock__undo-wrap">
               {redoHoldOpen ? (
@@ -2515,7 +2436,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   void handleUndoLastEvent();
                 }}
                 disabled={writeDisabled || !undoActionLabel}
-                title={`${undoLabel}${redoActionLabel ? " | Halten fuer Redo" : ""}`}
+                title={`${undoLabel}${redoActionLabel ? " | Halten für Redo" : ""}`}
               >
                 <span className="game-bottom-dock__primary-label">{undoLabel}</span>
                 <small className="game-bottom-dock__hint">(hold Redo)</small>

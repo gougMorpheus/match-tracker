@@ -92,7 +92,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!formState.defenderSlot) {
-      setFormError("Bitte waehle aus, wer Defender ist.");
+      setFormError("Bitte wähle aus, wer Defender ist.");
       return;
     }
 
@@ -109,7 +109,7 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   return (
     <Layout
       title="Neues Spiel"
-      subtitle="Spieler waehlen, Armeen auswaehlen, Punkte einmal setzen"
+      subtitle="Spieler wählen, Armeen auswählen, Punkte einmal setzen"
       onBack={onBack}
     >
       <form className="stack" onSubmit={handleSubmit} noValidate>

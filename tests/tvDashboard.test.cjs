@@ -22,20 +22,23 @@ const runTvDashboardTests = () => {
     { id:'ignored', type:'time', action:'turn-end', createdAt:'2026-10-01T10:06:00Z' }
   ];
   const feed = buildTvEventFeed(g);
-  assert.deepEqual(feed.map(e => e.id), ['end','round','start','cp','negative','score']);
+  // Ohne Zug: direkt aufeinanderfolgende gleiche SP werden zusammengefasst (+7, −2 -> +5).
+  assert.deepEqual(feed.map(e => e.id), ['end','round','start',`group:cp|${a.id}|-|cp`,`group:score|primary|${b.id}|-|score`]);
   assert.equal(feed[0].text, 'Spiel beendet');
   assert.equal(feed[1].text, 'Runde 4 beginnt');
   assert.equal(feed[2].text, 'Runde 3 · Zug 2: Alice ist am Zug');
   assert.equal(feed[3].text, 'Runde 3 · Alice: −1 CP');
-  assert.equal(feed[4].text, 'Runde 3 · Bob: −2 Primär');
-  assert.equal(feed[5].text, 'Runde 3 · Bob: +7 Primär');
+  assert.equal(feed[4].text, 'Runde 3 · Bob: +5 Primär');
   assert.match(feed[0].time, /^\d{2}:\d{2}$/);
   assert.equal(buildTvEventFeed(g, 2).length, 2);
   assert.equal(buildTvEventFeed(g, -1).length, 0);
-  g.noteEvents = Array.from({ length:12 }, (_, i) => ({ id:`note-${String(i).padStart(2,'0')}`, type:'note', playerId:a.id, note:'Notiz', createdAt:'2026-10-01T10:07:00Z' }));
+  // Notizen werden nicht mehr angezeigt.
+  g.noteEvents = [{ id:'note', type:'note', playerId:a.id, note:'Notiz', createdAt:'2026-10-01T10:09:00Z' }];
+  assert.ok(!buildTvEventFeed(g, 100).some(e => e.id === 'note'));
+  g.timeEvents.push(...Array.from({ length:12 }, (_, i) => ({ id:`p-${String(i).padStart(2,'0')}`, type:'time', action:'turn-pause', playerId:a.id, createdAt:'2026-10-01T10:07:00Z' })));
   assert.equal(buildTvEventFeed(g).length, 8, 'Standard: acht Eintraege');
-  assert.equal(buildTvEventFeed(g, 100).length, 18, 'View only: scrollbare Liste mit allen Eintraegen');
-  assert.equal(buildTvEventFeed(g)[0].id, 'note-11');
+  assert.equal(buildTvEventFeed(g, 100).length, 17, 'View only: scrollbare Liste mit allen Eintraegen');
+  assert.equal(buildTvEventFeed(g)[0].id, 'p-11');
   const before = JSON.stringify(g); buildTvEventFeed(g); getDeficitInfo(g);
   assert.equal(JSON.stringify(g), before, 'Pure derivations must not mutate the source');
 };

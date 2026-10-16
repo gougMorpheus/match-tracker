@@ -32,7 +32,7 @@ export const PasswordDialog = ({
             <p className="muted-copy">Passwort erforderlich</p>
           </div>
           <button type="button" className="ghost-button compact-button" onClick={onClose}>
-            Schliessen
+            Schließen
           </button>
         </div>
         <label className="field">

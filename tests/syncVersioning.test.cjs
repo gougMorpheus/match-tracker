@@ -33,7 +33,7 @@ const runSyncVersioningTests = async () => {
     details: JSON.stringify({ kind: 'flow', game_id: 'g1', expected: 2, current: 3 }) });
   assert.deepEqual(conflict, { kind: 'flow', gameId: 'g1', expected: 2, current: 3 });
   assert.equal(sv.parseSyncConflict({ status: 401, message: 'permission denied' }), null);
-  assert.match(sv.formatConflictNotice(2), /2 lokale Aenderungen/);
+  assert.match(sv.formatConflictNotice(2), /2 lokale Änderungen/);
 
   // Aktionsgruppen
   assert.ok(sv.isSameSyncBatch({ gameId: 'g', batchId: 'b1', createdAt: 'x' }, { gameId: 'g', batchId: 'b1', createdAt: 'y' }));

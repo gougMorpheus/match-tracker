@@ -142,3 +142,11 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 
 - Highlights (Nachtrag 15.10.): Führungswechsel/Ausgleich für Liste/Verlauf pro Punkte-Event (`deriveScoreLeadHighlights`), übrige Highlights an Phasengrenzen. Seit PR #12 nutzt auch die große TV-Einblendung `deriveScoreLeadHighlights`: neue Führungswechsel/Ausgleiche nach jedem gültigen Punkte-Event (nur Events, die beim letzten Stand noch nicht existierten), Undo entfernt die Einblendung aus der Queue (auch die sichtbare), von schnell aufeinanderfolgenden Punkte-Highlights wartet nur das neueste, die sichtbare läuft ihre 4 s zu Ende (`enqueueTvHighlights`, max. 3). Phasengrenzen liefern nur noch die übrigen Highlights.
 - Mobil (`orientation: portrait`, ≤900 px Breite oder ≤500 px Höhe): Zeilen in „Letzte Ereignisse“ nach Inhalt (min. 36 px), Liste feste Höhe `min(60vh, 440px)` und scrollbar. Desktop unverändert 12,5 %.
+
+## Schritt 1 (16.10.2026)
+
+- Anzeige-Bündelung `src/utils/eventGrouping.ts` (`groupDisplayEvents`): genutzt von `buildTvEventFeed` und vom Verlauf in `GamePage`. Auto-CP = cp gained 1 mit Zeitpunkt + Runde/Zug eines turn-start. Gruppen-Schlüssel pro Zug: `cp|player|r|t`, `score|type|player|r|t`; ohne Zug nur direkt aufeinanderfolgende gleiche. Reine Ableitung, Events unverändert.
+- Notizen: keine UI mehr (Menü, Dialoge, Eingabe, Anzeige in TV/Verlauf/Feed). Daten (`event_type = note`, `events.note`) bleiben. `games.notes` ist Metadaten-JSON (optionsMeta usw.), nicht die Nutzer-Notizen.
+- Menü im Spiel: Navigation (Main, Neues Spiel, Statistik), Optionen (Verlauf, Link teilen, Einstellungen, Folgen, Notifications, Spiel beenden/löschen bzw. Entsperren). Kein Scoreboard mehr (GameOverview-Modal ist nicht mehr erreichbar).
+- Push-Hinweis: `getPushHint(status, isIos, context, deliveryAvailable)`; bis `PUSH_DELIVERY_AVAILABLE = true` nur ein Hinweis.
+- Status-Chip Zuschaueransicht: `getTvStatusLabel` (tvDashboard.ts).
