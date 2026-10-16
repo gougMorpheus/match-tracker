@@ -132,3 +132,20 @@ export const FLOW_EVENT_TYPES = new Set(["game-start", "game-end", "setup-start"
 export const resolveOwnRetryResult = (result: SyncRpcResult, baseFlowVersion: number, eventType: string): SyncRpcResult =>
   result.noop && !result.matched && FLOW_EVENT_TYPES.has(eventType) && result.flow_version === baseFlowVersion + 1
     ? { ...result, matched: true } : result;
+
+// Abgleich gegen eigenes Schreiben absichern ("Spiel nicht gefunden" direkt nach dem Anlegen):
+// Ein Zaehler steigt bei jedem eigenen Schreiben (Queue-Eintrag abgearbeitet) und beim lokalen Anlegen.
+// Hat er sich waehrend eines Ladens geaendert, ist die Antwort evtl. vor dem Speichern gelesen -> verwerfen, neu laden.
+export const isPullOutdated = (pullStartGeneration: number, currentGeneration: number): boolean =>
+  currentGeneration !== pullStartGeneration;
+
+// Zweite Sicherung: Ein lokal angelegtes Spiel, das in der Serverantwort fehlt, nur verwerfen, wenn das Laden NACH
+// dem letzten eigenen Speichern dieses Spiels gestartet wurde (Speicher-Generation <= Start-Generation).
+export const keepLocallyCreatedGames = <T extends { id: string }>(
+  merged: T[], localGames: T[], lastOwnSaveGeneration: ReadonlyMap<string, number>, pullStartGeneration: number
+): T[] => {
+  const present = new Set(merged.map((game) => game.id));
+  const kept = localGames.filter((game) => !present.has(game.id)
+    && (lastOwnSaveGeneration.get(game.id) ?? Number.NEGATIVE_INFINITY) > pullStartGeneration);
+  return kept.length ? [...merged, ...kept] : merged;
+};

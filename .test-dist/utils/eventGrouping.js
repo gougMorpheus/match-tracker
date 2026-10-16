@@ -5,7 +5,6 @@ const eventOrder_1 = require("./eventOrder");
 // Gleicher Zeitpunkt: zentrale logische Reihenfolge (eventOrder.ts), z. B. Zug Ende, ★ Runde abgeschlossen, Runde beginnt, Zug Start, Pause.
 const getSameTimeRank = (e) => (0, eventOrder_1.getLogicalRank)(e);
 exports.getSameTimeRank = getSameTimeRank;
-const byTimeAsc = (a, b) => (0, eventOrder_1.compareEventsAsc)(a, b);
 const hasTurn = (e) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
 // Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
 // Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
@@ -34,7 +33,8 @@ const findAutoCommandPoints = (asc, awardedTurns) => {
 };
 exports.findAutoCommandPoints = findAutoCommandPoints;
 const groupDisplayEvents = (events, awardedTurns) => {
-    const asc = [...events].sort(byTimeAsc);
+    const order = (0, eventOrder_1.createEventComparators)(events);
+    const asc = [...events].sort(order.asc);
     const autoCp = (0, exports.findAutoCommandPoints)(asc, awardedTurns);
     const groups = [];
     const buckets = new Map();
@@ -91,7 +91,7 @@ const groupDisplayEvents = (events, awardedTurns) => {
         turnStartGroups.get(start.id)?.autoCp.push(cp);
     }
     // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event; Gleichstand nach logischer Reihenfolge (umgekehrt).
-    return groups.sort((a, b) => (0, eventOrder_1.compareEventsDesc)({ ...a.latest, createdAt: a.createdAt }, { ...b.latest, createdAt: b.createdAt }));
+    return groups.sort((a, b) => order.desc({ ...a.latest, createdAt: a.createdAt }, { ...b.latest, createdAt: b.createdAt }));
 };
 exports.groupDisplayEvents = groupDisplayEvents;
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");

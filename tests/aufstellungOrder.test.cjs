@@ -72,9 +72,9 @@ const runAufstellungOrderTests = async () => {
   assert.deepEqual([...timeEvents].sort(compareEventsAsc).map((e) => e.action), ["turn-start", "turn-pause"]);
   // Alle Anzeige-/Push-Stellen nutzen die zentrale Funktion.
   const src = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
-  assert.ok(src("src/pages/GamePage.tsx").includes(".sort(compareEventsDesc)"));
+  assert.ok(src("src/pages/GamePage.tsx").includes("sortEventsNewestFirst(["));
   assert.ok(src("src/utils/tvHighlights.ts").includes(".sort(compareEventsAsc)"));
   assert.ok(src("src/utils/pushHighlights.ts").includes(".sort(compareEventsAsc)"));
-  assert.ok(src("src/utils/eventGrouping.ts").includes("compareEventsDesc("));
+  assert.ok(src("src/utils/eventGrouping.ts").includes("createEventComparators(events)"));
 };
 module.exports = { runAufstellungOrderTests };

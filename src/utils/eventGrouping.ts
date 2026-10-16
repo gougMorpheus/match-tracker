@@ -1,4 +1,4 @@
-import { compareEventsAsc, compareEventsDesc, getLogicalRank, type LogicallyOrderable } from "./eventOrder";
+import { createEventComparators, getLogicalRank, type LogicallyOrderable } from "./eventOrder";
 // Buendelung fuer die ANZEIGE von "Letzte Ereignisse" und Verlauf. Gespeicherte Events bleiben unveraendert;
 // alles wird bei jeder Aenderung (auch Undo des letzten Einzel-Events) neu aus den Events berechnet.
 // Regeln:
@@ -42,7 +42,6 @@ export interface EventGroup<T extends GroupableEvent> {
 
 // Gleicher Zeitpunkt: zentrale logische Reihenfolge (eventOrder.ts), z. B. Zug Ende, ★ Runde abgeschlossen, Runde beginnt, Zug Start, Pause.
 export const getSameTimeRank = (e: { id: string; kind?: string; timeAction?: string }): number => getLogicalRank(e as LogicallyOrderable);
-const byTimeAsc = (a: GroupableEvent, b: GroupableEvent) => compareEventsAsc(a, b);
 const hasTurn = (e: GroupableEvent) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
 // Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
 // Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
@@ -67,7 +66,8 @@ export const findAutoCommandPoints = <T extends GroupableEvent>(asc: T[], awarde
 };
 
 export const groupDisplayEvents = <T extends GroupableEvent>(events: T[], awardedTurns?: Record<string, boolean>): EventGroup<T>[] => {
-  const asc = [...events].sort(byTimeAsc);
+  const order = createEventComparators(events);
+  const asc = [...events].sort(order.asc);
   const autoCp = findAutoCommandPoints(asc, awardedTurns);
   const groups: EventGroup<T>[] = [];
   const buckets = new Map<string, EventGroup<T>>();
@@ -103,7 +103,7 @@ export const groupDisplayEvents = <T extends GroupableEvent>(events: T[], awarde
     turnStartGroups.get(start.id)?.autoCp.push(cp);
   }
   // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event; Gleichstand nach logischer Reihenfolge (umgekehrt).
-  return groups.sort((a, b) => compareEventsDesc({ ...a.latest, createdAt: a.createdAt }, { ...b.latest, createdAt: b.createdAt }));
+  return groups.sort((a, b) => order.desc({ ...a.latest, createdAt: a.createdAt }, { ...b.latest, createdAt: b.createdAt }));
 };
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");
