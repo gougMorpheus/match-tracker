@@ -16,6 +16,13 @@ export interface PushDispatchDeps {
 }
 export interface PushDispatchResult { status: string; candidates: number; claimed: string[]; recipients: number; delivered: number; failed: number; gone: number }
 
+// Testspiele: alle Spielernamen beginnen mit "ZZ" -> kein Push (kein Claim, keine Dedupe-Zeile, kein Versand).
+// "Statistik: Nicht zaehlen" allein ist KEIN Ausschlussgrund; Spiele mit mindestens einem echten Spieler werden gepusht.
+export const isZzOnlyGame = (row: Pick<SupabaseGameRecord, "player1_name" | "player2_name">): boolean => {
+  const names = [row.player1_name, row.player2_name].map((n) => (n ?? "").trim());
+  return names.every((n) => n.startsWith("ZZ"));
+};
+
 export const toPushPayload = (m: PushMessage): string =>
   JSON.stringify({ title: m.title, body: m.body, gameId: m.gameId, tag: `${m.gameId}:${m.key}`, url: m.url });
 
@@ -24,6 +31,7 @@ export const runPushDispatch = async (gameId: string, eventId: string, deps: Pus
   const loaded = await deps.loadGame(gameId);
   if (!loaded) return empty("no-game");
   if (isSupabaseGameDeleted(loaded.row)) return empty("deleted");
+  if (isZzOnlyGame(loaded.row)) return empty("test-game");
   const game = buildGameFromRows(loaded.row, loaded.events);
   const messages = selectPushMessagesForEvent(game, eventId, (deps.now ?? Date.now)());
   if (!messages.length) return empty("nothing");
