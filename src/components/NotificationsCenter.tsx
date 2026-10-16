@@ -45,7 +45,7 @@ export const NotificationsCenter = () => {
   }, [games, settings.autoFollowNew]);
 
   const status = getPushStatus(env);
-  const hint = getPushHint(status, env.isIos);
+  const hint = getPushHint(status, env.isIos, mode === "hint" ? "hint" : "overview");
   const followed = useMemo(() => {
     const byId = new Map(games.map((game) => [game.id, game]));
     return getFollowedGameIds(settings).map((id) => ({ id, game: byId.get(id), entry: settings.follows[id] }));
@@ -60,7 +60,7 @@ export const NotificationsCenter = () => {
 
   const hintBox = (
     <div className={`push-hint push-hint--${status}`} role="status">
-      <strong>{hint.title}</strong>
+      {hint.title ? <strong>{hint.title}</strong> : null}
       {hint.lines.map((line) => <p key={line}>{line}</p>)}
       {hint.canRequestPermission ? (
         <button type="button" className="primary-button compact-button" onClick={() => void requestPermission()}>
@@ -76,12 +76,11 @@ export const NotificationsCenter = () => {
         <div className="stack">
           <div className="list-row">
             <h2>{mode === "hint" ? "Spiel gefolgt" : "Notifications"}</h2>
-            <button type="button" className="ghost-button compact-button" onClick={() => setMode(null)}>Schliessen</button>
+            <button type="button" className="ghost-button compact-button" onClick={() => setMode(null)}>Schließen</button>
           </div>
           {mode === "hint" ? (
             <>
-              <p className="muted-copy">Gespeichert auf diesem Gerät. Ohne Login, gilt nur für dieses Gerät.</p>
-              {hintBox}
+                            {hintBox}
               <div className="button-row button-row--compact">
                 <button type="button" className="secondary-button compact-button" onClick={() => setMode("overview")}>Übersicht öffnen</button>
               </div>
@@ -113,7 +112,7 @@ export const NotificationsCenter = () => {
                         <button type="button" className="ghost-button compact-button" onClick={() => { setMode(null); window.location.hash = `/game/${id}`; }}>Öffnen</button>
                       ) : null}
                       <button type="button" className="ghost-button compact-button" onClick={() => updatePushFollowSettings((current) => setGameFollowed(current, id, false))}>
-                        Nicht mehr folgen
+                        Entfolgen
                       </button>
                     </div>
                   </div>

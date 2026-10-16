@@ -53,8 +53,8 @@ const parseSyncConflict = (error) => {
 };
 exports.parseSyncConflict = parseSyncConflict;
 const formatConflictNotice = (droppedCount) => droppedCount === 1
-    ? "Konflikt: Ein anderes Geraet hat dieses Spiel gleichzeitig geaendert. 1 lokale Aenderung wurde verworfen, der aktuelle Stand ist geladen."
-    : `Konflikt: Ein anderes Geraet hat dieses Spiel gleichzeitig geaendert. ${droppedCount} lokale Aenderungen wurden verworfen, der aktuelle Stand ist geladen.`;
+    ? "Konflikt: Ein anderes Gerät hat dieses Spiel gleichzeitig geändert. 1 lokale Änderung wurde verworfen, der aktuelle Stand ist geladen."
+    : `Konflikt: Ein anderes Gerät hat dieses Spiel gleichzeitig geändert. ${droppedCount} lokale Änderungen wurden verworfen, der aktuelle Stand ist geladen.`;
 exports.formatConflictNotice = formatConflictNotice;
 // Schema-Pruefung: Server verlangt neuere App -> neu laden (einmal je Sitzung), sonst Hinweis.
 const decideSchemaUpdate = (minAppSchema, alreadyReloaded) => {

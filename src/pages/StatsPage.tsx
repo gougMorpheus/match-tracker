@@ -1333,7 +1333,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           </button>
           <FloatingMenu
             fixed
-            ariaLabel="Hauptmenue"
+            ariaLabel="Hauptmenü"
             sections={[
               {
                 label: "Navigation",
@@ -1360,7 +1360,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           <article className="notice-card notice-card--error">
             <div className="stack">
               <div>
-                <h2>Statistik nicht verfuegbar</h2>
+                <h2>Statistik nicht verfügbar</h2>
                 <p>{errorMessage}</p>
               </div>
               <button type="button" className="ghost-button" onClick={clearError}>
@@ -1557,7 +1557,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   ]}
                 />
                 <SingleLineChart
-                  title="Score ueber Zeit"
+                  title="Score über Zeit"
                   rows={scoreTrendRows}
                   emptyLabel="Noch keine Score-Daten vorhanden."
                   formatValue={(value) => value.toFixed(0)}
@@ -1584,7 +1584,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   ]}
                 />
                 <SingleLineChart
-                  title="Dauer ueber Zeit"
+                  title="Dauer über Zeit"
                   rows={durationTrendRows}
                   emptyLabel="Noch keine Dauer-Daten vorhanden."
                   formatValue={formatDuration}
@@ -1593,7 +1593,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
             </CollapsibleSection>
 
             {false ? <CollapsibleSection
-              title="Uebersicht"
+              title="Übersicht"
               helper="Kompakte Kennzahlen zum gefilterten Pool"
               count={overview.games}
               open={openSections.overview}
@@ -2138,7 +2138,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                     scaleByValueOnly
                   />
                   <SingleLineChart
-                    title="Rundendauer ueber Zeit"
+                    title="Rundendauer über Zeit"
                     rows={roundDurationTrendRows}
                     emptyLabel="Noch keine Rundendauer-Daten vorhanden."
                     formatValue={formatDuration}
@@ -2170,7 +2170,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
             </CollapsibleSection>
 
             <CollapsibleSection
-              title="Primaermissionen"
+              title="Primärmissionen"
               helper="Leader, Winrate, Spiele, Score, CP und Zeit"
               count={missionSummaries.length}
               open={openSections.missions}
@@ -2267,7 +2267,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
               onToggle={() => toggleSection("records")}
             >
               <div className="record-grid">
-                {renderTurnRecordCard(turnRecords.longestTurn, "Laengster Zug")}
+                {renderTurnRecordCard(turnRecords.longestTurn, "Längster Zug")}
                 {renderTurnRecordCard(turnRecords.fastestTurn, "Schnellster Zug", "record-card--accent")}
                 {renderTurnRecordCard(turnRecords.highestScoringTurn, "Punktreichster Zug", "record-card--warning")}
               </div>
@@ -2276,7 +2276,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
           </>
         ) : (
           <article className="empty-state">
-            <h2>Keine Statistik verfuegbar</h2>
+            <h2>Keine Statistik verfügbar</h2>
             <p>Mit den aktuellen Filtern wurden keine Spiele gefunden.</p>
           </article>
         )}
@@ -2288,7 +2288,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
             <div className="stack">
               <div className="list-row">
                 <div>
-                  <h2>Spiel auswaehlen</h2>
+                  <h2>Spiel auswählen</h2>
                   <p className="muted-copy">{filteredGames.length} Treffer</p>
                 </div>
                 <button
@@ -2296,7 +2296,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                   className="ghost-button compact-button"
                   onClick={() => setGamePickerOpen(false)}
                 >
-                  Schliessen
+                  Schließen
                 </button>
               </div>
               <div className="modal-list">

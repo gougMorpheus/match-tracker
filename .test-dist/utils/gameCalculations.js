@@ -187,10 +187,10 @@ const createStatsEligibilityReport = (game) => {
                 countedTurns,
                 excludedTurns,
                 reasons: area === "cp"
-                    ? ["CP-Events zaehlen nur in zeitlich validen oder manuell eingeschlossenen Zuegen"]
+                    ? ["CP-Events zählen nur in zeitlich validen oder manuell eingeschlossenen Zügen"]
                     : area === "time"
                         ? ["Zeitwertung nutzt die Mindestdauer je Zug"]
-                        : ["Score-/Notiz-Events oder verwertbare Dauer machen Zuege wertbar"]
+                        : ["Score-/Notiz-Events oder verwertbare Dauer machen Züge wertbar"]
             }
         ];
     }));

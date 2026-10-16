@@ -4,7 +4,7 @@ import { TvEventFeed } from "./TvEventFeed";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { useGameStore } from "../store/GameStore";
 import { getPlayerColors } from "../data/factionColors";
-import { TV_FEED_SCROLL_LIMIT, buildTvEventFeed, getDeficitInfo } from "../utils/tvDashboard";
+import { TV_FEED_SCROLL_LIMIT, buildTvEventFeed, getDeficitInfo, getTvStatusLabel } from "../utils/tvDashboard";
 import { getGameOutcome, getHeadToHead, getPlayerWinRate } from "../utils/headToHead";
 import { createTvSnapshot, deriveGameHighlights, deriveScoreLeadHighlights, detectTvHighlights, enqueueTvHighlights,
   findNewScoreLeadHighlights, getScoreEventIds, reconcileTvHighlightQueue, SCORE_DRIVEN_KINDS, type TvSnapshot, type TvHighlight } from "../utils/tvHighlights";
@@ -91,7 +91,7 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
   const turn = getLatestTurn(game);
   const timeout = isTimeoutActive(game) && !completed;
   const running = !completed && (isSetupRunning(game) || Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn)));
-  const status = completed ? "Beendet" : timeout ? "Time-out" : running ? "Läuft" : game.startedAt ? "Pausiert" : "Bereit";
+  const status = getTvStatusLabel({ completed, timeout, running, started: Boolean(game.startedAt), hasTurn: Boolean(turn), turnMs: turn ? getTurnDurationMs(turn, game) : 0 });
   const phase = completed ? "Spiel beendet" : turn ? `Runde ${getCurrentRoundNumber(game)} · Zug ${getCurrentTurnNumber(game)}` : "Aufstellung";
   const phaseMs = timeout ? getTimeoutDurationMs(game) : turn ? getTurnDurationMs(turn, game) : getSetupDurationMs(game);
   const fullscreenSupported = typeof document !== "undefined" && Boolean(
@@ -228,6 +228,10 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
           <h2 className="tv-phase__title">{phase}</h2><span className={`tv-chip${running && !timeout ? " tv-chip--running" : ""}`}>{status} · View only</span>
           <div className="tv-phase__clock"><span>{timeout ? "Time-out" : turn ? completed ? "Letzte Zugzeit" : "Laufende Zugzeit" : "Aufstellungszeit"}</span><strong>{clock(phaseMs)}</strong></div>
           <div className="tv-deficit"><strong>{completed ? result : deficit.text}</strong>{!completed && deficit.perRound !== null && <span>≈ {deficit.perRound} VP pro verbleibender Runde nötig</span>}</div>
+          <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
+            {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>{isFullscreen ? "Full screen verlassen" : "Full screen"}</button> : null}
+            {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
+          </nav>
         </section>
         {renderPlayer(1)}
         <section className="tv-panel tv-chart">
@@ -273,10 +277,6 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
         </section>
       </main>
       {menu ? <div className="tv-game__menu">{menu}</div> : null}
-      <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
-        {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>{isFullscreen ? "Full screen verlassen" : "Full screen"}</button> : null}
-        {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
-      </nav>
       {activeHighlight && <div key={activeHighlight.id} className="tv-highlight" role="status" data-kind={activeHighlight.kind}
         style={{ "--player-color": colors[Math.max(0, game.players.findIndex(p => p.id === activeHighlight.playerId))] } as CSSProperties}>
         <div className="tv-highlight__card"><span className="tv-eyebrow">BIG MOMENT</span><h2>{activeHighlight.title}</h2><p>{activeHighlight.subtitle}</p></div>

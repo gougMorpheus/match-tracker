@@ -67,17 +67,17 @@ export const GameMetaFields = ({
       value={value.deployment}
       options={deploymentOptions}
       disabled={disabled}
-      selectPlaceholder="Aufstellung waehlen"
+      selectPlaceholder="Aufstellung wählen"
       inputPlaceholder="Neue Aufstellung eingeben"
       onChange={(nextValue) => onChange("deployment", nextValue)}
     />
     <SelectOrCreateField
-      label="Primaermission (optional)"
+      label="Primärmission (optional)"
       value={value.primaryMission}
       options={primaryMissionOptions}
       disabled={disabled}
-      selectPlaceholder="Primaermission waehlen"
-      inputPlaceholder="Neue Primaermission eingeben"
+      selectPlaceholder="Primärmission wählen"
+      inputPlaceholder="Neue Primärmission eingeben"
       onChange={(nextValue) => onChange("primaryMission", nextValue)}
     />
 
@@ -119,7 +119,7 @@ export const GameMetaFields = ({
         disabled={disabled}
         onChange={(event) => onChange("defenderSlot", event.target.value as CreateGameInput["defenderSlot"])}
       >
-        <option value="">Bitte auswaehlen</option>
+        <option value="">Bitte auswählen</option>
         <option value="player1">{playerOneLabel}</option>
         <option value="player2">{playerTwoLabel}</option>
       </select>
@@ -133,7 +133,7 @@ export const GameMetaFields = ({
         disabled={disabled}
         onChange={(event) => onChange("startingSlot", event.target.value as CreateGameInput["startingSlot"])}
       >
-        <option value="">Bitte auswaehlen</option>
+        <option value="">Bitte auswählen</option>
         <option value="player1">{playerOneLabel}</option>
         <option value="player2">{playerTwoLabel}</option>
       </select>

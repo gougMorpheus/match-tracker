@@ -36,7 +36,7 @@ export const GamePlayerFields = ({
       options={playerOptions}
       required
       disabled={disabled}
-      selectPlaceholder="Spieler waehlen"
+      selectPlaceholder="Spieler wählen"
       inputPlaceholder="Neuen Namen eingeben"
       onChange={onNameChange}
       onSelectOption={onSelectRememberedName}
@@ -44,7 +44,7 @@ export const GamePlayerFields = ({
     <label className="field">
       <span>Armee</span>
       <select required value={armyValue} onChange={(event) => onArmyChange(event.target.value)} disabled={disabled}>
-        <option value="">Armee waehlen</option>
+        <option value="">Armee wählen</option>
         {ARMY_OPTIONS.map((army) => (
           <option key={army} value={army}>
             {army}
@@ -57,7 +57,7 @@ export const GamePlayerFields = ({
       value={detachmentValue}
       options={detachmentOptions}
       disabled={disabled}
-      selectPlaceholder="Detachment waehlen"
+      selectPlaceholder="Detachment wählen"
       inputPlaceholder="Neues Detachment eingeben"
       onChange={onDetachmentChange}
     />

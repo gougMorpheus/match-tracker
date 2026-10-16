@@ -94,7 +94,7 @@ const runTvGameViewTests = () => {
     assert.match(content(tree),/Letzter Zug · Bob/);
     // TV-Abschlussansicht: nur Ansehen, kein Bearbeiten/Wiedereroeffnen/Loeschen.
     assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Full screen']);
-    assert.doesNotMatch(content(tree),/eroeffnen|loeschen|Bearbeiten|Passwort/i);
+    assert.doesNotMatch(content(tree),/eroeffnen|eröffnen|loeschen|löschen|Bearbeiten|Passwort/i);
     // Spielmenue (beendete Spiele) wird nur angezeigt, wenn uebergeben.
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-game__menu').length,0);
     cursor = 0; const withMenu = TvGameView({game:finished,onExit:()=>{},menu:{type:'menu',props:{}}}); while (pending.length) pending.shift()();

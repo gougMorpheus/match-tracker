@@ -46,3 +46,14 @@ export const buildTvEventFeed = (game: Game, limit = TV_EVENT_LIMIT,
     .slice(0, Math.max(0, Math.floor(limit)))
     .map(e => ({ id: e.id, createdAt: e.createdAt, text: e.text, time: formatClockTime(e.createdAt), ...(e.kind ? { kind: e.kind } : {}) }));
 };
+
+// Status-Chip der Zuschaueransicht. Der Zug startet nach "Weiter" aus der Aufstellung bewusst pausiert;
+// solange noch keine Zugzeit gelaufen ist, heisst das "Zug noch nicht gestartet" statt "Pausiert".
+export const getTvStatusLabel = (s: { completed: boolean; timeout: boolean; running: boolean; started: boolean; hasTurn: boolean; turnMs: number }): string => {
+  if (s.completed) return "Beendet";
+  if (s.timeout) return "Time-out";
+  if (s.running) return "Läuft";
+  if (!s.started) return "Bereit";
+  if (s.hasTurn && s.turnMs < 1000) return "Zug noch nicht gestartet";
+  return "Pausiert";
+};

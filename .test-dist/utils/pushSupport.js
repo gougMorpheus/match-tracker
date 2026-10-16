@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.detectPushEnvironment = exports.getPushHint = exports.getPushStatus = exports.PUSH_DELIVERY_AVAILABLE = void 0;
+exports.detectPushEnvironment = exports.getPushHint = exports.PENDING_HINT_OVERVIEW = exports.PENDING_HINT_FOLLOWED = exports.getPushStatus = exports.PUSH_DELIVERY_AVAILABLE = void 0;
 // Solange Stufe (b) (Versand ueber Netlify Function + DB-Abos) fehlt: ehrlich "kommt bald".
 exports.PUSH_DELIVERY_AVAILABLE = false;
 const getPushStatus = (env) => {
@@ -17,8 +17,13 @@ const getPushStatus = (env) => {
     return "ask";
 };
 exports.getPushStatus = getPushStatus;
-const COMING_SOON = "Notifications kommen bald: Das Folgen wird schon gespeichert, der Versand der Ticker-Meldungen wird gerade eingerichtet.";
-const getPushHint = (status, isIos = false) => {
+// Solange Push nicht live ist: genau EIN Hinweis, keine (widerspruechlichen) Statushinweise wie "blockiert".
+exports.PENDING_HINT_FOLLOWED = "Du folgst dem Spiel. Benachrichtigungen aufs Handy kommen in einem nächsten Schritt.";
+exports.PENDING_HINT_OVERVIEW = "Benachrichtigungen aufs Handy kommen in einem nächsten Schritt. Gefolgte Spiele werden schon auf diesem Gerät gespeichert.";
+const getPushHint = (status, isIos = false, context = "overview", deliveryAvailable = exports.PUSH_DELIVERY_AVAILABLE) => {
+    if (!deliveryAvailable) {
+        return { title: "", lines: [context === "hint" ? exports.PENDING_HINT_FOLLOWED : exports.PENDING_HINT_OVERVIEW], canRequestPermission: false };
+    }
     switch (status) {
         case "ios-install":
             return {
@@ -26,17 +31,16 @@ const getPushHint = (status, isIos = false) => {
                 lines: [
                     "Auf iPhone und iPad gibt es Notifications nur für installierte Web-Apps (ab iOS 16.4).",
                     "In Safari unten auf „Teilen“ (Quadrat mit Pfeil) tippen, dann „Zum Home-Bildschirm“ und „Hinzufügen“.",
-                    "Danach den Match-Tracker über das neue Symbol auf dem Home-Bildschirm öffnen.",
-                    COMING_SOON
+                    "Danach den Match-Tracker über das neue Symbol auf dem Home-Bildschirm öffnen."
                 ],
                 canRequestPermission: false
             };
         case "insecure":
-            return { title: "Nur über https", lines: ["Notifications funktionieren nur über die sichere Adresse (https).", COMING_SOON], canRequestPermission: false };
+            return { title: "Nur über https", lines: ["Notifications funktionieren nur über die sichere Adresse (https)."], canRequestPermission: false };
         case "unsupported":
             return {
                 title: "Dieser Browser kann keine Notifications",
-                lines: ["Bitte einen aktuellen Browser nutzen, z. B. Chrome, Edge, Firefox oder Safari (auf dem iPhone als Home-Bildschirm-App).", COMING_SOON],
+                lines: ["Bitte einen aktuellen Browser nutzen, z. B. Chrome, Edge, Firefox oder Safari (auf dem iPhone als Home-Bildschirm-App)."],
                 canRequestPermission: false
             };
         case "denied":
@@ -45,20 +49,19 @@ const getPushHint = (status, isIos = false) => {
                 lines: [
                     isIos
                         ? "iPhone: Einstellungen → Mitteilungen → Match-Tracker → „Mitteilungen erlauben“ einschalten."
-                        : "Im Browser links neben der Adresse auf das Schloss bzw. die Seiteneinstellungen tippen und „Benachrichtigungen“ auf „Zulassen“ stellen (so heißt die Einstellung im Browser). Danach die Seite neu laden.",
-                    COMING_SOON
+                        : "Im Browser links neben der Adresse auf das Schloss bzw. die Seiteneinstellungen tippen und „Benachrichtigungen“ auf „Zulassen“ stellen (so heißt die Einstellung im Browser). Danach die Seite neu laden."
                 ],
                 canRequestPermission: false
             };
         case "ask":
             return {
                 title: "Notifications erlauben",
-                lines: ["Du kannst Notifications schon jetzt erlauben.", COMING_SOON],
+                lines: ["Du kannst Notifications schon jetzt erlauben."],
                 canRequestPermission: true
             };
         case "granted":
         default:
-            return { title: "Notifications erlaubt", lines: [COMING_SOON], canRequestPermission: false };
+            return { title: "Notifications erlaubt", lines: ["Du bekommst Meldungen zu den Spielen, denen du folgst."], canRequestPermission: false };
     }
 };
 exports.getPushHint = getPushHint;

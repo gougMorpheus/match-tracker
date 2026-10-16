@@ -60,11 +60,11 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
             onClick={() => setFiltersOpen((current) => !current)}
             aria-expanded={filtersOpen}
           >
-            {filtersOpen ? "Filter schliessen" : "Filter"}
+            {filtersOpen ? "Filter schließen" : "Filter"}
           </button>
           <FloatingMenu
             fixed
-            ariaLabel="Hauptmenue"
+            ariaLabel="Hauptmenü"
             sections={[
               {
                 label: "Navigation",

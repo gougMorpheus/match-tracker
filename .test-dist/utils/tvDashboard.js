@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildTvEventFeed = exports.getDeficitInfo = exports.TV_FEED_SCROLL_LIMIT = exports.TV_EVENT_LIMIT = void 0;
+exports.getTvStatusLabel = exports.buildTvEventFeed = exports.getDeficitInfo = exports.TV_FEED_SCROLL_LIMIT = exports.TV_EVENT_LIMIT = void 0;
 const gameCalculations_1 = require("./gameCalculations");
 const time_1 = require("./time");
 exports.TV_EVENT_LIMIT = 8;
@@ -65,3 +65,19 @@ const buildTvEventFeed = (game, limit = exports.TV_EVENT_LIMIT, highlights = [])
         .map(e => ({ id: e.id, createdAt: e.createdAt, text: e.text, time: (0, time_1.formatClockTime)(e.createdAt), ...(e.kind ? { kind: e.kind } : {}) }));
 };
 exports.buildTvEventFeed = buildTvEventFeed;
+// Status-Chip der Zuschaueransicht. Der Zug startet nach "Weiter" aus der Aufstellung bewusst pausiert;
+// solange noch keine Zugzeit gelaufen ist, heisst das "Zug noch nicht gestartet" statt "Pausiert".
+const getTvStatusLabel = (s) => {
+    if (s.completed)
+        return "Beendet";
+    if (s.timeout)
+        return "Time-out";
+    if (s.running)
+        return "Läuft";
+    if (!s.started)
+        return "Bereit";
+    if (s.hasTurn && s.turnMs < 1000)
+        return "Zug noch nicht gestartet";
+    return "Pausiert";
+};
+exports.getTvStatusLabel = getTvStatusLabel;

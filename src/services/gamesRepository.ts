@@ -660,7 +660,7 @@ const fetchGameRecordById = async (gameId: string): Promise<SupabaseGameRecord |
     .eq("id", gameId);
 
   if (error) {
-    throw new Error(`Spiel konnte nicht fuer Vergleich geladen werden: ${error.message}`);
+    throw new Error(`Spiel konnte nicht für Vergleich geladen werden: ${error.message}`);
   }
 
   const rows = Array.isArray(data) ? data : data ? [data] : [];
@@ -675,7 +675,7 @@ const fetchEventRecordById = async (eventId: string): Promise<SupabaseEventRecor
     .eq("id", eventId);
 
   if (error) {
-    throw new Error(`Event konnte nicht fuer Vergleich geladen werden: ${error.message}`);
+    throw new Error(`Event konnte nicht für Vergleich geladen werden: ${error.message}`);
   }
 
   const rows = Array.isArray(data) ? data : data ? [data] : [];
@@ -1499,7 +1499,7 @@ export const syncRepository = {
   revokeEvent(gameId: string, eventId: string, expectedFlowVersion: number,
     canWrite: () => boolean = () => true): Promise<SyncRpcResult> {
     return runSyncRpc("mt_revoke_event", { p_game_id: gameId, p_event_id: eventId, p_expected_flow: expectedFlowVersion },
-      canWrite, "Event konnte nicht zurueckgenommen werden");
+      canWrite, "Event konnte nicht zurückgenommen werden");
   },
   async deleteGame(gameId: string, canWrite: () => boolean = () => true): Promise<SyncRpcResult> {
     const gameRecord = await fetchGameRecordById(gameId);
@@ -1507,7 +1507,7 @@ export const syncRepository = {
       return { matched: true, noop: true };
     }
     return runSyncRpc("mt_delete_game", { p_game_id: gameId,
-      p_notes: serializeSoftDeletedNotes(gameRecord.notes, getNowIso()) }, canWrite, "Spiel konnte nicht geloescht werden");
+      p_notes: serializeSoftDeletedNotes(gameRecord.notes, getNowIso()) }, canWrite, "Spiel konnte nicht gelöscht werden");
   },
   async getSchemaInfo(): Promise<{ schema_version: number; min_app_schema: number } | null> {
     const { data, error } = await getSupabaseClient().rpc<{ schema_version: number; min_app_schema: number }>(
@@ -1559,7 +1559,7 @@ export const gamesRepository = {
     }
 
     if (isSupabaseGameDeleted(gameRecord)) {
-      throw new Error("Spiel wurde geloescht.");
+      throw new Error("Spiel wurde gelöscht.");
     }
 
     const events = await fetchEventsForGameIds([gameId]);
@@ -1768,7 +1768,7 @@ export const gamesRepository = {
     }
 
     if (error) {
-      throw new Error(`Spiel konnte nicht geloescht werden: ${error.message}`);
+      throw new Error(`Spiel konnte nicht gelöscht werden: ${error.message}`);
     }
   },
 
@@ -1851,7 +1851,7 @@ export const gamesRepository = {
     const { error } = await supabase.from("events").guardWrite(canWrite).delete().eq("id", eventId);
 
     if (error) {
-      throw new Error(`Event konnte nicht geloescht werden: ${error.message}`);
+      throw new Error(`Event konnte nicht gelöscht werden: ${error.message}`);
     }
   },
 

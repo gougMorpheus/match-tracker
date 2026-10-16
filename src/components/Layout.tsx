@@ -34,7 +34,7 @@ export const Layout = ({
   const { syncStatus, lastSyncAt, pendingSyncCount, retrySync } = useGameStore();
   const syncLabel = (() => {
     if (syncStatus === "syncing") {
-      return "Sync laeuft";
+      return "Sync läuft";
     }
     if (syncStatus === "offline") {
       return "Offline";
@@ -55,7 +55,7 @@ export const Layout = ({
           <div className="header-topline">
             {onBack ? (
               <button type="button" className="back-button" onClick={onBack}>
-                Zurueck
+                Zurück
               </button>
             ) : null}
             <p className="eyebrow">40K Match-Tracker</p>

@@ -265,7 +265,7 @@ const getLatestAddedEventId = (beforeGame: Game, afterGame: Game): string | null
 };
 
 const getTimeHistoryLabel = (baseLabel: string, turnRef?: TurnRef | null): string => {
-  if (baseLabel !== "Weiter" && baseLabel !== "Zurueck") {
+  if (baseLabel !== "Weiter" && baseLabel !== "Zurück") {
     return baseLabel;
   }
 
@@ -1588,7 +1588,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         turnNumber?: number;
         createdAt?: string;
       }>,
-      label = "Zeit geaendert",
+      label = "Zeit geändert",
       historyTurnRef?: TurnRef | null,
       kind: GameHistoryEntry["kind"] = "snapshot",
       recordHistory = true,
@@ -2172,7 +2172,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           enqueueTimeEvents(
             game,
             eventsToAdd,
-            "Zurueck",
+            "Zurück",
             currentTurn ?? targetTurn ?? null,
             recordHistory ? "rewind-turn" : "snapshot",
             recordHistory
@@ -2486,7 +2486,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             createReopenGameSyncQueueItem(gameId, getNowIso(), latestGameEndEvent?.id)
           )
         );
-        recordHistoryAction("Spiel wieder eroeffnet", game, syncedGame);
+        recordHistoryAction("Spiel wieder eröffnet", game, syncedGame);
         void flushSyncQueue();
       }),
     [flushSyncQueue, getGame, recordHistoryAction, replaceGame, runMutation, shouldBlockGameWrite, updateSyncQueue]
@@ -2531,7 +2531,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           throw new Error("Spiel nicht gefunden.");
         }
 
-        const label = `Eintrag geloescht: ${getEventActionLabel(currentGame, eventId)}`;
+        const label = `Eintrag gelöscht: ${getEventActionLabel(currentGame, eventId)}`;
         const nextGame = removeLocalEvent(currentGame, eventId);
         commitGameSnapshot(label, currentGame, nextGame);
         void flushSyncQueue();
@@ -2692,7 +2692,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       const buildDecision = decideBuildUpdate(currentBuild, liveBuild, queueRef.current.length);
       if (buildDecision === "reload" && reloadOnce(`build:${liveBuild}`)) return;
       setAppUpdateNotice(buildDecision === "notice"
-        ? "Neue App-Version verfuegbar. Sie wird geladen, sobald alle Aenderungen synchronisiert sind." : null);
+        ? "Neue App-Version verfügbar. Sie wird geladen, sobald alle Änderungen synchronisiert sind." : null);
     };
     void check();
     const interval = window.setInterval(() => void check(), 120000);

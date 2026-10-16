@@ -19,18 +19,18 @@ const parseImportedGames = (rawContent) => {
     if (Array.isArray(parsed)) {
         const games = parsed.filter(looksLikeGame);
         if (games.length !== parsed.length) {
-            throw new Error("Die Datei enthaelt ungueltige Spieleintraege.");
+            throw new Error("Die Datei enthält ungültige Spieleinträge.");
         }
         return { games };
     }
     if (isObject(parsed) && Array.isArray(parsed.games)) {
         const games = parsed.games.filter(looksLikeGame);
         if (games.length !== parsed.games.length) {
-            throw new Error("Die Datei enthaelt ungueltige Spieleintraege.");
+            throw new Error("Die Datei enthält ungültige Spieleinträge.");
         }
         return { games };
     }
-    throw new Error("Die Datei hat kein gueltiges Match-Tracker-Format.");
+    throw new Error("Die Datei hat kein gültiges Match-Tracker-Format.");
 };
 exports.parseImportedGames = parseImportedGames;
 const exportGamesAsJson = (games) => {

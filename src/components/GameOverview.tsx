@@ -1055,7 +1055,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
           aria-expanded={scoreTableOpen}
         >
           <span>Tabelle</span>
-          <strong>{scoreTableRows.length} Zuege</strong>
+          <strong>{scoreTableRows.length} Züge</strong>
           <span aria-hidden="true">{scoreTableOpen ? "Zu" : "Auf"}</span>
         </button>
         {scoreTableOpen ? (
@@ -1098,7 +1098,7 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
               </table>
             </div>
           ) : (
-            <p className="muted-copy">Noch keine Zuege vorhanden.</p>
+            <p className="muted-copy">Noch keine Züge vorhanden.</p>
           )
         ) : null}
       </article>

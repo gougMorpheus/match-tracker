@@ -68,8 +68,8 @@ export const parseSyncConflict = (error: { status?: number; code?: string; detai
 
 export const formatConflictNotice = (droppedCount: number): string =>
   droppedCount === 1
-    ? "Konflikt: Ein anderes Geraet hat dieses Spiel gleichzeitig geaendert. 1 lokale Aenderung wurde verworfen, der aktuelle Stand ist geladen."
-    : `Konflikt: Ein anderes Geraet hat dieses Spiel gleichzeitig geaendert. ${droppedCount} lokale Aenderungen wurden verworfen, der aktuelle Stand ist geladen.`;
+    ? "Konflikt: Ein anderes Gerät hat dieses Spiel gleichzeitig geändert. 1 lokale Änderung wurde verworfen, der aktuelle Stand ist geladen."
+    : `Konflikt: Ein anderes Gerät hat dieses Spiel gleichzeitig geändert. ${droppedCount} lokale Änderungen wurden verworfen, der aktuelle Stand ist geladen.`;
 
 export type AppUpdateDecision = "ok" | "reload" | "notice";
 
