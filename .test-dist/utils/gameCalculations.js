@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.isStatsEligibleGame = exports.getCountedRounds = exports.createStatsEligibilityReport = void 0;
 exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = void 0;
 exports.getTimeoutDurationMs = getTimeoutDurationMs;
+const timeEventOrder_1 = require("./timeEventOrder");
 const time_1 = require("./time");
 const time_2 = require("./time");
 const sumValues = (items) => items.reduce((total, item) => total + item.value, 0);
@@ -359,14 +360,14 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
         event.action === "setup-pause" ||
         event.action === "setup-resume" ||
         event.action === "round-start" ||
-        event.action === "turn-start")
-        .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+        event.action === "turn-start");
+    const orderedEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(setupEvents);
     let startedAt = null;
     let pauseStartedAt = null;
     let pausedDuration = 0;
     let total = 0;
     let setupClosed = false;
-    setupEvents.forEach((event) => {
+    orderedEvents.forEach((event) => {
         if (setupClosed) {
             return;
         }
@@ -425,7 +426,8 @@ const isSetupActive = (game) => {
         event.action === "setup-pause" ||
         event.action === "setup-resume")
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-    const latest = setupEvents[setupEvents.length - 1];
+    const orderedSetupEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(setupEvents);
+    const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
     return Boolean(setupEvents.length && latest?.action !== "setup-end");
 };
 exports.isSetupActive = isSetupActive;
@@ -436,7 +438,8 @@ const isSetupPaused = (game) => {
         event.action === "setup-pause" ||
         event.action === "setup-resume")
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-    const latest = setupEvents[setupEvents.length - 1];
+    const orderedSetupEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(setupEvents);
+    const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
     return latest?.action === "setup-pause";
 };
 exports.isSetupPaused = isSetupPaused;

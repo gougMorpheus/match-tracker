@@ -3680,7 +3680,7 @@ button.stats-table__row.is-active {
 .tv-game__controls { position: static; flex-shrink: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .5em; transition: opacity .2s; }
 .tv-game__controls button { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: .6em; padding: .35em .9em; font-size: var(--tv-small); }
 .tv-game__controls [role=status] { font-size: var(--tv-small); color: var(--muted); }
-.tv-game--idle .tv-game__controls { opacity: 0; pointer-events: none; }
+/* Full screen bleibt immer sichtbar (auch Touch, ohne Hover). */
 .tv-game:has(.tv-game__controls:focus-within) .tv-game__controls { opacity: 1; visibility: visible; pointer-events: auto; }
 .tv-highlight { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 96%, transparent); backdrop-filter: blur(10px); padding: 6vw; pointer-events: none; animation: tv-highlight-show 4s ease both; }
 .tv-highlight__card { width: 100%; text-align: center; padding: 4vw; min-width: 0; background: var(--bg); border: 2px solid var(--player-color); border-radius: 2vw; box-shadow: var(--shadow), 0 0 4vw color-mix(in srgb, var(--player-color) 20%, transparent); }

@@ -66,6 +66,7 @@ export const getTvStatusLabel = (s: { completed: boolean; timeout: boolean; runn
   if (s.timeout) return "Time-out";
   if (s.running) return "Läuft";
   if (!s.started) return "Bereit";
-  if (s.hasTurn && s.turnMs < 1000) return "Zug noch nicht gestartet";
+  // Pausiert, bevor ein Zug Zeit hatte (Aufstellung pausiert oder pausierter Zugstart): noch kein Zug gestartet.
+  if (!s.hasTurn || s.turnMs < 1000) return "Zug noch nicht gestartet";
   return "Pausiert";
 };

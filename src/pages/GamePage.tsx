@@ -1115,7 +1115,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       share: typeof nav.share === "function" ? (data) => nav.share!(data) : undefined,
       isMobile
     });
-    setShareNotice(shareResultMessage(result, url));
+    const message = shareResultMessage(result, url);
+    if (message) setShareNotice(message);
   };
   const openViewOnly = () => {
     setGameAccessMode(game.id, "view");

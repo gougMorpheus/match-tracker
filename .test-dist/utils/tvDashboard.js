@@ -71,7 +71,8 @@ const getTvStatusLabel = (s) => {
         return "Läuft";
     if (!s.started)
         return "Bereit";
-    if (s.hasTurn && s.turnMs < 1000)
+    // Pausiert, bevor ein Zug Zeit hatte (Aufstellung pausiert oder pausierter Zugstart): noch kein Zug gestartet.
+    if (!s.hasTurn || s.turnMs < 1000)
         return "Zug noch nicht gestartet";
     return "Pausiert";
 };

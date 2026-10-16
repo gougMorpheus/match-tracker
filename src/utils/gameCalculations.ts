@@ -1,3 +1,4 @@
+import { orderTimeEventsForEvaluation } from "./timeEventOrder";
 import { getNowIso } from "./time";
 import type {
   CommandPointEvent,
@@ -613,15 +614,15 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
         event.action === "setup-resume" ||
         event.action === "round-start" ||
         event.action === "turn-start"
-    )
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    );
+  const orderedEvents = orderTimeEventsForEvaluation(setupEvents);
   let startedAt: string | null = null;
   let pauseStartedAt: string | null = null;
   let pausedDuration = 0;
   let total = 0;
   let setupClosed = false;
 
-  setupEvents.forEach((event) => {
+  orderedEvents.forEach((event) => {
     if (setupClosed) {
       return;
     }
@@ -692,7 +693,8 @@ export const isSetupActive = (game: Game): boolean => {
         event.action === "setup-resume"
     )
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  const latest = setupEvents[setupEvents.length - 1];
+  const orderedSetupEvents = orderTimeEventsForEvaluation(setupEvents);
+  const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
 
   return Boolean(setupEvents.length && latest?.action !== "setup-end");
 };
@@ -707,7 +709,8 @@ export const isSetupPaused = (game: Game): boolean => {
         event.action === "setup-resume"
     )
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  const latest = setupEvents[setupEvents.length - 1];
+  const orderedSetupEvents = orderTimeEventsForEvaluation(setupEvents);
+  const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
 
   return latest?.action === "setup-pause";
 };

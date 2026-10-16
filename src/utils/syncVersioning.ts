@@ -98,3 +98,27 @@ export const isSameSyncBatch = (
   const delta = Math.abs(Date.parse(left.createdAt) - Date.parse(right.createdAt));
   return Number.isFinite(delta) && delta <= LEGACY_BATCH_WINDOW_MS;
 };
+
+// Fehlerbild 16.10. (Falschalarm "Konflikt: Ein anderes Geraet ..."): Ein Neuladen (Realtime/15-s-Takt) las den
+// Server vor dem eigenen Schreiben, kam aber erst danach zurueck und setzte die lokale Version wieder zurueck.
+// Die naechste Aenderung beruhte dann auf der alten Version und wurde als Konflikt verworfen.
+// Versionen steigen auf dem Server nur; ein Serverstand mit kleinerer Version als lokal bekannt ist veraltet
+// und darf den lokalen Stand nicht ersetzen. Fremde Aenderungen haben immer eine hoehere Version (Schutz bleibt).
+export const isStaleRemoteGame = (
+  local: { syncVersion?: number; syncFlowVersion?: number } | undefined,
+  remote: { syncVersion?: number; syncFlowVersion?: number }
+): boolean => {
+  if (!local) return false;
+  const lower = (l?: number, r?: number) => typeof l === "number" && typeof r === "number" && r < l;
+  return lower(local.syncVersion, remote.syncVersion) || lower(local.syncFlowVersion, remote.syncFlowVersion);
+};
+
+export const keepNewerLocalGames = <T extends { id: string; syncVersion?: number; syncFlowVersion?: number }>(
+  remoteGames: T[], localGames: T[]
+): T[] => {
+  const localById = new Map(localGames.map((game) => [game.id, game]));
+  return remoteGames.map((remote) => {
+    const local = localById.get(remote.id);
+    return local && isStaleRemoteGame(local, remote) ? local : remote;
+  });
+};

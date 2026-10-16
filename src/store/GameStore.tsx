@@ -3,6 +3,7 @@ import {
   decideBuildUpdate,
   decideSchemaUpdate,
   formatConflictNotice,
+  keepNewerLocalGames,
   getItemBaseFlowVersion,
   getItemBaseVersion,
   getQueuedMs,
@@ -797,7 +798,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     }
 
     try {
-      const remoteGames = await gamesRepository.listGames();
+      // Veraltete Antworten (vor dem eigenen Schreiben gelesen) ersetzen den neueren lokalen Stand nicht.
+      const remoteGames = keepNewerLocalGames(await gamesRepository.listGames(), gamesRef.current);
       holdBlockedLocalGames();
       const nextGames = mergeRemoteWithPending(remoteGames, gamesRef.current,
         queueRef.current.filter((item) => !isGameViewOnly(item.gameId)));

@@ -5,7 +5,7 @@ import {
   updatePushFollowSettings,
   usePushFollowSettings
 } from "../pwa/pushFollowStore";
-import { applyAutoFollow, getFollowedGameIds, setAutoFollowNew, setGameFollowed } from "../utils/pushFollow";
+import { applyAutoFollow, getFollowedGameIds, pruneDeletedFollows, setAutoFollowNew, setGameFollowed } from "../utils/pushFollow";
 import { detectPushEnvironment, getPushHint, getPushStatus } from "../utils/pushSupport";
 import { isGameCompletedForDisplay } from "../utils/gameAccessMode";
 import type { Game } from "../types/game";
@@ -14,7 +14,7 @@ const gameLabel = (game: Game) => `${game.players[0].name} vs. ${game.players[1]
 
 // Uebersicht "Notifications" (unter Optionen) und Hinweis nach "Folgen". Stufe a: nur lokal, kein Abo.
 export const NotificationsCenter = () => {
-  const { games } = useGameStore();
+  const { games, lastSyncAt } = useGameStore();
   const settings = usePushFollowSettings();
   const [mode, setMode] = useState<"overview" | "hint" | null>(null);
   const [env, setEnv] = useState(detectPushEnvironment);
@@ -38,6 +38,11 @@ export const NotificationsCenter = () => {
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
   }, [mode]);
+
+  // Geloeschte Spiele verschwinden aus den gefolgten Spielen, sobald die Liste frisch vom Server geladen ist.
+  useEffect(() => {
+    if (lastSyncAt) updatePushFollowSettings((current) => pruneDeletedFollows(current, games.map((game) => game.id)));
+  }, [games, lastSyncAt]);
 
   // Neuen Spielen automatisch folgen (nur Spiele, die nach dem Einschalten angelegt wurden).
   useEffect(() => {
