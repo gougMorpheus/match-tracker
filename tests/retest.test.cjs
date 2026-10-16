@@ -17,6 +17,13 @@ const runRetestTests = () => {
   assert.deepEqual(merged.map((g) => g.tag), ["lokal", "server"]);
   assert.equal(v.keepNewerLocalGames([{ id: "g", syncVersion: 4, syncFlowVersion: 9, tag: "fremd" }], [local])[0].tag, "fremd");
 
+  // Retry nach Netzfehler: erster Versuch war gespeichert -> noop, Server = Basis + 1 -> eigenes Schreiben.
+  assert.equal(v.resolveOwnRetryResult({ matched: false, noop: true, flow_version: 8 }, 7, "turn-pause").matched, true);
+  // Fremde Aenderung dazwischen (Basis + 2): bleibt unmatched (Konflikt bei der naechsten Ablauf-Aktion).
+  assert.equal(v.resolveOwnRetryResult({ matched: false, noop: true, flow_version: 9 }, 7, "turn-pause").matched, false);
+  assert.equal(v.resolveOwnRetryResult({ matched: false, noop: true, flow_version: 8 }, 7, "cp-gained").matched, false);
+  assert.equal(v.resolveOwnRetryResult({ matched: false, flow_version: 8 }, 7, "turn-pause").matched, false, "kein noop");
+
   // Geloeschte Spiele verschwinden aus den gefolgten Spielen.
   let s = f.createPushFollowSettings("dev", "2026-10-16T05:00:00.000Z");
   s = f.setGameFollowed(s, "a", true, "2026-10-16T05:00:01.000Z");

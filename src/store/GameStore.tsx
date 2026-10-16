@@ -4,6 +4,7 @@ import {
   decideSchemaUpdate,
   formatConflictNotice,
   keepNewerLocalGames,
+  resolveOwnRetryResult,
   getItemBaseFlowVersion,
   getItemBaseVersion,
   getQueuedMs,
@@ -927,8 +928,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             continue;
           }
 
-          const eventResult = applyResult(flowOnly(await syncRepository.putEvent(eventPayload, base.flowVersion,
-            getQueuedMs(nextItem.createdAt, getServerNow()), canWrite)));
+          const eventResult = applyResult(flowOnly(resolveOwnRetryResult(await syncRepository.putEvent(eventPayload, base.flowVersion,
+            getQueuedMs(nextItem.createdAt, getServerNow()), canWrite), base.flowVersion, eventPayload.event_type)));
           appliedEventsRef.current = [...appliedEventsRef.current.slice(-200), { gameId: nextItem.gameId,
             eventId: nextItem.eventId, batchId: nextItem.batchId, createdAt: nextItem.createdAt,
             flowVersion: eventResult.flowVersion }];

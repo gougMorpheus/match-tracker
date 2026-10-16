@@ -122,3 +122,13 @@ export const keepNewerLocalGames = <T extends { id: string; syncVersion?: number
     return local && isStaleRemoteGame(local, remote) ? local : remote;
   });
 };
+
+// Wiederholtes Senden (Retry nach Netzfehler), obwohl der erste Versuch schon gespeichert war: Der Server meldet
+// "noop" (identisches Ereignis existiert) und matched=false, weil unser eigener erster Versuch die Ablauf-Version
+// um 1 erhoeht hat. Ist die Serverversion genau Basis + 1, gab es ausser uns keine Aenderung: als eigenes
+// Schreiben werten (sonst fiele die naechste Aktion als Konflikt durch). Bei fremden Aenderungen (> Basis + 1) bleibt es ein Konflikt.
+export const FLOW_EVENT_TYPES = new Set(["game-start", "game-end", "setup-start", "setup-end", "setup-pause", "setup-resume",
+  "round-start", "round-end", "turn-start", "turn-end", "turn-pause", "turn-resume", "timeout-start", "timeout-end"]);
+export const resolveOwnRetryResult = (result: SyncRpcResult, baseFlowVersion: number, eventType: string): SyncRpcResult =>
+  result.noop && !result.matched && FLOW_EVENT_TYPES.has(eventType) && result.flow_version === baseFlowVersion + 1
+    ? { ...result, matched: true } : result;
