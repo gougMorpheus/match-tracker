@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFollowedGameIds = exports.applyAutoFollow = exports.setAutoFollowNew = exports.toggleGameFollowed = exports.setGameFollowed = exports.isFollowingGame = exports.savePushFollowSettings = exports.loadPushFollowSettings = exports.parsePushFollowSettings = exports.createPushFollowSettings = exports.PUSH_SETTINGS_KEY = void 0;
+exports.pruneDeletedFollows = exports.getFollowedGameIds = exports.applyAutoFollow = exports.setAutoFollowNew = exports.toggleGameFollowed = exports.setGameFollowed = exports.isFollowingGame = exports.savePushFollowSettings = exports.loadPushFollowSettings = exports.parsePushFollowSettings = exports.createPushFollowSettings = exports.PUSH_SETTINGS_KEY = void 0;
 const id_1 = require("./id");
 // Folge-Einstellungen pro Geraet (Stufe a: nur localStorage, kein Login).
 // Stufe (b) synchronisiert diese Struktur spaeter per device_id in die DB (Tabelle fuer Abos),
@@ -114,3 +114,16 @@ const getFollowedGameIds = (settings) => Object.entries(settings.follows)
     .sort(([, a], [, b]) => b.followedAt.localeCompare(a.followedAt))
     .map(([gameId]) => gameId);
 exports.getFollowedGameIds = getFollowedGameIds;
+// Geloeschte Spiele aus den gefolgten Spielen entfernen. Nur mit einer frisch vom Server geladenen Spieleliste
+// aufrufen (sonst wuerden z. B. offline noch nicht geladene Spiele entfernt). Gibt bei keiner Aenderung dasselbe Objekt zurueck.
+const pruneDeletedFollows = (settings, existingGameIds, at = nowIso()) => {
+    const existing = new Set(existingGameIds);
+    const gone = Object.keys(settings.follows).filter((id) => !existing.has(id));
+    if (!gone.length)
+        return settings;
+    const follows = { ...settings.follows };
+    for (const id of gone)
+        delete follows[id];
+    return { ...settings, follows, updatedAt: at };
+};
+exports.pruneDeletedFollows = pruneDeletedFollows;

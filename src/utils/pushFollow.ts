@@ -130,3 +130,14 @@ export const getFollowedGameIds = (settings: PushFollowSettings): string[] =>
   Object.entries(settings.follows)
     .sort(([, a], [, b]) => b.followedAt.localeCompare(a.followedAt))
     .map(([gameId]) => gameId);
+
+// Geloeschte Spiele aus den gefolgten Spielen entfernen. Nur mit einer frisch vom Server geladenen Spieleliste
+// aufrufen (sonst wuerden z. B. offline noch nicht geladene Spiele entfernt). Gibt bei keiner Aenderung dasselbe Objekt zurueck.
+export const pruneDeletedFollows = (settings: PushFollowSettings, existingGameIds: Iterable<string>, at = nowIso()): PushFollowSettings => {
+  const existing = new Set(existingGameIds);
+  const gone = Object.keys(settings.follows).filter((id) => !existing.has(id));
+  if (!gone.length) return settings;
+  const follows = { ...settings.follows };
+  for (const id of gone) delete follows[id];
+  return { ...settings, follows, updatedAt: at };
+};

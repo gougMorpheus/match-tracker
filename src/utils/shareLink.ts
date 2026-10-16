@@ -10,15 +10,19 @@ export interface ShareDeps {
   isMobile: boolean;
 }
 
-export type ShareResult = "copied" | "shared" | "copied+shared" | "failed";
+export type ShareResult = "copied" | "shared" | "cancelled" | "failed";
 
-// Immer kopieren (mit kurzer Bestaetigung); auf dem Handy zusaetzlich den Teilen-Dialog oeffnen.
+const isAbort = (error: unknown) => Boolean(error && typeof error === "object" && (error as { name?: string }).name === "AbortError");
+
+// Handy: Teilen-Dialog (navigator.share). Nur wenn es ihn nicht gibt (oder er technisch scheitert), kopieren.
+// Abbruch im Teilen-Dialog: keine Meldung. Desktop: kopieren.
 export const shareSpectatorLink = async (url: string, title: string, deps: ShareDeps): Promise<ShareResult> => {
-  let copied = false, shared = false;
-  if (deps.clipboardWrite) { try { await deps.clipboardWrite(url); copied = true; } catch { copied = false; } }
-  if (deps.isMobile && deps.share) { try { await deps.share({ title, url }); shared = true; } catch { shared = false; } }
-  return copied && shared ? "copied+shared" : copied ? "copied" : shared ? "shared" : "failed";
+  if (deps.isMobile && deps.share) {
+    try { await deps.share({ title, url }); return "shared"; } catch (error) { if (isAbort(error)) return "cancelled"; }
+  }
+  if (deps.clipboardWrite) { try { await deps.clipboardWrite(url); return "copied"; } catch { /* Fallback: Link anzeigen */ } }
+  return "failed";
 };
 
-export const shareResultMessage = (result: ShareResult, url: string): string =>
-  result === "failed" ? `Link: ${url}` : result === "shared" ? "Link geteilt" : "Link kopiert";
+export const shareResultMessage = (result: ShareResult, url: string): string | null =>
+  result === "cancelled" ? null : result === "failed" ? `Link: ${url}` : result === "shared" ? "Link geteilt" : "Link kopiert";

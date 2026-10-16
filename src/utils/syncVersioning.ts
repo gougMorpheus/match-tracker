@@ -98,3 +98,37 @@ export const isSameSyncBatch = (
   const delta = Math.abs(Date.parse(left.createdAt) - Date.parse(right.createdAt));
   return Number.isFinite(delta) && delta <= LEGACY_BATCH_WINDOW_MS;
 };
+
+// Fehlerbild 16.10. (Falschalarm "Konflikt: Ein anderes Geraet ..."): Ein Neuladen (Realtime/15-s-Takt) las den
+// Server vor dem eigenen Schreiben, kam aber erst danach zurueck und setzte die lokale Version wieder zurueck.
+// Die naechste Aenderung beruhte dann auf der alten Version und wurde als Konflikt verworfen.
+// Versionen steigen auf dem Server nur; ein Serverstand mit kleinerer Version als lokal bekannt ist veraltet
+// und darf den lokalen Stand nicht ersetzen. Fremde Aenderungen haben immer eine hoehere Version (Schutz bleibt).
+export const isStaleRemoteGame = (
+  local: { syncVersion?: number; syncFlowVersion?: number } | undefined,
+  remote: { syncVersion?: number; syncFlowVersion?: number }
+): boolean => {
+  if (!local) return false;
+  const lower = (l?: number, r?: number) => typeof l === "number" && typeof r === "number" && r < l;
+  return lower(local.syncVersion, remote.syncVersion) || lower(local.syncFlowVersion, remote.syncFlowVersion);
+};
+
+export const keepNewerLocalGames = <T extends { id: string; syncVersion?: number; syncFlowVersion?: number }>(
+  remoteGames: T[], localGames: T[]
+): T[] => {
+  const localById = new Map(localGames.map((game) => [game.id, game]));
+  return remoteGames.map((remote) => {
+    const local = localById.get(remote.id);
+    return local && isStaleRemoteGame(local, remote) ? local : remote;
+  });
+};
+
+// Wiederholtes Senden (Retry nach Netzfehler), obwohl der erste Versuch schon gespeichert war: Der Server meldet
+// "noop" (identisches Ereignis existiert) und matched=false, weil unser eigener erster Versuch die Ablauf-Version
+// um 1 erhoeht hat. Ist die Serverversion genau Basis + 1, gab es ausser uns keine Aenderung: als eigenes
+// Schreiben werten (sonst fiele die naechste Aktion als Konflikt durch). Bei fremden Aenderungen (> Basis + 1) bleibt es ein Konflikt.
+export const FLOW_EVENT_TYPES = new Set(["game-start", "game-end", "setup-start", "setup-end", "setup-pause", "setup-resume",
+  "round-start", "round-end", "turn-start", "turn-end", "turn-pause", "turn-resume", "timeout-start", "timeout-end"]);
+export const resolveOwnRetryResult = (result: SyncRpcResult, baseFlowVersion: number, eventType: string): SyncRpcResult =>
+  result.noop && !result.matched && FLOW_EVENT_TYPES.has(eventType) && result.flow_version === baseFlowVersion + 1
+    ? { ...result, matched: true } : result;

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { createBaseGame } = require('./helpers/gameFixtures.cjs');
 const { orderTimeEventsForEvaluation, fixStartBeforePauseTies } = require('../.test-dist/utils/timeEventOrder.js');
 const { syncDerivedGameState } = require('../.test-dist/utils/gameState.js');
-const { getTurnDurationMs, getPlayerTurnDurationTotalMs } = require('../.test-dist/utils/gameCalculations.js');
+const { getTurnDurationMs, getPlayerTurnDurationTotalMs, isSetupPaused, getSetupBaseDurationMs } = require('../.test-dist/utils/gameCalculations.js');
 const { getTvStatusLabel } = require('../.test-dist/utils/tvDashboard.js');
 const T = '2026-10-16T04:32:20.552Z';
 const runTimeEventOrderTests = () => {
@@ -60,4 +60,16 @@ const runTimeEventOrderTests = () => {
   // Datenreihenfolge im Spiel selbst wird nicht veraendert (Eingabe bleibt).
   assert.deepEqual(ids(g.timeEvents), ['gs', 'rs', 'p', 's']);
 };
-module.exports = { runTimeEventOrderTests };
+const runSetupTieTests = () => {
+  // Aufstellung: setup-pause mit gleichem Zeitstempel wie setup-start/game-start -> Pause gilt.
+  const g = createBaseGame();
+  g.timeEvents = [
+    { id: 'p', type: 'time', action: 'setup-pause', createdAt: T },
+    { id: 'gs', type: 'time', action: 'game-start', createdAt: T },
+    { id: 'ss', type: 'time', action: 'setup-start', createdAt: T }
+  ];
+  assert.deepEqual(orderTimeEventsForEvaluation(g.timeEvents).map(e => e.id), ['gs', 'ss', 'p']);
+  assert.equal(isSetupPaused(g), true);
+  assert.equal(getSetupBaseDurationMs({ ...g, endedAt: '2026-10-16T05:00:00.000Z' }), 0);
+};
+module.exports = { runTimeEventOrderTests: () => { runTimeEventOrderTests(); runSetupTieTests(); } };

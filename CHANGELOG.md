@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Retest-Fixes (Pepper, 6ad1a84a)
+- Zuschaueransicht: Aufstellung pausiert bzw. pausierter Zugstart heißt „Zug noch nicht gestartet“ (vorher „Pausiert“). Echte Pausen mitten im Zug bleiben „Pausiert“. Zusätzlich gilt die feste Reihenfolge bei gleichem Zeitstempel jetzt auch für die Aufstellung (game-/setup-start vor setup-pause).
+- Full screen ist immer sichtbar (vorher nach 3,5 s ohne Bewegung ausgeblendet, auf Touch nur nach Tippen sichtbar).
+- „Link teilen“: am Handy nur der Teilen-Dialog (navigator.share); kopiert wird nur ohne Teilen-Dialog oder bei technischem Fehler. Abbruch im Dialog ohne Meldung. Desktop kopiert.
+- Falschalarm „Konflikt: Ein anderes Gerät …“ bei nur einem Gerät. Ursache (per Playwright auf dem alten Prod reproduziert): Ging die Antwort auf ein bereits gespeichertes Ablauf-Ereignis (z. B. Timer an/aus) verloren, sendete der Client es erneut. Der Server meldete „schon vorhanden“ (noop) mit matched=false, weil der eigene erste Versuch die Ablauf-Version schon erhöht hatte. Der Client hielt deshalb seine alte Version, und die nächste Aktion (z. B. Pause) wurde als Konflikt verworfen. Lösung: `resolveOwnRetryResult` wertet noop mit Serverversion = Basis + 1 als eigenes Schreiben. Zusätzlich ersetzen ältere Neulade-Antworten den lokalen Stand nicht mehr (`keepNewerLocalGames`). Fremde Änderungen ergeben Basis + 2 oder mehr, der Konfliktschutz bei zwei Geräten bleibt (getestet).
+- Notifications: Gelöschte Spiele verschwinden aus den gefolgten Spielen, sobald die Spieleliste frisch vom Server geladen ist (`pruneDeletedFollows`).
+
 ## 2026-10-16 – Feste Reihenfolge „Start vor Pause“ bei gleichem Zeitstempel
 - Fehlerbild: Nach „Weiter“ zeigte die Zuschaueransicht nach Neuladen „Läuft“ mit tickender Zugzeit, der Editor nach Neuladen „Timer läuft“, obwohl der Zug pausiert startet.
 - Ursache: `turn-start` und `turn-pause` bekommen denselben Server-Zeitstempel; die DB liefert gleiche Zeitstempel in beliebiger Reihenfolge. Kam die Pause zuerst, wurde sie ignoriert (Zug noch nicht gestartet) und der Zug galt als laufend.

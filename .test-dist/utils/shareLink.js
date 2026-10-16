@@ -5,29 +5,29 @@ const gameAccessMode_1 = require("./gameAccessMode");
 // Direktlink zur Zuschaueransicht (View only) eines Spiels.
 const buildSpectatorLink = (origin, pathname, gameId) => `${origin}${pathname || "/"}#${(0, gameAccessMode_1.getTvModeHash)(gameId)}`;
 exports.buildSpectatorLink = buildSpectatorLink;
-// Immer kopieren (mit kurzer Bestaetigung); auf dem Handy zusaetzlich den Teilen-Dialog oeffnen.
+const isAbort = (error) => Boolean(error && typeof error === "object" && error.name === "AbortError");
+// Handy: Teilen-Dialog (navigator.share). Nur wenn es ihn nicht gibt (oder er technisch scheitert), kopieren.
+// Abbruch im Teilen-Dialog: keine Meldung. Desktop: kopieren.
 const shareSpectatorLink = async (url, title, deps) => {
-    let copied = false, shared = false;
-    if (deps.clipboardWrite) {
-        try {
-            await deps.clipboardWrite(url);
-            copied = true;
-        }
-        catch {
-            copied = false;
-        }
-    }
     if (deps.isMobile && deps.share) {
         try {
             await deps.share({ title, url });
-            shared = true;
+            return "shared";
         }
-        catch {
-            shared = false;
+        catch (error) {
+            if (isAbort(error))
+                return "cancelled";
         }
     }
-    return copied && shared ? "copied+shared" : copied ? "copied" : shared ? "shared" : "failed";
+    if (deps.clipboardWrite) {
+        try {
+            await deps.clipboardWrite(url);
+            return "copied";
+        }
+        catch { /* Fallback: Link anzeigen */ }
+    }
+    return "failed";
 };
 exports.shareSpectatorLink = shareSpectatorLink;
-const shareResultMessage = (result, url) => result === "failed" ? `Link: ${url}` : result === "shared" ? "Link geteilt" : "Link kopiert";
+const shareResultMessage = (result, url) => result === "cancelled" ? null : result === "failed" ? `Link: ${url}` : result === "shared" ? "Link geteilt" : "Link kopiert";
 exports.shareResultMessage = shareResultMessage;
