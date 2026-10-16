@@ -60,10 +60,11 @@ export const NotificationsCenter = () => {
   useEffect(() => {
     if (env.permission !== "granted") return;
     const timer = setTimeout(() => {
-      void syncFollowsIfSubscribed(latest.current).then((ok) => setSync(ok ? { state: "ok" } : { state: "error", message: "Abgleich mit dem Server fehlgeschlagen. Bitte später erneut versuchen." }));
+      void syncFollowsIfSubscribed(latest.current).then((ok) => setSync(ok ? { state: "ok" } : { state: "error", message: "Push ist auf diesem Gerät nicht aktiv (Abo fehlt oder Abgleich fehlgeschlagen)." }));
     }, 600);
     return () => clearTimeout(timer);
-  }, [syncKey, env.permission]);
+    // mode: beim Oeffnen des Panels Browser-Abo und Server erneut abgleichen (Anzeige "aktiv" nur nach erfolgreichem Abgleich).
+  }, [syncKey, env.permission, mode]);
 
   const status = getPushStatus(env);
   const hint = getPushHint(status, env.isIos, mode === "hint" ? "hint" : "overview");

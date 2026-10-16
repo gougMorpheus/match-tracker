@@ -3,6 +3,9 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Push-Abo: Browser und Server abgleichen
+- Fehlerbild: Fehlte das Abo im Browser (Berechtigung zurückgenommen, Browser hat es verworfen) oder hatte der Server es nach 404/410 beim Versand entfernt, zeigte die App weiter „Push-Abo auf diesem Gerät ist aktiv“ und meldete das alte, tote Abo erneut an. Ursache: Der Abgleich prüfte nur den Server (mt_push_set_follows), nie `pushManager.getSubscription()`.
+- Jetzt: Beim Abgleich (Laden, Änderung der Folgen, Öffnen des Panels) wird zuerst das Browser-Abo geprüft. Fehlt es, wird ein neues angelegt und gespeichert; ein geänderter Endpoint wird gespeichert; kennt der Server das Abo nicht mehr, wird das Browser-Abo erneuert. „Aktiv“ erscheint nur nach erfolgreichem Abgleich, sonst „Push ist auf diesem Gerät nicht aktiv“ mit „Erneut versuchen“. Test `tests/pushAbo.test.cjs`.
 ## 2026-10-16 – Timer: Zug-Auswahl folgt dem neuen Zug (Timer an nach Neustart, „Timer gestoppt“ von selbst)
 - Fehlerbild: Nach Browser-Neustart schrieb „Timer an“ turn-pause für den laufenden Zug (R1Z2) und turn-resume für den alten (R1Z1). Zweitens erschien im Editor „Timer gestoppt – Der Timer wurde angehalten“, ohne dass jemand gestoppt hatte (kein Pause-Event in der DB).
 - Ursache: Die Zug-Auswahl (`selectedTurnKey`, GamePage) blieb auf dem bisher neuesten Zug stehen, wenn ein neuer Zug nicht auf diesem Gerät entstand (App startet aus veraltetem lokalem Stand und bekommt dann den neueren Serverstand, oder ein anderes Gerät drückt „Weiter“). Der alte, beendete Zug wurde als „Gestoppt“ angezeigt (daher der Hinweis), und „Timer an“ setzte ihn fort.
