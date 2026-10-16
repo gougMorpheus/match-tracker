@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveOwnRetryResult = exports.FLOW_EVENT_TYPES = exports.keepNewerLocalGames = exports.isStaleRemoteGame = exports.isSameSyncBatch = exports.LEGACY_BATCH_WINDOW_MS = exports.decideBuildUpdate = exports.decideSchemaUpdate = exports.formatConflictNotice = exports.parseSyncConflict = exports.rebaseSyncQueue = exports.getItemBaseFlowVersion = exports.getItemBaseVersion = exports.getQueuedMs = exports.LEGACY_BASE_VERSION = exports.APP_SCHEMA_VERSION = void 0;
+exports.keepLocallyCreatedGames = exports.isPullOutdated = exports.resolveOwnRetryResult = exports.FLOW_EVENT_TYPES = exports.keepNewerLocalGames = exports.isStaleRemoteGame = exports.isSameSyncBatch = exports.LEGACY_BATCH_WINDOW_MS = exports.decideBuildUpdate = exports.decideSchemaUpdate = exports.formatConflictNotice = exports.parseSyncConflict = exports.rebaseSyncQueue = exports.getItemBaseFlowVersion = exports.getItemBaseVersion = exports.getQueuedMs = exports.LEGACY_BASE_VERSION = exports.APP_SCHEMA_VERSION = void 0;
 // Schema-Stand, den diese App-Version voraussetzt (siehe supabase/migrations/20261012_*).
 exports.APP_SCHEMA_VERSION = 2;
 // Vor der Migration gespeicherte Spiele/Queue-Eintraege haben keine Version: Basis = Migrationsstand.
@@ -111,3 +111,17 @@ exports.FLOW_EVENT_TYPES = new Set(["game-start", "game-end", "setup-start", "se
 const resolveOwnRetryResult = (result, baseFlowVersion, eventType) => result.noop && !result.matched && exports.FLOW_EVENT_TYPES.has(eventType) && result.flow_version === baseFlowVersion + 1
     ? { ...result, matched: true } : result;
 exports.resolveOwnRetryResult = resolveOwnRetryResult;
+// Abgleich gegen eigenes Schreiben absichern ("Spiel nicht gefunden" direkt nach dem Anlegen):
+// Ein Zaehler steigt bei jedem eigenen Schreiben (Queue-Eintrag abgearbeitet) und beim lokalen Anlegen.
+// Hat er sich waehrend eines Ladens geaendert, ist die Antwort evtl. vor dem Speichern gelesen -> verwerfen, neu laden.
+const isPullOutdated = (pullStartGeneration, currentGeneration) => currentGeneration !== pullStartGeneration;
+exports.isPullOutdated = isPullOutdated;
+// Zweite Sicherung: Ein lokal angelegtes Spiel, das in der Serverantwort fehlt, nur verwerfen, wenn das Laden NACH
+// dem letzten eigenen Speichern dieses Spiels gestartet wurde (Speicher-Generation <= Start-Generation).
+const keepLocallyCreatedGames = (merged, localGames, lastOwnSaveGeneration, pullStartGeneration) => {
+    const present = new Set(merged.map((game) => game.id));
+    const kept = localGames.filter((game) => !present.has(game.id)
+        && (lastOwnSaveGeneration.get(game.id) ?? Number.NEGATIVE_INFINITY) > pullStartGeneration);
+    return kept.length ? [...merged, ...kept] : merged;
+};
+exports.keepLocallyCreatedGames = keepLocallyCreatedGames;

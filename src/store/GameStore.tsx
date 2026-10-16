@@ -4,6 +4,8 @@ import {
   decideSchemaUpdate,
   formatConflictNotice,
   keepNewerLocalGames,
+  isPullOutdated,
+  keepLocallyCreatedGames,
   resolveOwnRetryResult,
   getItemBaseFlowVersion,
   getItemBaseVersion,
@@ -414,6 +416,17 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     saveHeldGames(rest);
   };
   const flushAgainRef = useRef(false);
+  const pullPendingRef = useRef<(attempt?: number) => Promise<boolean>>(async () => false);
+  const scheduleRemoteRefreshRef = useRef<(() => void) | null>(null);
+  // Zaehler fuer eigenes Schreiben und lokales Anlegen (siehe isPullOutdated / keepLocallyCreatedGames).
+  const writeGenerationRef = useRef(0);
+  const locallyCreatedSaveGenerationRef = useRef<Map<string, number>>(new Map());
+  const bumpWriteGeneration = (gameId?: string) => {
+    writeGenerationRef.current += 1;
+    if (gameId && locallyCreatedSaveGenerationRef.current.has(gameId)) {
+      locallyCreatedSaveGenerationRef.current.set(gameId, writeGenerationRef.current);
+    }
+  };
   // Aktionsgruppen: alle Queue-Eintraege eines synchronen Durchlaufs teilen sich eine batchId.
   const currentBatchRef = useRef<string | null>(null);
   const getCurrentBatchId = () => {
@@ -787,7 +800,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     }, delay);
   }, [clearRetryTimer]);
 
-  const pullRemoteGames = useCallback(async () => {
+  const pullRemoteGames = useCallback(async (attempt = 0): Promise<boolean> => {
     if (!canAttemptRemoteSync()) {
       setSyncStatus(queueRef.current.length ? "offline" : "idle");
       return false;
@@ -801,10 +814,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
     try {
       // Veraltete Antworten (vor dem eigenen Schreiben gelesen) ersetzen den neueren lokalen Stand nicht.
-      const remoteGames = keepNewerLocalGames(await gamesRepository.listGames(), gamesRef.current);
+      const pullStartGeneration = writeGenerationRef.current;
+      const listed = await gamesRepository.listGames();
+      if (isPullOutdated(pullStartGeneration, writeGenerationRef.current)) {
+        // Waehrend des Ladens wurde selbst gespeichert/angelegt: Antwort kann aelter sein -> verwerfen, sofort neu laden.
+        if (attempt < 3) return pullPendingRef.current(attempt + 1);
+        scheduleRemoteRefreshRef.current?.();
+        return false;
+      }
+      const remoteGames = keepNewerLocalGames(listed, gamesRef.current);
       holdBlockedLocalGames();
-      const nextGames = mergeRemoteWithPending(remoteGames, gamesRef.current,
-        queueRef.current.filter((item) => !isGameViewOnly(item.gameId)));
+      const nextGames = keepLocallyCreatedGames(mergeRemoteWithPending(remoteGames, gamesRef.current,
+        queueRef.current.filter((item) => !isGameViewOnly(item.gameId))), gamesRef.current,
+        locallyCreatedSaveGenerationRef.current, pullStartGeneration);
       gamesRef.current = nextGames;
       setGames(nextGames);
       saveCachedGames(nextGames);
@@ -823,6 +845,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       return false;
     }
   }, [isGameViewOnly]);
+  pullPendingRef.current = pullRemoteGames;
 
   const flushSyncQueue = useCallback(async (): Promise<boolean> => {
     if (!canAttemptRemoteSync()) {
@@ -887,13 +910,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
           if (nextItem.type === "delete-game") {
             await syncRepository.deleteGame(nextItem.gameId, canWrite);
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             continue;
           }
 
           const currentGame = gamesRef.current.find((game) => game.id === nextItem.gameId);
           if (!currentGame) {
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             continue;
           }
 
@@ -905,19 +928,19 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             }
             if (isGameViewOnly(nextItem.gameId)) break;
             applyResult(rowOnly(await syncRepository.saveGame(currentGame, current.version, canWrite)), current);
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             continue;
           }
 
           if (nextItem.type === "upsert-game") {
             applyResult(rowOnly(await syncRepository.saveGame(currentGame, base.version, canWrite)));
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             continue;
           }
 
           if (nextItem.type === "delete-event") {
             applyResult(flowOnly(await syncRepository.revokeEvent(nextItem.gameId, nextItem.eventId, base.flowVersion, canWrite)));
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             continue;
           }
 
@@ -925,7 +948,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           if (!eventPayload) {
             // Lokale Daten zur wartenden Aenderung fehlen (z. B. lokal wieder entfernt): protokollieren.
             recordSyncConflict({ at: getNowIso(), item: nextItem, conflict: { kind: "local-missing" } });
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             continue;
           }
 
@@ -934,7 +957,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           appliedEventsRef.current = [...appliedEventsRef.current.slice(-200), { gameId: nextItem.gameId,
             eventId: nextItem.eventId, batchId: nextItem.batchId, createdAt: nextItem.createdAt,
             flowVersion: eventResult.flowVersion }];
-          removeQueueItem(nextItem.id);
+          bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
         } catch (error) {
           if (isGameViewOnly(nextItem.gameId)) {
             setSyncStatus("pending");
@@ -943,7 +966,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           if (error instanceof SyncRpcError && (error.conflict || error.status === 404)) {
             // Konflikt (veraltete Version) oder Spiel fehlt: Aenderung verwerfen, protokollieren, Stand neu laden.
             recordSyncConflict({ at: getNowIso(), item: nextItem, conflict: error.conflict, status: error.status });
-            removeQueueItem(nextItem.id);
+            bumpWriteGeneration(nextItem.gameId); removeQueueItem(nextItem.id);
             droppedConflicts += 1;
             // Die ganze Benutzeraktion verwerfen: wartende Geschwister entfernen, gesendete zuruecknehmen.
             const siblings = queueRef.current.filter((item) => item.id !== nextItem.id && isSameSyncBatch(item, nextItem));
@@ -1038,6 +1061,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       void refreshGames();
     }, 600);
   }, [refreshGames]);
+  scheduleRemoteRefreshRef.current = scheduleRemoteRefresh;
 
   useEffect(() => {
     void refreshGames();
@@ -1339,6 +1363,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         // Wer das Spiel anlegt, bearbeitet es: Wahl für dieses Gerät merken (kein Dialog nach Neuladen).
         rememberAccessMode(createdGame.id, "edit");
         replaceGame(createdGame);
+        // Lokales Anlegen zaehlt als eigenes Schreiben: laufende (aeltere) Abgleiche werfen das Spiel nicht weg.
+        locallyCreatedSaveGenerationRef.current.set(createdGame.id, 0);
+        bumpWriteGeneration(createdGame.id);
         enqueueGameUpsert(createdGame.id);
         // Start-Events (game-start, setup-start) mit der Spielzeile speichern. Fehlerbild vorher: Sie lagen nur lokal;
         // der erste Abgleich nach dem Speichern ersetzte das Spiel durch den Serverstand ohne Events, die laufende

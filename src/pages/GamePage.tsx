@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
-import { compareEventsDesc } from "../utils/eventOrder";
+import { sortEventsNewestFirst } from "../utils/eventOrder";
 import { resolveSelectedTurnKey, SETUP_TURN_KEY } from "../utils/turnSelection";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
@@ -422,7 +422,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const editableEvents = useMemo<EditableEventItem[]>(
     () =>
       game
-        ? [
+        ? sortEventsNewestFirst([
             ...game.timeEvents.map((event) => ({
               id: event.id,
               playerId: event.playerId,
@@ -489,7 +489,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               turnNumber: highlight.turnNumber,
               createdAt: highlight.createdAt
             }))
-          ].sort(compareEventsDesc)
+          ])
         : [],
     [game]
   );
@@ -850,17 +850,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       return;
     }
 
-    if (event.kind !== "time" && isTimerRunning) {
-      await pauseActiveTimer(
-        game.id,
-        selectedTurn
-          ? {
-              roundNumber: selectedTurn.roundNumber,
-              turnNumber: selectedTurn.turnNumber
-            }
-          : undefined
-      );
-    }
+    // Bearbeiten eines Punkte-/CP-Eintrags pausiert die Uhr NICHT (Entscheidung Tim 2026-10-16): der aktive Zug laeuft
+    // weiter, Oeffnen/Speichern/Abbrechen erzeugen keine Timer-Events.
     setEditingEventId(event.id);
     setEditingValue(event.kind === "time" ? toDateTimeLocalInput(event.createdAt) : typeof event.displayValue === "number" ? String(event.displayValue) : "");
     setEditingNote(event.note ?? "");
