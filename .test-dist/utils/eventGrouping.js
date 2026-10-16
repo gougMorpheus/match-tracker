@@ -2,26 +2,48 @@
 // Buendelung fuer die ANZEIGE von "Letzte Ereignisse" und Verlauf. Gespeicherte Events bleiben unveraendert;
 // alles wird bei jeder Aenderung (auch Undo des letzten Einzel-Events) neu aus den Events berechnet.
 // Regeln:
-// 1. Automatische +1 CP beim Zugwechsel (cp gained = 1, gleicher Zeitpunkt + Runde/Zug wie turn-start)
+// 1. Automatische +1 CP beim Zugwechsel (cp gained = 1, Runde/Zug wie turn-start, Zeitpunkt +-2 s, je Spieler das erste)
 //    erscheinen nicht als eigene Zeilen, sondern im Zugwechsel mit "(auto CP each)".
 // 2.-4. Innerhalb eines Zuges werden pro Spieler alle CP-Gewinne/-Ausgaben zu einem Eintrag gebuendelt,
 //    ebenso SP pro Spieler und Art (Primaer, Sekundaer, Herausforderung, Gesamt getrennt).
 //    Ohne Runde/Zug werden nur direkt aufeinanderfolgende gleiche Eintraege zusammengefasst.
 // Highlights und Zeit-Events bleiben eigene Eintraege.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AUTO_CP_SUFFIX = exports.formatScoreValue = exports.formatCpGroup = exports.groupDisplayEvents = exports.isAutoCommandPoint = void 0;
+exports.AUTO_CP_SUFFIX = exports.formatScoreValue = exports.formatCpGroup = exports.groupDisplayEvents = exports.findAutoCommandPoints = exports.AUTO_CP_WINDOW_MS = void 0;
 const byTimeAsc = (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id);
 const hasTurn = (e) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
-const turnStartKey = (round, turn, at) => `${round}:${turn}:${at ? Date.parse(at) : ""}`;
-const isAutoCommandPoint = (e, turnStarts) => e.kind === "cp" && e.cpType === "gained" && e.value === 1 && hasTurn(e) && turnStarts.has(turnStartKey(e.roundNumber, e.turnNumber, e.createdAt));
-exports.isAutoCommandPoint = isAutoCommandPoint;
-const groupDisplayEvents = (events) => {
+// Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
+// Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
+exports.AUTO_CP_WINDOW_MS = 2000;
+const turnKey = (round, turn) => `${round}:${turn}`;
+// awardedTurns: optional game.autoCommandPointAwards ("runde:zug" -> true); wenn angegeben, nur dort Auto-CP.
+const findAutoCommandPoints = (asc, awardedTurns) => {
+    const starts = asc.filter(e => e.kind === "time" && e.timeAction === "turn-start" && hasTurn(e));
+    const result = new Map(); // cp-id -> turn-start
+    for (const start of starts) {
+        const key = turnKey(start.roundNumber, start.turnNumber);
+        if (awardedTurns && !awardedTurns[key])
+            continue;
+        const t = Date.parse(start.createdAt);
+        const seen = new Set();
+        for (const e of asc) {
+            if (e.kind !== "cp" || e.cpType !== "gained" || e.value !== 1 || turnKey(e.roundNumber, e.turnNumber) !== key)
+                continue;
+            if (Math.abs(Date.parse(e.createdAt) - t) > exports.AUTO_CP_WINDOW_MS || seen.has(e.playerId ?? "") || result.has(e.id))
+                continue;
+            seen.add(e.playerId ?? "");
+            result.set(e.id, start);
+        }
+    }
+    return result;
+};
+exports.findAutoCommandPoints = findAutoCommandPoints;
+const groupDisplayEvents = (events, awardedTurns) => {
     const asc = [...events].sort(byTimeAsc);
-    const turnStarts = new Set(asc.filter(e => e.kind === "time" && e.timeAction === "turn-start").map(e => turnStartKey(e.roundNumber, e.turnNumber, e.createdAt)));
+    const autoCp = (0, exports.findAutoCommandPoints)(asc, awardedTurns);
     const groups = [];
     const buckets = new Map();
     const turnStartGroups = new Map();
-    const pendingAuto = [];
     const make = (key, e) => ({ key, kind: e.kind, items: [], first: e, latest: e, createdAt: e.createdAt,
         playerId: e.playerId, roundNumber: e.roundNumber, turnNumber: e.turnNumber, autoCp: [], cpGained: 0, cpSpent: 0, scoreSum: 0, scoreType: e.scoreType });
     const add = (g, e) => {
@@ -38,10 +60,8 @@ const groupDisplayEvents = (events) => {
             g.scoreSum += e.value ?? 0;
     };
     for (const e of asc) {
-        if ((0, exports.isAutoCommandPoint)(e, turnStarts)) {
-            pendingAuto.push(e);
+        if (autoCp.has(e.id))
             continue;
-        }
         if (e.kind === "cp" || e.kind === "score") {
             const base = e.kind === "cp" ? `cp|${e.playerId}` : `score|${e.scoreType}|${e.playerId}`;
             if (hasTurn(e)) {
@@ -69,12 +89,11 @@ const groupDisplayEvents = (events) => {
         add(g, e);
         groups.push(g);
         if (e.kind === "time" && e.timeAction === "turn-start")
-            turnStartGroups.set(turnStartKey(e.roundNumber, e.turnNumber, e.createdAt), g);
+            turnStartGroups.set(e.id, g);
     }
-    for (const cp of pendingAuto) {
-        const g = turnStartGroups.get(turnStartKey(cp.roundNumber, cp.turnNumber, cp.createdAt));
-        if (g)
-            g.autoCp.push(cp);
+    for (const [cpId, start] of autoCp) {
+        const cp = asc.find(e => e.id === cpId);
+        turnStartGroups.get(start.id)?.autoCp.push(cp);
     }
     // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event.
     return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.latest.id.localeCompare(a.latest.id));

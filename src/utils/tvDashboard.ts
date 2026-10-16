@@ -54,7 +54,7 @@ export const buildTvEventFeed = (game: Game, limit = TV_EVENT_LIMIT,
     }
   };
   // ID einer Gruppe = juengstes Event (stabil fuer Animationen, aendert sich, wenn ein Event dazukommt).
-  return groupDisplayEvents(sources)
+  return groupDisplayEvents(sources, game.autoCommandPointAwards)
     .slice(0, Math.max(0, Math.floor(limit)))
     .map(g => ({ id: g.kind === "cp" || g.kind === "score" ? `group:${g.key}` : g.first.id, createdAt: g.createdAt, text: textOf(g), time: formatClockTime(g.createdAt), ...(g.kind === "highlight" ? { kind: "highlight" as const } : {}) }));
 };

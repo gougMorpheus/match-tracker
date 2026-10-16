@@ -52,7 +52,7 @@ const runEventGroupingTests = () => {
     const turnStarts = groups.filter((x) => x.kind === "time" && x.first.timeAction === "turn-start");
     const withAuto = turnStarts.filter((x) => x.autoCp.length);
     assert.ok(withAuto.length >= Math.floor(turnStarts.length / 2), `${file}: Auto-CP erkannt (${withAuto.length}/${turnStarts.length})`);
-    for (const t of withAuto) for (const cp of t.autoCp) { assert.equal(cp.value, 1); assert.equal(cp.createdAt, t.first.createdAt); }
+    for (const t of withAuto) for (const cp of t.autoCp) { assert.equal(cp.value, 1); assert.ok(Math.abs(Date.parse(cp.createdAt) - Date.parse(t.first.createdAt)) <= g.AUTO_CP_WINDOW_MS); }
     const autoIds = new Set(withAuto.flatMap((x) => x.autoCp.map((e) => e.id)));
     assert.ok(!groups.some((x) => x.kind === "cp" && x.items.some((e) => autoIds.has(e.id))));
     // Neueste zuerst.
@@ -94,5 +94,21 @@ const runEventGroupingTests = () => {
   game.commandPointEvents.push({ id: "g1", type: "command-point", playerId: a.id, cpType: "gained", value: 2, roundNumber: 1, turnNumber: 1, createdAt: at(50) });
   assert.equal(buildTvEventFeed(game, 50)[0].text, "Runde 1 · Alice: +2 / −2 CP");
   assert.equal(g.formatCpGroup({ cpGained: 0, cpSpent: 3 }), "−3 CP");
+
+  // Neuer Verlauf (Server-Zeitstempel fuer Zeit-Events, Auto-CP ~50 ms daneben; echter ZZ-Verlauf 16.10.):
+  const ev = [
+    { id: "te", kind: "time", timeAction: "turn-end", playerId: "p2", roundNumber: 1, turnNumber: 1, createdAt: "2026-10-16T04:21:05.185748Z" },
+    { id: "ts2", kind: "time", timeAction: "turn-start", playerId: "p1", roundNumber: 1, turnNumber: 2, createdAt: "2026-10-16T04:21:05.190716Z" },
+    { id: "a1", kind: "cp", cpType: "gained", value: 1, playerId: "p1", roundNumber: 1, turnNumber: 2, createdAt: "2026-10-16T04:21:05.238Z" },
+    { id: "a2", kind: "cp", cpType: "gained", value: 1, playerId: "p2", roundNumber: 1, turnNumber: 2, createdAt: "2026-10-16T04:21:05.238Z" },
+    { id: "m1", kind: "cp", cpType: "gained", value: 1, playerId: "p1", roundNumber: 1, turnNumber: 2, createdAt: "2026-10-16T04:21:07.219Z" }
+  ];
+  const gr = g.groupDisplayEvents(ev, { "1:2": true });
+  const start = gr.find((x) => x.first.id === "ts2");
+  assert.deepEqual(start.autoCp.map((x) => x.id).sort(), ["a1", "a2"]);
+  assert.deepEqual(gr.filter((x) => x.kind === "cp").map((x) => [x.first.id, x.cpGained]), [["m1", 1]], "manuelles +1 CP bleibt eigener Eintrag");
+  // Auto-CP ausgeschaltet (kein Award fuer den Zug): keine Auto-Erkennung.
+  assert.equal(g.groupDisplayEvents(ev, {}).find((x) => x.first.id === "ts2").autoCp.length, 0);
+
 };
 module.exports = { runEventGroupingTests };

@@ -224,13 +224,14 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
         {renderPlayer(0)}
         <section className="tv-panel tv-phase">
           <span className="tv-eyebrow">MATCH TRACKER · LIVE DASHBOARD</span>
-          <h2 className="tv-phase__title">{phase}</h2><span className={`tv-chip${running && !timeout ? " tv-chip--running" : ""}`}>{status} · View only</span>
+          <h2 className="tv-phase__title">{phase}</h2><div className="tv-phase__status"><span className={`tv-chip${running && !timeout ? " tv-chip--running" : ""}`}>{status} · View only</span>
+            <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
+              {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>{isFullscreen ? "Full screen verlassen" : "Full screen"}</button> : null}
+              {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
+            </nav>
+          </div>
           <div className="tv-phase__clock"><span>{timeout ? "Time-out" : turn ? completed ? "Letzte Zugzeit" : "Laufende Zugzeit" : "Aufstellungszeit"}</span><strong>{clock(phaseMs)}</strong></div>
           <div className="tv-deficit"><strong>{completed ? result : deficit.text}</strong>{!completed && deficit.perRound !== null && <span>≈ {deficit.perRound} VP pro verbleibender Runde nötig</span>}</div>
-          <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
-            {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>{isFullscreen ? "Full screen verlassen" : "Full screen"}</button> : null}
-            {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
-          </nav>
         </section>
         {renderPlayer(1)}
         <section className="tv-panel tv-chart">

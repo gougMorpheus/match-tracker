@@ -3675,7 +3675,8 @@ button.stats-table__row.is-active {
 .tv-event time { color: var(--accent); font-size: var(--tv-small); flex-shrink: 0; }
 .tv-event > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; overflow-wrap: anywhere; }
 .tv-empty { color: var(--muted); margin: auto !important; }
-/* Full screen liegt im Fluss der Mitte-Kachel (kein Overlay mehr ueber Ereignissen/Spielerzeit). */
+/* Full screen liegt im Fluss der Mitte-Kachel neben dem Status-Chip (kein Overlay mehr ueber Ereignissen/Spielerzeit). */
+.tv-phase__status { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .5em; }
 .tv-game__controls { position: static; flex-shrink: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .5em; transition: opacity .2s; }
 .tv-game__controls button { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: .6em; padding: .35em .9em; font-size: var(--tv-small); }
 .tv-game__controls [role=status] { font-size: var(--tv-small); color: var(--muted); }

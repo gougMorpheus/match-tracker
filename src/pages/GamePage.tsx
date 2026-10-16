@@ -472,7 +472,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     [editableEvents, entryFilterPlayerId, entryFilterType]
   );
   // Anzeige-Buendelung im Verlauf (Events bleiben einzeln gespeichert und einzeln bearbeitbar ueber "Einzeln").
-  const groupedEditableEvents = useMemo(() => groupDisplayEvents(filteredEditableEvents), [filteredEditableEvents]);
+  const groupedEditableEvents = useMemo(() => groupDisplayEvents(filteredEditableEvents, game.autoCommandPointAwards), [filteredEditableEvents, game.autoCommandPointAwards]);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const undoActionLabel = getUndoActionLabel(gameId);
   const redoActionLabel = getRedoActionLabel(gameId);
