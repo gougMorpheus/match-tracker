@@ -74,12 +74,12 @@ export const syncFollowsIfSubscribed = async (settings: PushFollowSettings): Pro
   if (!VAPID_PUBLIC_KEY || typeof Notification === "undefined" || Notification.permission !== "granted") return false;
   const local = await getLocalSubscription();
   if (!local) return (await subscribeAndSync(settings)).ok;
-  if (local.endpoint !== lastSyncedEndpoint) return (await subscribeAndSync(settings)).ok;
   const key = getPushFollowSyncKey(settings);
-  if (key === lastSyncedKey) return true;
+  if (key === lastSyncedKey && local.endpoint === lastSyncedEndpoint) return true;
   const { data, error } = await getSupabaseClient().rpc<{ subscribed?: boolean }>("mt_push_set_follows", getPushFollowRpcArgs(settings));
   if (error) return false;
   if (!data?.subscribed) return (await subscribeAndSync(settings, { renew: true })).ok;
+  if (local.endpoint !== lastSyncedEndpoint) return (await subscribeAndSync(settings)).ok;
   lastSyncedKey = key;
   return true;
 };

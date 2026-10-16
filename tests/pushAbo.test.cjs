@@ -52,10 +52,15 @@ const runPushAboTests = async () => {
   assert.equal(await mod.syncFollowsIfSubscribed(changed), true);
   assert.deepEqual(env.calls, ["mt_push_set_follows", "browser-subscribe", "mt_push_subscribe:https://push.example/neu-3"]);
 
-  // 5) Erster Abgleich nach Neuladen mit vorhandenem Browser-Abo: Endpoint wird gespeichert (Server ggf. veraltet).
+  // 5) Nach Neuladen, Browser hat altes Abo, Server kennt es nicht mehr (z. B. nach 410 entfernt) -> erneuern.
   mod = await load(); env = setup({ local: "https://push.example/alt", serverSubscribed: false });
   assert.equal(await mod.syncFollowsIfSubscribed(settings), true);
-  assert.deepEqual(env.calls, ["mt_push_subscribe:https://push.example/alt"]);
+  assert.deepEqual(env.calls, ["mt_push_set_follows", "browser-subscribe", "mt_push_subscribe:https://push.example/neu-1"]);
+  // 5b) Nach Neuladen, Server kennt das Geraet: Endpoint einmal speichern, kein neues Browser-Abo.
+  mod = await load(); env = setup({ local: "https://push.example/alt", serverSubscribed: true });
+  assert.equal(await mod.syncFollowsIfSubscribed(settings), true);
+  assert.deepEqual(env.calls, ["mt_push_set_follows", "mt_push_subscribe:https://push.example/alt"]);
+  env.calls.length = 0; assert.equal(await mod.syncFollowsIfSubscribed(settings), true); assert.deepEqual(env.calls, []);
 
   // 6) Anlegen schlaegt fehl -> nicht aktiv (false), keine falsche Erfolgsmeldung.
   mod = await load(); env = setup({ local: null });
