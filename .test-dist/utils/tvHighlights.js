@@ -4,6 +4,7 @@ exports.enqueueTvHighlights = exports.reconcileTvHighlightQueue = exports.getSco
 const gameCalculations_1 = require("./gameCalculations");
 const headToHead_1 = require("./headToHead");
 const gameState_1 = require("./gameState");
+const eventOrder_1 = require("./eventOrder");
 const createTvSnapshot = (game, nowIso) => {
     const round = (0, gameCalculations_1.getCurrentRoundNumber)(game), completed = game.status === "completed";
     const total = game.players.map(p => (0, gameCalculations_1.getPlayerComparableTotalScore)(game, p.id));
@@ -96,7 +97,9 @@ exports.HIGHLIGHT_RULES = [
         return [highlight(next, "game-end", winner ? `${winner.name} gewinnt` : outcome?.draw ? "Unentschieden" : "Spiel beendet", `Endstand ${scoreLabel(next)}`, winner?.id)];
     }
 ];
-const detectTvHighlights = (prev, next, game, rules = exports.HIGHLIGHT_RULES) => prev.phaseKey === next.phaseKey ? [] : rules.flatMap(rule => rule(prev, next, game));
+const detectTvHighlights = (prev, next, game, rules = exports.HIGHLIGHT_RULES) => prev.phaseKey === next.phaseKey ? [] : rules.flatMap(rule => rule(prev, next, game))
+    // TV-Einblendung in derselben logischen Reihenfolge wie Liste/Push (alle Treffer haben denselben Phasen-Zeitpunkt).
+    .map((h, index) => ({ h, index })).sort((a, b) => (0, eventOrder_1.getLogicalRank)({ kind: a.h.kind, createdAt: "" }) - (0, eventOrder_1.getLogicalRank)({ kind: b.h.kind, createdAt: "" }) || a.index - b.index).map(({ h }) => h);
 exports.detectTvHighlights = detectTvHighlights;
 const PHASE_ACTIONS = new Set(["round-start", "turn-start", "game-end"]);
 const getGameAsOf = (game, iso) => {
@@ -138,8 +141,8 @@ const deriveGameHighlights = (game, rules = exports.HIGHLIGHT_RULES) => {
         next.lastLeaderId = next.leaderId ?? prev.lastLeaderId;
         prev = next;
     }
-    return [...result, ...(0, exports.deriveScoreLeadHighlights)(game)]
-        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    // Gleicher Zeitpunkt: zentrale logische Reihenfolge (★ Runde abgeschlossen vor Zeit-Duell/Meilensteinen, dann Spielende).
+    return [...result, ...(0, exports.deriveScoreLeadHighlights)(game)].sort(eventOrder_1.compareEventsAsc);
 };
 exports.deriveGameHighlights = deriveGameHighlights;
 // Fehlerbild 15.10.: Fuehrungswechsel innerhalb eines Zugs fehlten, weil der Stand nur an Phasengrenzen
