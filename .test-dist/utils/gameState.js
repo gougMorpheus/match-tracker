@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapPersistedGame = exports.upsertLocalEventFromSource = exports.overlayLocalGameMetadata = exports.updateLocalEvent = exports.removeLocalEvent = exports.appendLocalTimeEvents = exports.appendLocalNoteEvent = exports.appendLocalCommandPointEvent = exports.appendLocalScoreEvent = exports.updateLocalGameDetails = exports.createLocalGame = exports.syncDerivedGameState = exports.getMissingGameStartCreatedAt = void 0;
 const id_1 = require("./id");
 const time_1 = require("./time");
+const timeEventOrder_1 = require("./timeEventOrder");
 const sortByCreatedAt = (items) => [...items].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 const ensureRound = (roundsByNumber, roundNumber) => {
     const existing = roundsByNumber.get(roundNumber);
@@ -136,7 +137,7 @@ exports.getMissingGameStartCreatedAt = getMissingGameStartCreatedAt;
 const buildRoundsFromTimeEvents = (timeEvents, fallbackEndedAt) => {
     const roundsByNumber = new Map();
     const gameEndAt = getFirstGameEndAt(timeEvents) ?? fallbackEndedAt;
-    [...timeEvents].sort((left, right) => left.createdAt.localeCompare(right.createdAt)).forEach((event) => {
+    (0, timeEventOrder_1.orderTimeEventsForEvaluation)(timeEvents).forEach((event) => {
         if (gameEndAt && event.createdAt > gameEndAt && event.action !== "game-end") {
             return;
         }
