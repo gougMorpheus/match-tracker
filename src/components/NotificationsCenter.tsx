@@ -1,3 +1,4 @@
+import { getTvModeHash } from "../utils/gameAccessMode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameStore } from "../store/GameStore";
 import {
@@ -149,7 +150,7 @@ export const NotificationsCenter = () => {
                     </div>
                     <div className="button-row button-row--compact">
                       {game ? (
-                        <button type="button" className="ghost-button compact-button" onClick={() => { setMode(null); window.location.hash = `/game/${id}`; }}>Öffnen</button>
+                        <button type="button" className="ghost-button compact-button" onClick={() => { setMode(null); window.location.hash = getTvModeHash(id); }}>Öffnen</button>
                       ) : null}
                       <button type="button" className="ghost-button compact-button" onClick={() => updatePushFollowSettings((current) => setGameFollowed(current, id, false))}>
                         Entfolgen

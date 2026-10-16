@@ -9,8 +9,13 @@
 //    Ohne Runde/Zug werden nur direkt aufeinanderfolgende gleiche Eintraege zusammengefasst.
 // Highlights und Zeit-Events bleiben eigene Eintraege.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AUTO_CP_SUFFIX = exports.formatScoreValue = exports.formatCpGroup = exports.groupDisplayEvents = exports.findAutoCommandPoints = exports.AUTO_CP_WINDOW_MS = void 0;
-const byTimeAsc = (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id);
+exports.AUTO_CP_SUFFIX = exports.formatScoreValue = exports.formatCpGroup = exports.groupDisplayEvents = exports.findAutoCommandPoints = exports.AUTO_CP_WINDOW_MS = exports.getSameTimeRank = void 0;
+// Gleicher Zeitpunkt: der Rundenabschluss (Highlight) gehört vor den Beginn der nächsten Runde
+// (Fehlerbild: „★ Runde 1 abgeschlossen“ stand in der Liste über „Runde 2 beginnt“).
+const getSameTimeRank = (e) => (e.id.startsWith("highlight:round-summary") ? -1 : 0);
+exports.getSameTimeRank = getSameTimeRank;
+const byTimeAsc = (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
+    (0, exports.getSameTimeRank)(a) - (0, exports.getSameTimeRank)(b) || a.id.localeCompare(b.id);
 const hasTurn = (e) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
 // Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
 // Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
@@ -95,8 +100,10 @@ const groupDisplayEvents = (events, awardedTurns) => {
         const cp = asc.find(e => e.id === cpId);
         turnStartGroups.get(start.id)?.autoCp.push(cp);
     }
-    // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event.
-    return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.latest.id.localeCompare(a.latest.id));
+    // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event. Bei gleichem Zeitpunkt steht der Rundenabschluss
+    // (aelter) unter dem Beginn der naechsten Runde – sonst entschied der ID-Vergleich ("highlight:" > UUID).
+    return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+        (0, exports.getSameTimeRank)(b.latest) - (0, exports.getSameTimeRank)(a.latest) || b.latest.id.localeCompare(a.latest.id));
 };
 exports.groupDisplayEvents = groupDisplayEvents;
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");

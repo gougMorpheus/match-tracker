@@ -39,7 +39,11 @@ export interface EventGroup<T extends GroupableEvent> {
   scoreType?: string;
 }
 
-const byTimeAsc = (a: GroupableEvent, b: GroupableEvent) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id);
+// Gleicher Zeitpunkt: der Rundenabschluss (Highlight) gehört vor den Beginn der nächsten Runde
+// (Fehlerbild: „★ Runde 1 abgeschlossen“ stand in der Liste über „Runde 2 beginnt“).
+export const getSameTimeRank = (e: { id: string }): number => (e.id.startsWith("highlight:round-summary") ? -1 : 0);
+const byTimeAsc = (a: GroupableEvent, b: GroupableEvent) => Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
+  getSameTimeRank(a) - getSameTimeRank(b) || a.id.localeCompare(b.id);
 const hasTurn = (e: GroupableEvent) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
 // Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
 // Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
@@ -99,8 +103,10 @@ export const groupDisplayEvents = <T extends GroupableEvent>(events: T[], awarde
     const cp = asc.find(e => e.id === cpId)!;
     turnStartGroups.get(start.id)?.autoCp.push(cp);
   }
-  // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event.
-  return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.latest.id.localeCompare(a.latest.id));
+  // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event. Bei gleichem Zeitpunkt steht der Rundenabschluss
+  // (aelter) unter dem Beginn der naechsten Runde – sonst entschied der ID-Vergleich ("highlight:" > UUID).
+  return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+    getSameTimeRank(b.latest) - getSameTimeRank(a.latest) || b.latest.id.localeCompare(a.latest.id));
 };
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");

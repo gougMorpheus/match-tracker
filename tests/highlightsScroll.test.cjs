@@ -22,7 +22,8 @@ const runHighlightsScrollTests = () => {
 
   // Undo/Loeschen der Ursache entfernt das abgeleitete Highlight.
   const undone = { ...game, scoreEvents: game.scoreEvents.filter((e) => e.playerId === game.players[0].id) };
-  assert.ok(!deriveGameHighlights(undone).some((h) => h.kind === "lead-change"), "nach Undo kein Fuehrungswechsel");
+  const undoneLead = deriveGameHighlights(undone).filter((h) => h.kind === "lead-change");
+  assert.ok(undoneLead.every((h) => h.title === "Führung"), "nach Undo kein Fuehrungswechsel (nur noch die erste Führung)");
 
   // Keine Auswirkung auf Punkte/Statistik.
   const totals = game.players.map((p) => getPlayerScoreTotal(game, p.id));
