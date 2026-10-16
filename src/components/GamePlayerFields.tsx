@@ -38,6 +38,8 @@ export const GamePlayerFields = ({
       disabled={disabled}
       selectPlaceholder="Spieler wählen"
       inputPlaceholder="Neuen Namen eingeben"
+      createButtonLabel="+ Spieler"
+      createButtonTitle="Neuen Spieler anlegen (Namen eingeben)"
       onChange={onNameChange}
       onSelectOption={onSelectRememberedName}
     />
@@ -59,6 +61,7 @@ export const GamePlayerFields = ({
       disabled={disabled}
       selectPlaceholder="Detachment wählen"
       inputPlaceholder="Neues Detachment eingeben"
+      createButtonTitle="Neues Detachment eingeben"
       onChange={onDetachmentChange}
     />
   </section>

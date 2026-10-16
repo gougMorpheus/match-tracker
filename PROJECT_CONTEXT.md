@@ -160,3 +160,9 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Client: `src/pwa/pushSubscription.ts` (subscribe + Sync der Folgen per RPC, entprellt in `NotificationsCenter`). SW (`sw.template.js`) zeigt die Meldung und öffnet `/#/game/<id>?tv=1` (View only).
 - Tests: `tests/pushB.test.cjs` (Anzeige = Push an 16 echten Spielen, Dedupe parallel, Undo, Texte).
 - Touch: Bearbeiten/Löschen unter „Einzeln (n)“ bei `pointer: coarse` mind. 44 × 44 px, Desktop unverändert.
+
+## Kleinigkeiten (16.10.2026)
+
+- „Match öffnen“-Wahl pro Spiel/Gerät in localStorage (`src/utils/accessModeMemory.ts`), übernommen in `GamePage` per `useLayoutEffect` vor dem ersten Zeichnen; nur laufende Spiele, nicht bei ?tv=1. Menüpunkt „Match öffnen …“ (nur wenn „View only“ gemerkt) löscht die Wahl und zeigt den Dialog.
+- `SelectOrCreateField`: Enter springt zum nächsten Feld (`src/utils/formKeys.ts`), Toggle mit `createButtonTitle` (Tooltip).
+- Spielerliste im Formular: Namen aus den geladenen (nicht gelöschten) Spielen, im Browser unter `match-tracker.player-presets.v1` gespiegelt (wird bei jedem Laden aus den Spielen neu gesetzt). Eine eigene Spielertabelle in der DB gibt es nicht.

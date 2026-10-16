@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
 import { FloatingMenu } from "../components/FloatingMenu";
@@ -247,6 +248,22 @@ export const GamePage = (props: GamePageProps) => {
   useEffect(() => {
     if (props.forceTv) setGameAccessMode(props.gameId, "view");
   }, [props.forceTv, props.gameId, setGameAccessMode]);
+  // Gemerkte Auswahl "Match öffnen" (pro Spiel und Gerät) vor dem ersten Zeichnen übernehmen, damit der Dialog
+  // beim Neuladen nicht erneut erscheint. Nur laufende Spiele, nicht bei View-only-Links (?tv=1).
+  const hasGame = Boolean(game);
+  const [restoredFor, setRestoredFor] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!hasGame || restoredFor === props.gameId) return;
+    if (!props.forceTv && !isGameCompletedForDisplay(game) && !getGameAccessMode(props.gameId)) {
+      const remembered = loadRememberedAccessMode(props.gameId);
+      if (remembered) {
+        setGameAccessMode(props.gameId, remembered);
+        if (remembered === "view") window.location.hash = getTvModeHash(props.gameId);
+      }
+    }
+    setRestoredFor(props.gameId);
+  }, [hasGame, props.gameId, props.forceTv, restoredFor, game, getGameAccessMode, setGameAccessMode]);
+  if (game && restoredFor !== props.gameId) return null;
   if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
     subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfügbar."} />;
   return <LoadedGamePage key={props.gameId} {...props} game={game} />;
@@ -331,6 +348,16 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   // Abgeschlossenes Spiel in View only: Menue bietet "Entsperren" (Passwort).
   const closedTv = shouldShowClosedGameTv(game, accessMode);
   // Folgen (Push Stufe a): nur lokal pro Geraet, nach dem Einschalten Hinweis zur Verfuegbarkeit.
+  const rememberedViewOnly = loadRememberedAccessMode(game.id) === "view";
+  const reopenAccessChoice = () => {
+    rememberAccessMode(game.id, null);
+    setGameAccessMode(game.id, null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tv");
+    url.hash = `/game/${game.id}`;
+    window.history.replaceState(null, "", url);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  };
   const pushFollowSettings = usePushFollowSettings();
   const followingGame = isFollowingGame(pushFollowSettings, game.id);
   const followMenuItems = [
@@ -1413,6 +1440,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     { label: "Link teilen", onClick: () => { void handleShareLink(); } },
                     { label: "Einstellungen", onClick: () => { openGameSettings(); } },
                     ...followMenuItems,
+                    // Laufendes Spiel, auf diesem Gerät als "View only" gemerkt: Auswahl erneut anbieten (Dialog wie beim ersten Öffnen).
+                    ...(!closedTv && rememberedViewOnly ? [{ label: "Match öffnen …", onClick: () => { reopenAccessChoice(); } }] : []),
                     // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
                     ...(closedTv ? [{ label: "Entsperren", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
                   ]
@@ -1434,14 +1463,14 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                 <button
                   type="button"
                   className="primary-button compact-button"
-                  onClick={() => setGameAccessMode(game.id, "edit")}
+                  onClick={() => { rememberAccessMode(game.id, "edit"); setGameAccessMode(game.id, "edit"); }}
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   className="secondary-button compact-button"
-                  onClick={() => { setGameAccessMode(game.id, "view"); window.location.hash = getTvModeHash(game.id); }}
+                  onClick={() => { rememberAccessMode(game.id, "view"); setGameAccessMode(game.id, "view"); window.location.hash = getTvModeHash(game.id); }}
                 >
                   View only
                 </button>

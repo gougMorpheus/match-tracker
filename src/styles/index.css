@@ -484,6 +484,7 @@ textarea {
 .choice-field__toggle {
   width: auto;
   min-width: 2.6rem;
+  white-space: nowrap;
   padding-left: 0.8rem;
   padding-right: 0.8rem;
 }
