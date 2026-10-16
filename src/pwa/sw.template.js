@@ -1,9 +1,9 @@
-/* Service Worker Match-Tracker (Stufe a). Build: __APP_BUILD__
+/* Service Worker Match-Tracker (Stufe b: echte Push-Meldungen). Build: __APP_BUILD__
  * - App-Huelle: Navigation network-first (Fallback Cache), /assets/* cache-first (gehashte Dateien).
  * - Nie gecacht: alles fremde (Supabase-API, Realtime), version.json, sw.js, Nicht-GET.
  * - Update: neuer Build => neuer Cache-Name, skipWaiting + clients.claim, alte Caches werden geloescht.
  *   Die App prueft zusaetzlich version.json und laedt bei neuem Build neu.
- * - push/notificationclick vorbereitet: Klick oeffnet das Spiel in View only (?tv=1).
+ * - push: zeigt die Meldung der Netlify Function (push-dispatch) an; notificationclick oeffnet das Spiel in View only (?tv=1).
  */
 const BUILD = "__APP_BUILD__";
 const CACHE = `mt-shell-${BUILD}`;
@@ -61,8 +61,9 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
-// Stufe (b): Server sendet JSON { title, body, gameId, tag }.
+// Server sendet JSON { title, body, gameId, tag, url }. url ist immer ein Pfad dieser App (View only).
 const gameUrl = (gameId) => (gameId ? `/#/game/${encodeURIComponent(gameId)}?tv=1` : "/#/games");
+const targetUrl = (data) => (typeof data.url === "string" && data.url.startsWith("/") && !data.url.startsWith("//") ? data.url : gameUrl(data.gameId));
 
 self.addEventListener("push", (event) => {
   let data = {};
@@ -74,7 +75,8 @@ self.addEventListener("push", (event) => {
       tag: data.tag || (data.gameId ? `game-${data.gameId}` : undefined),
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      data: { url: gameUrl(data.gameId) }
+      timestamp: Date.now(),
+      data: { url: targetUrl(data) }
     })
   );
 });
@@ -86,7 +88,7 @@ self.addEventListener("notificationclick", (event) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if (new URL(client.url).origin === self.location.origin && "focus" in client) {
-          return client.navigate(target).then((c) => (c || client).focus()).catch(() => client.focus());
+          return client.navigate(target).then((c) => (c || client).focus()).catch(() => self.clients.openWindow(target));
         }
       }
       return self.clients.openWindow(target);

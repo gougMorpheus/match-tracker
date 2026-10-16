@@ -1,0 +1,4 @@
+# Nur Functions-Einstellungen; Build-Befehl/Ordner bleiben in den Netlify-Site-Einstellungen (npm run build, dist).
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

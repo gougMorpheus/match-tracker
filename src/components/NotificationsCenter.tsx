@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameStore } from "../store/GameStore";
 import {
   OPEN_NOTIFICATIONS_EVENT,
   updatePushFollowSettings,
   usePushFollowSettings
 } from "../pwa/pushFollowStore";
-import { applyAutoFollow, getFollowedGameIds, pruneDeletedFollows, setAutoFollowNew, setGameFollowed } from "../utils/pushFollow";
+import { applyAutoFollow, getFollowedGameIds, getPushFollowSyncKey, pruneDeletedFollows, setAutoFollowNew, setGameFollowed } from "../utils/pushFollow";
+import { subscribeAndSync, syncFollowsIfSubscribed } from "../pwa/pushSubscription";
 import { detectPushEnvironment, getPushHint, getPushStatus } from "../utils/pushSupport";
 import { isGameCompletedForDisplay } from "../utils/gameAccessMode";
 import type { Game } from "../types/game";
 
 const gameLabel = (game: Game) => `${game.players[0].name} vs. ${game.players[1].name}`;
 
-// Uebersicht "Notifications" (unter Optionen) und Hinweis nach "Folgen". Stufe a: nur lokal, kein Abo.
+// Uebersicht "Notifications" (unter Optionen) und Hinweis nach "Folgen".
+// Stufe b: "Notifications erlauben" legt das echte Push-Abo an; Folgen/Auto-Follow werden per RPC abgeglichen.
 export const NotificationsCenter = () => {
   const { games, lastSyncAt } = useGameStore();
   const settings = usePushFollowSettings();
@@ -49,6 +51,19 @@ export const NotificationsCenter = () => {
     if (settings.autoFollowNew) updatePushFollowSettings((current) => applyAutoFollow(current, games));
   }, [games, settings.autoFollowNew]);
 
+  // Push-Abo: Status der letzten Anmeldung (nur Anzeige).
+  const [sync, setSync] = useState<{ state: "idle" | "working" | "ok" | "error"; message?: string }>({ state: "idle" });
+  const latest = useRef(settings);
+  latest.current = settings;
+  const syncKey = getPushFollowSyncKey(settings);
+  useEffect(() => {
+    if (env.permission !== "granted") return;
+    const timer = setTimeout(() => {
+      void syncFollowsIfSubscribed(latest.current).then((ok) => setSync(ok ? { state: "ok" } : { state: "error", message: "Abgleich mit dem Server fehlgeschlagen. Bitte später erneut versuchen." }));
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [syncKey, env.permission]);
+
   const status = getPushStatus(env);
   const hint = getPushHint(status, env.isIos, mode === "hint" ? "hint" : "overview");
   const followed = useMemo(() => {
@@ -58,10 +73,18 @@ export const NotificationsCenter = () => {
 
   if (!mode) return null;
 
+  const connect = async () => {
+    setSync({ state: "working" });
+    const result = await subscribeAndSync(latest.current);
+    setSync(result.ok ? { state: "ok" } : { state: "error", message: result.message });
+  };
   const requestPermission = async () => {
     try { await Notification.requestPermission(); } catch { /* ignoriert */ }
-    setEnv(detectPushEnvironment());
+    const next = detectPushEnvironment();
+    setEnv(next);
+    if (next.permission === "granted") await connect();
   };
+
 
   const hintBox = (
     <div className={`push-hint push-hint--${status}`} role="status">
@@ -71,6 +94,18 @@ export const NotificationsCenter = () => {
         <button type="button" className="primary-button compact-button" onClick={() => void requestPermission()}>
           Notifications erlauben
         </button>
+      ) : null}
+      {status === "granted" ? (
+        <>
+          {sync.state === "working" || sync.state === "idle" ? <p>Push wird eingerichtet …</p> : null}
+          {sync.state === "ok" ? <p className="push-hint__ok">Push-Abo auf diesem Gerät ist aktiv.</p> : null}
+          {sync.message && sync.state !== "ok" ? <p>{sync.message}</p> : null}
+          <div className="button-row button-row--compact">
+            {sync.state === "error" ? (
+              <button type="button" className="primary-button compact-button" onClick={() => void connect()}>Erneut versuchen</button>
+            ) : null}
+          </div>
+        </>
       ) : null}
     </div>
   );
