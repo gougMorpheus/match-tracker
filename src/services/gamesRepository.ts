@@ -16,6 +16,7 @@ import { getSupabaseClient } from "../lib/supabase";
 import type { Database } from "../types/supabase";
 import type { Json } from "../types/supabase";
 import { createId } from "../utils/id";
+import { orderTimeEventsForEvaluation } from "../utils/timeEventOrder";
 import { getPlayerTotalScore } from "../utils/gameCalculations";
 import { getNowIso, toLocalDateInput, toLocalTimeInput } from "../utils/time";
 import type { ScoreDetailLevel, StatsEligibilityArea, StatsEligibilityMode, StatsEligibilityOverrides, TimerCorrections } from "../types/game";
@@ -773,9 +774,8 @@ const buildRoundsFromTimeEvents = (gameId: string, timeEvents: TimeEvent[], fall
     .map((event) => event.createdAt)
     .sort((left, right) => left.localeCompare(right))[0] ?? fallbackEndedAt;
 
-  timeEvents
-    .filter((event) => !gameEndAt || event.createdAt <= gameEndAt || event.action === "game-end")
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  orderTimeEventsForEvaluation(timeEvents
+    .filter((event) => !gameEndAt || event.createdAt <= gameEndAt || event.action === "game-end"))
     .map((event) => ({
       id: event.id,
       created_at: event.createdAt,
@@ -1032,7 +1032,7 @@ const mapEventRows = (gameId: string, events: SupabaseEventRecord[]) => {
     scoreEvents,
     commandPointEvents,
     noteEvents,
-    timeEvents
+    timeEvents: orderTimeEventsForEvaluation(timeEvents)
   };
 };
 

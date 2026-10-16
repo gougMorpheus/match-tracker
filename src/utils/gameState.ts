@@ -19,6 +19,7 @@ import type {
 } from "../types/game";
 import { createId, createUuid, isUuid } from "./id";
 import { getNowIso } from "./time";
+import { orderTimeEventsForEvaluation } from "./timeEventOrder";
 
 const sortByCreatedAt = <T extends { createdAt: string }>(items: T[]): T[] =>
   [...items].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
@@ -200,7 +201,7 @@ const buildRoundsFromTimeEvents = (timeEvents: TimeEvent[], fallbackEndedAt?: st
   const roundsByNumber = new Map<number, Round>();
   const gameEndAt = getFirstGameEndAt(timeEvents) ?? fallbackEndedAt;
 
-  [...timeEvents].sort((left, right) => left.createdAt.localeCompare(right.createdAt)).forEach((event) => {
+  orderTimeEventsForEvaluation(timeEvents).forEach((event) => {
     if (gameEndAt && event.createdAt > gameEndAt && event.action !== "game-end") {
       return;
     }
@@ -410,7 +411,7 @@ const normalizeStatsEligibilityOverrides = (value?: StatsEligibilityOverrides | 
 };
 
 export const syncDerivedGameState = (game: Game): Game => {
-  const orderedTimeEvents = [...game.timeEvents];
+  const orderedTimeEvents = orderTimeEventsForEvaluation(game.timeEvents);
   const hasTimeEvents = orderedTimeEvents.length > 0;
   const endedAt = getFirstGameEndAt(orderedTimeEvents) ?? game.endedAt;
   const rounds = buildRoundsFromTimeEvents(orderedTimeEvents, endedAt);

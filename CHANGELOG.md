@@ -3,6 +3,11 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Feste Reihenfolge „Start vor Pause“ bei gleichem Zeitstempel
+- Fehlerbild: Nach „Weiter“ zeigte die Zuschaueransicht nach Neuladen „Läuft“ mit tickender Zugzeit, der Editor nach Neuladen „Timer läuft“, obwohl der Zug pausiert startet.
+- Ursache: `turn-start` und `turn-pause` bekommen denselben Server-Zeitstempel; die DB liefert gleiche Zeitstempel in beliebiger Reihenfolge. Kam die Pause zuerst, wurde sie ignoriert (Zug noch nicht gestartet) und der Zug galt als laufend.
+- Lösung (nur Auswertung, Daten und Timer-Logik unverändert): `orderTimeEventsForEvaluation` (src/utils/timeEventOrder.ts) sortiert nach Zeitstempel und setzt bei Gleichstand game-/round-/turn-start (desselben Zugs) vor `turn-pause`. Genutzt beim Laden (gamesRepository), in `syncDerivedGameState` (Editor, Zuschauer, Statistik, Highlights). Test: tests/timeEventOrder.test.cjs.
+
 ## 2026-10-16 – Schritt 2: Schreibschutz für Alt-Backup-Tabellen
 - `events_backup_before_timer_corrections` und `games_backup_before_timer_corrections`: INSERT/UPDATE/DELETE/TRUNCATE für `anon` und `authenticated` entzogen (vorher `arwdDxtm`, RLS an, keine Policies). SELECT, REFERENCES, TRIGGER, MAINTAIN unverändert.
 - Ursache: Die Tabellen hatten volle Schreibrechte für öffentliche Rollen, obwohl App, RPCs und Keepalive sie nicht nutzen.
