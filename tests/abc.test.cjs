@@ -33,3 +33,19 @@ const runAbcTests = () => {
   assert.ok(field.includes("aria-label={`${label}: neue Eingabe`}"), "aria-label unverändert");
 };
 module.exports = { runAbcTests };
+// Retest Pepper 2: Reihenfolge Rundenabschluss vor Rundenbeginn, Menüpunkt, Öffnen aus Notifications
+const { groupDisplayEvents, getSameTimeRank } = require("../.test-dist/utils/eventGrouping.js");
+const runRetest2Tests = () => {
+  const t = "2026-10-16T07:14:31.815Z";
+  const g = groupDisplayEvents([
+    { id: "highlight:round-summary:r2t1:false", createdAt: t, kind: "highlight" },
+    { id: "0000-round-start", createdAt: t, kind: "time", timeAction: "round-start", roundNumber: 2 }
+  ]);
+  assert.equal(g[0].first.id, "highlight:round-summary:r2t1:false", "Abschluss zuerst (älter)");
+  assert.equal(getSameTimeRank({ id: "highlight:lead-change:x" }), 0);
+  const page = fs.readFileSync(path.join(__dirname, "..", "src/pages/GamePage.tsx"), "utf8");
+  assert.equal((page.match(/\.\.\.accessChoiceMenuItems/g) || []).length, 2, "Match öffnen in Edit- und View-only-Menü");
+  const nc = fs.readFileSync(path.join(__dirname, "..", "src/components/NotificationsCenter.tsx"), "utf8");
+  assert.ok(nc.includes("window.location.hash = getTvModeHash(id)"), "Öffnen aus Notifications = View only");
+};
+module.exports.runRetest2Tests = runRetest2Tests;

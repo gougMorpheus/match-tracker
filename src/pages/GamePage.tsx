@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
+import { getSameTimeRank } from "../utils/eventGrouping";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
 import { FloatingMenu } from "../components/FloatingMenu";
@@ -348,7 +349,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   // Abgeschlossenes Spiel in View only: Menue bietet "Entsperren" (Passwort).
   const closedTv = shouldShowClosedGameTv(game, accessMode);
   // Folgen (Push Stufe a): nur lokal pro Geraet, nach dem Einschalten Hinweis zur Verfuegbarkeit.
-  const rememberedViewOnly = loadRememberedAccessMode(game.id) === "view";
+  // "Match öffnen …": für jedes laufende Spiel erreichbar (Edit und View only), um die gemerkte Wahl zu ändern.
+  const accessChoiceMenuItems = isGameCompletedForDisplay(game) ? [] : [{ label: "Match öffnen …", onClick: () => { reopenAccessChoice(); } }];
   const reopenAccessChoice = () => {
     rememberAccessMode(game.id, null);
     setGameAccessMode(game.id, null);
@@ -485,7 +487,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               turnNumber: highlight.turnNumber,
               createdAt: highlight.createdAt
             }))
-          ].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+          ].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || getSameTimeRank(right) - getSameTimeRank(left))
         : [],
     [game]
   );
@@ -1390,6 +1392,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   { label: "Link teilen", onClick: () => { void handleShareLink(); } },
                   { label: "Einstellungen", onClick: openGameSettings },
                   ...followMenuItems,
+                  ...accessChoiceMenuItems,
                   ...(!isReadOnly ? [isClosed
                     ? {
                         label: "Spiel wieder eröffnen",
@@ -1440,8 +1443,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     { label: "Link teilen", onClick: () => { void handleShareLink(); } },
                     { label: "Einstellungen", onClick: () => { openGameSettings(); } },
                     ...followMenuItems,
-                    // Laufendes Spiel, auf diesem Gerät als "View only" gemerkt: Auswahl erneut anbieten (Dialog wie beim ersten Öffnen).
-                    ...(!closedTv && rememberedViewOnly ? [{ label: "Match öffnen …", onClick: () => { reopenAccessChoice(); } }] : []),
+                    ...accessChoiceMenuItems,
                     // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
                     ...(closedTv ? [{ label: "Entsperren", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
                   ]

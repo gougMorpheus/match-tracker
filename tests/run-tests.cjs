@@ -24,7 +24,7 @@ const { runSchritt1Tests } = require("./schritt1.test.cjs");
 const { runTimeEventOrderTests } = require("./timeEventOrder.test.cjs");
 const { runRetestTests } = require("./retest.test.cjs");
 const { runPushBTests } = require("./pushB.test.cjs");
-const { runAbcTests } = require("./abc.test.cjs");
+const { runAbcTests, runRetest2Tests } = require("./abc.test.cjs");
 
 const suites = [
   ["factionColors", runFactionColorsTests],
@@ -53,7 +53,8 @@ const suites = [
   ["timeEventOrder", runTimeEventOrderTests],
   ["retest", runRetestTests],
   ["pushB", runPushBTests],
-  ["abc", runAbcTests]
+  ["abc", runAbcTests],
+  ["retest2", runRetest2Tests]
 ];
 
 const main = async () => {

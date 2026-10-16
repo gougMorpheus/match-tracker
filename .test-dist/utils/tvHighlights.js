@@ -162,7 +162,14 @@ const deriveScoreLeadHighlights = (game) => {
         const now = total[0] === total[1] ? null : total[0] > total[1] ? 0 : 1;
         const label = `${total[0]} : ${total[1]} VP`;
         const meta = { createdAt: event.createdAt, roundNumber: event.roundNumber, turnNumber: event.turnNumber };
-        if (now !== null && lastLeader !== null && now !== lastLeader) {
+        // Führungswechsel: anderer Führender als zuletzt (wie bisher). Neu (Wunsch Tim 16.10.): auch die erste Führung
+        // im Spiel (aus 0 : 0) ist ein ★-Highlight („geht in Führung“). Dieselbe Funktion speist Liste, Verlauf, TV und Push.
+        if (now !== null && lastLeader === null) {
+            const player = game.players[now];
+            result.push({ id: `highlight:lead-change:${event.id}`, kind: "lead-change", title: "Führung",
+                subtitle: `${player.name} geht in Führung · ${label}`, playerId: player.id, ...meta });
+        }
+        else if (now !== null && now !== lastLeader) {
             const player = game.players[now];
             result.push({ id: `highlight:lead-change:${event.id}`, kind: "lead-change", title: "Führungswechsel",
                 subtitle: `${player.name} übernimmt die Führung · ${label}`, playerId: player.id, ...meta });
