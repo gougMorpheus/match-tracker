@@ -100,8 +100,10 @@ const groupDisplayEvents = (events, awardedTurns) => {
         const cp = asc.find(e => e.id === cpId);
         turnStartGroups.get(start.id)?.autoCp.push(cp);
     }
-    // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event.
-    return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.latest.id.localeCompare(a.latest.id));
+    // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event. Bei gleichem Zeitpunkt steht der Rundenabschluss
+    // (aelter) unter dem Beginn der naechsten Runde – sonst entschied der ID-Vergleich ("highlight:" > UUID).
+    return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+        (0, exports.getSameTimeRank)(b.latest) - (0, exports.getSameTimeRank)(a.latest) || b.latest.id.localeCompare(a.latest.id));
 };
 exports.groupDisplayEvents = groupDisplayEvents;
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");
