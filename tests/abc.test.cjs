@@ -20,6 +20,7 @@ const runAbcTests = () => {
   assert.ok(page.includes('rememberAccessMode(game.id, "edit")') && page.includes('rememberAccessMode(game.id, "view")'), "Dialog merkt sich die Wahl");
   assert.ok(page.includes("loadRememberedAccessMode(props.gameId)") && page.includes("useLayoutEffect"), "Wahl wird vor dem Zeichnen übernommen");
   assert.ok(/!props\.forceTv && !isGameCompletedForDisplay\(game\)/.test(page), "nur laufende Spiele, nicht bei ?tv=1");
+  assert.ok(read("src/store/GameStore.tsx").includes(`rememberAccessMode(createdGame.id, "edit")`), "Neues Spiel: Edit gemerkt");
   assert.ok(page.includes('setReopenPasswordError("Falsches Passwort.")'), "Passwortschutz unverändert");
   // (b) Enter im Namensfeld schickt das Formular nicht ab
   const field = read("src/components/SelectOrCreateField.tsx");

@@ -88,6 +88,7 @@ import {
   type SyncQueueItem
 } from "../utils/localSync";
 import { syncRememberedPlayerNames } from "../utils/presets";
+import { rememberAccessMode } from "../utils/accessModeMemory";
 import { createId } from "../utils/id";
 import { getNowIso } from "../utils/time";
 import {
@@ -1335,6 +1336,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       runMutation(async () => {
         const createdGame = createLocalGame(input);
         setGameAccessMode(createdGame.id, "edit");
+        // Wer das Spiel anlegt, bearbeitet es: Wahl für dieses Gerät merken (kein Dialog nach Neuladen).
+        rememberAccessMode(createdGame.id, "edit");
         replaceGame(createdGame);
         enqueueGameUpsert(createdGame.id);
         void flushSyncQueue();
