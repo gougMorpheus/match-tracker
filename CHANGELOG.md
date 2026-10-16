@@ -3,6 +3,15 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Abgleich nach dem Anlegen, Auto-CP nach Zug Start, Bearbeiten ohne Pause
+- Fehlerbild 1: Direkt nach „Spiel anlegen“ kurz „Spiel nicht gefunden“, bis neu geladen wurde.
+- Ursache 1: Ein Abgleich (15-s-Polling, Realtime, Tab-Wechsel), der VOR dem Speichern gelesen hatte, kam NACH dem Leeren der Queue zurück. Das neue Spiel fehlte in der Antwort und stand nicht mehr in der Queue – `mergeRemoteWithPending` verwarf es.
+- Jetzt: Zähler für eigenes Schreiben und lokales Anlegen (`isPullOutdated`). Ein Abgleich, während dessen selbst gespeichert/angelegt wurde, wird verworfen und sofort wiederholt (max. 3×, sonst Refresh in 600 ms). Zusätzlich verwirft `keepLocallyCreatedGames` ein lokal angelegtes Spiel nur, wenn das Laden nach dessen letztem eigenen Speichern begann.
+- Fehlerbild 2: Im Editor standen automatische CP+ des neuen Zugs zwischen Runde Ende und Zug Ende (CP wenige ms vor Zug Start gespeichert, Bündelung fehlte).
+- Jetzt (`eventOrder.ts`, nur Anzeige): CP und Punkte derselben Runde/desselben Zugs bis 2 s vor dessen Zug Start werden auf Zug Start einsortiert (Rang 55: nach Zug Start, vor Pause). Genutzt von Verlauf, Letzte Ereignisse, TV-Feed (`createEventComparators`, `sortEventsNewestFirst`). Highlights, Push und Zeitauswertung (`timeEventOrder.ts`) unverändert.
+- Entscheidung Tim: Bearbeiten eines Punkte-/CP-Eintrags pausiert die Uhr nicht mehr (`openEditor`); Öffnen, Speichern und Abbrechen erzeugen keine Timer-Events. „Zurück“ und Zugauswahl unverändert.
+- Tests `tests/abgleichAutoCp.test.cjs`.
+
 ## 2026-10-16 – Push: reine ZZ-Testspiele lösen keinen Push aus
 - Fehlerbild: Prod-Live-Checks mit ZZ-Testspielen schickten „Spiel gestartet“ und Rundenabschluss an echte Abos.
 - Ursache: push-dispatch kannte keinen Ausschluss für Testspiele.
