@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-16 – Schritt 2: Schreibschutz für Alt-Backup-Tabellen
+- `events_backup_before_timer_corrections` und `games_backup_before_timer_corrections`: INSERT/UPDATE/DELETE/TRUNCATE für `anon` und `authenticated` entzogen (vorher `arwdDxtm`, RLS an, keine Policies). SELECT, REFERENCES, TRIGGER, MAINTAIN unverändert.
+- Ursache: Die Tabellen hatten volle Schreibrechte für öffentliche Rollen, obwohl App, RPCs und Keepalive sie nicht nutzen.
+- Angewendet am 16.10.2026 06:44 (Berlin) über die Management-API; Migration `supabase/migrations/20261016_01_backup_tabellen_schreibschutz.sql`, Rollback `…rollback.sql`.
+- Daten unverändert (1685 bzw. 35 Zeilen), Backup unter `/home/box/ops/backup/match-tracker-2026-10-16-vor-rechte/`.
+
 ## 2026-10-16
 
 ### Schritt 1: Hinweis, Full screen, Umlaute, Zugstart, Bündelung, Link teilen, ohne Notizen/Scoreboard
