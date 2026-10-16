@@ -279,7 +279,7 @@ const getTimeHistoryLabel = (baseLabel: string, turnRef?: TurnRef | null): strin
   return `${baseLabel} R${turnRef.roundNumber} Z${turnRef.turnNumber}`;
 };
 
-const mergeRemoteWithPending = (
+export const mergeRemoteWithPending = (
   remoteGames: Game[],
   localGames: Game[],
   queue: SyncQueueItem[]
@@ -1340,10 +1340,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         rememberAccessMode(createdGame.id, "edit");
         replaceGame(createdGame);
         enqueueGameUpsert(createdGame.id);
+        // Start-Events (game-start, setup-start) mit der Spielzeile speichern. Fehlerbild vorher: Sie lagen nur lokal;
+        // der erste Abgleich nach dem Speichern ersetzte das Spiel durch den Serverstand ohne Events, die laufende
+        // Aufstellung wurde zu "Bereit" und es erschien "Timer gestoppt" (die Aufstellungszeit ging verloren).
+        createdGame.timeEvents.forEach((event) => enqueueEventUpsert(createdGame.id, event.id));
         void flushSyncQueue();
         return createdGame;
       }),
-    [enqueueGameUpsert, flushSyncQueue, replaceGame, runMutation, setGameAccessMode]
+    [enqueueEventUpsert, enqueueGameUpsert, flushSyncQueue, replaceGame, runMutation, setGameAccessMode]
   );
 
   const updateGameDetails = useCallback(

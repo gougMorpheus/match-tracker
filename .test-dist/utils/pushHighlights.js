@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildGameFromRows = exports.isVisibleEventRow = exports.selectPushMessagesForEvent = exports.RECENT_PUSH_WINDOW_MS = exports.derivePushMessages = exports.toPushMessage = exports.getViewOnlyPath = exports.getPushKey = exports.derivePushHighlights = exports.getGameStartHighlight = void 0;
 const gameCalculations_1 = require("./gameCalculations");
+const eventOrder_1 = require("./eventOrder");
 const tvHighlights_1 = require("./tvHighlights");
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 const START_ACTIONS = ["game-start", "setup-start", "round-start", "turn-start"];
@@ -20,7 +21,7 @@ exports.getGameStartHighlight = getGameStartHighlight;
 // Alles, was gepusht werden kann: Spielstart + exakt die angezeigten Highlights.
 const derivePushHighlights = (game) => {
     const start = (0, exports.getGameStartHighlight)(game);
-    return [...(start ? [start] : []), ...(0, tvHighlights_1.deriveGameHighlights)(game)];
+    return [...(start ? [start] : []), ...(0, tvHighlights_1.deriveGameHighlights)(game)].sort(eventOrder_1.compareEventsAsc);
 };
 exports.derivePushHighlights = derivePushHighlights;
 // Dedupe-Schluessel: Art + Zeitpunkt. Die Anzeige-IDs haengen an Event-ID bzw. Phase (z. B. r4t1). Live kommen

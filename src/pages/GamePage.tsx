@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
-import { getSameTimeRank } from "../utils/eventGrouping";
+import { compareEventsDesc } from "../utils/eventOrder";
 import { resolveSelectedTurnKey, SETUP_TURN_KEY } from "../utils/turnSelection";
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
@@ -489,7 +489,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
               turnNumber: highlight.turnNumber,
               createdAt: highlight.createdAt
             }))
-          ].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || getSameTimeRank(right) - getSameTimeRank(left))
+          ].sort(compareEventsDesc)
         : [],
     [game]
   );

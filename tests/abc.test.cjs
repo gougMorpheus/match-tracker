@@ -51,7 +51,7 @@ const runRetest2Tests = () => {
   assert.equal(order[order.length - 1], "a36275da-turn-end");
   const asc = [...g].reverse().map((x) => x.first.id);
   assert.ok(asc.indexOf("highlight:round-summary:r3t1:false") < asc.indexOf("7a824fcf-round-start"), "chronologisch: erst Abschluss, dann Beginn");
-  assert.equal(getSameTimeRank({ id: "highlight:lead-change:x" }), 0);
+  assert.ok(getSameTimeRank({ id: "highlight:lead-change:x" }) > getSameTimeRank({ id: "t", kind: "time", timeAction: "turn-start" }), "Führungs-Highlights nach Zug Start");
   const page = fs.readFileSync(path.join(__dirname, "..", "src/pages/GamePage.tsx"), "utf8");
   assert.equal((page.match(/\.\.\.accessChoiceMenuItems/g) || []).length, 2, "Match öffnen in Edit- und View-only-Menü");
   const nc = fs.readFileSync(path.join(__dirname, "..", "src/components/NotificationsCenter.tsx"), "utf8");

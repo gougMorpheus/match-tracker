@@ -28,6 +28,7 @@ const { runAbcTests, runRetest2Tests } = require("./abc.test.cjs");
 const { runStatsExcludeTests } = require("./statsExclude.test.cjs");
 const { runTurnSelectionTests } = require("./turnSelection.test.cjs");
 const { runPushAboTests } = require("./pushAbo.test.cjs");
+const { runAufstellungOrderTests } = require("./aufstellungOrder.test.cjs");
 
 const suites = [
   ["pushAbo", runPushAboTests],
@@ -60,7 +61,8 @@ const suites = [
   ["pushB", runPushBTests],
   ["abc", runAbcTests],
   ["retest2", runRetest2Tests],
-  ["turnSelection", runTurnSelectionTests]
+  ["turnSelection", runTurnSelectionTests],
+  ["aufstellungOrder", runAufstellungOrderTests]
 ];
 
 const main = async () => {

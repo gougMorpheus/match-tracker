@@ -1,21 +1,11 @@
 "use strict";
-// Buendelung fuer die ANZEIGE von "Letzte Ereignisse" und Verlauf. Gespeicherte Events bleiben unveraendert;
-// alles wird bei jeder Aenderung (auch Undo des letzten Einzel-Events) neu aus den Events berechnet.
-// Regeln:
-// 1. Automatische +1 CP beim Zugwechsel (cp gained = 1, Runde/Zug wie turn-start, Zeitpunkt +-2 s, je Spieler das erste)
-//    erscheinen nicht als eigene Zeilen, sondern im Zugwechsel mit "(auto CP each)".
-// 2.-4. Innerhalb eines Zuges werden pro Spieler alle CP-Gewinne/-Ausgaben zu einem Eintrag gebuendelt,
-//    ebenso SP pro Spieler und Art (Primaer, Sekundaer, Herausforderung, Gesamt getrennt).
-//    Ohne Runde/Zug werden nur direkt aufeinanderfolgende gleiche Eintraege zusammengefasst.
-// Highlights und Zeit-Events bleiben eigene Eintraege.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AUTO_CP_SUFFIX = exports.formatScoreValue = exports.formatCpGroup = exports.groupDisplayEvents = exports.findAutoCommandPoints = exports.AUTO_CP_WINDOW_MS = exports.getSameTimeRank = void 0;
-// Gleicher Zeitpunkt: der Rundenabschluss (Highlight) gehört vor den Beginn der nächsten Runde
-// (Fehlerbild: „★ Runde 1 abgeschlossen“ stand in der Liste über „Runde 2 beginnt“).
-const getSameTimeRank = (e) => (e.id.startsWith("highlight:round-summary") ? -1 : 0);
+const eventOrder_1 = require("./eventOrder");
+// Gleicher Zeitpunkt: zentrale logische Reihenfolge (eventOrder.ts), z. B. Zug Ende, ★ Runde abgeschlossen, Runde beginnt, Zug Start, Pause.
+const getSameTimeRank = (e) => (0, eventOrder_1.getLogicalRank)(e);
 exports.getSameTimeRank = getSameTimeRank;
-const byTimeAsc = (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
-    (0, exports.getSameTimeRank)(a) - (0, exports.getSameTimeRank)(b) || a.id.localeCompare(b.id);
+const byTimeAsc = (a, b) => (0, eventOrder_1.compareEventsAsc)(a, b);
 const hasTurn = (e) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
 // Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
 // Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
@@ -100,10 +90,8 @@ const groupDisplayEvents = (events, awardedTurns) => {
         const cp = asc.find(e => e.id === cpId);
         turnStartGroups.get(start.id)?.autoCp.push(cp);
     }
-    // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event. Bei gleichem Zeitpunkt steht der Rundenabschluss
-    // (aelter) unter dem Beginn der naechsten Runde – sonst entschied der ID-Vergleich ("highlight:" > UUID).
-    return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
-        (0, exports.getSameTimeRank)(b.latest) - (0, exports.getSameTimeRank)(a.latest) || b.latest.id.localeCompare(a.latest.id));
+    // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event; Gleichstand nach logischer Reihenfolge (umgekehrt).
+    return groups.sort((a, b) => (0, eventOrder_1.compareEventsDesc)({ ...a.latest, createdAt: a.createdAt }, { ...b.latest, createdAt: b.createdAt }));
 };
 exports.groupDisplayEvents = groupDisplayEvents;
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");

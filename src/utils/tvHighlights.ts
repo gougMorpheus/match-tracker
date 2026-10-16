@@ -4,6 +4,7 @@ import { getCurrentRoundNumber, getCurrentTurnNumber, getPlayerComparableTotalSc
   getPlayerTurnDurationTotalMs, getTurnDurationMs } from "./gameCalculations";
 import { getGameOutcome } from "./headToHead";
 import { syncDerivedGameState } from "./gameState";
+import { compareEventsAsc, getLogicalRank } from "./eventOrder";
 
 export interface TvSnapshot {
   phaseKey: string; round: number; completed: boolean; winnerId: string | null;
@@ -98,7 +99,9 @@ export const HIGHLIGHT_RULES: HighlightRule[] = [
   }
 ];
 export const detectTvHighlights = (prev: TvSnapshot, next: TvSnapshot, game: Game, rules = HIGHLIGHT_RULES): TvHighlight[] =>
-  prev.phaseKey === next.phaseKey ? [] : rules.flatMap(rule => rule(prev, next, game));
+  prev.phaseKey === next.phaseKey ? [] : rules.flatMap(rule => rule(prev, next, game))
+    // TV-Einblendung in derselben logischen Reihenfolge wie Liste/Push (alle Treffer haben denselben Phasen-Zeitpunkt).
+    .map((h, index) => ({ h, index })).sort((a, b) => getLogicalRank({ kind: a.h.kind, createdAt: "" }) - getLogicalRank({ kind: b.h.kind, createdAt: "" }) || a.index - b.index).map(({ h }) => h);
 
 // Abgeleitete Highlights fuer Ereignisliste und Verlauf: werden aus den bestehenden (nicht widerrufenen) Events
 // berechnet, nie gespeichert. Ablauf: Spielstand an jeder Phasengrenze (Runden-/Zugstart, Spielende) rekonstruieren
@@ -137,8 +140,8 @@ export const deriveGameHighlights = (game: Game, rules = HIGHLIGHT_RULES): Deriv
     next.lastLeaderId = next.leaderId ?? prev.lastLeaderId;
     prev = next;
   }
-  return [...result, ...deriveScoreLeadHighlights(game)]
-    .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  // Gleicher Zeitpunkt: zentrale logische Reihenfolge (★ Runde abgeschlossen vor Zeit-Duell/Meilensteinen, dann Spielende).
+  return [...result, ...deriveScoreLeadHighlights(game)].sort(compareEventsAsc);
 };
 
 // Fehlerbild 15.10.: Fuehrungswechsel innerhalb eines Zugs fehlten, weil der Stand nur an Phasengrenzen

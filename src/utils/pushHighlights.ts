@@ -3,6 +3,7 @@
 // und von der Netlify Function (netlify/functions/push-dispatch.mts) importiert – keine zweite Implementierung.
 import type { Game } from "../types/game";
 import { getPlayerComparableTotalScore } from "./gameCalculations";
+import { compareEventsAsc } from "./eventOrder";
 import { deriveGameHighlights, getGameAsOf, type DerivedHighlight } from "./tvHighlights";
 import { mapSupabaseGameToAppGame, type SupabaseEventRecord, type SupabaseGameRecord } from "./supabaseGameMapping";
 
@@ -34,7 +35,7 @@ export const getGameStartHighlight = (game: Game): DerivedHighlight | null => {
 // Alles, was gepusht werden kann: Spielstart + exakt die angezeigten Highlights.
 export const derivePushHighlights = (game: Game): DerivedHighlight[] => {
   const start = getGameStartHighlight(game);
-  return [...(start ? [start] : []), ...deriveGameHighlights(game)];
+  return [...(start ? [start] : []), ...deriveGameHighlights(game)].sort(compareEventsAsc);
 };
 
 // Dedupe-Schluessel: Art + Zeitpunkt. Die Anzeige-IDs haengen an Event-ID bzw. Phase (z. B. r4t1). Live kommen

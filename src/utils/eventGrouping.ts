@@ -1,3 +1,4 @@
+import { compareEventsAsc, compareEventsDesc, getLogicalRank, type LogicallyOrderable } from "./eventOrder";
 // Buendelung fuer die ANZEIGE von "Letzte Ereignisse" und Verlauf. Gespeicherte Events bleiben unveraendert;
 // alles wird bei jeder Aenderung (auch Undo des letzten Einzel-Events) neu aus den Events berechnet.
 // Regeln:
@@ -39,11 +40,9 @@ export interface EventGroup<T extends GroupableEvent> {
   scoreType?: string;
 }
 
-// Gleicher Zeitpunkt: der Rundenabschluss (Highlight) gehört vor den Beginn der nächsten Runde
-// (Fehlerbild: „★ Runde 1 abgeschlossen“ stand in der Liste über „Runde 2 beginnt“).
-export const getSameTimeRank = (e: { id: string }): number => (e.id.startsWith("highlight:round-summary") ? -1 : 0);
-const byTimeAsc = (a: GroupableEvent, b: GroupableEvent) => Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
-  getSameTimeRank(a) - getSameTimeRank(b) || a.id.localeCompare(b.id);
+// Gleicher Zeitpunkt: zentrale logische Reihenfolge (eventOrder.ts), z. B. Zug Ende, ★ Runde abgeschlossen, Runde beginnt, Zug Start, Pause.
+export const getSameTimeRank = (e: { id: string; kind?: string; timeAction?: string }): number => getLogicalRank(e as LogicallyOrderable);
+const byTimeAsc = (a: GroupableEvent, b: GroupableEvent) => compareEventsAsc(a, b);
 const hasTurn = (e: GroupableEvent) => typeof e.roundNumber === "number" && typeof e.turnNumber === "number";
 // Auto-CP liegen zeitlich am Zugstart: frueher exakt gleicher Zeitpunkt, seit Server-Zeitstempeln fuer
 // Zeit-Events bis zu einige ms (Client-Uhr) daneben. Fenster +-2 s, je Spieler und Zugstart nur das erste.
@@ -103,10 +102,8 @@ export const groupDisplayEvents = <T extends GroupableEvent>(events: T[], awarde
     const cp = asc.find(e => e.id === cpId)!;
     turnStartGroups.get(start.id)?.autoCp.push(cp);
   }
-  // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event. Bei gleichem Zeitpunkt steht der Rundenabschluss
-  // (aelter) unter dem Beginn der naechsten Runde – sonst entschied der ID-Vergleich ("highlight:" > UUID).
-  return groups.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
-    getSameTimeRank(b.latest) - getSameTimeRank(a.latest) || b.latest.id.localeCompare(a.latest.id));
+  // Neueste zuerst; Zeitpunkt einer Gruppe = juengstes Event; Gleichstand nach logischer Reihenfolge (umgekehrt).
+  return groups.sort((a, b) => compareEventsDesc({ ...a.latest, createdAt: a.createdAt }, { ...b.latest, createdAt: b.createdAt }));
 };
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "±0");
