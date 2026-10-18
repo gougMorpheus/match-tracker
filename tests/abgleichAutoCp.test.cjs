@@ -20,7 +20,7 @@ const runAbgleichAutoCpTests = async () => {
   assert.deepEqual(keepLocallyCreatedGames(remoteWithout, [other, newGame], new Map(), 5).map((g) => g.id), ["alt"], "fremde Spiele unveraendert");
   const store = src("src/store/GameStore.tsx");
   const pull = store.slice(store.indexOf("const pullRemoteGames = useCallback"), store.indexOf("pullPendingRef.current = pullRemoteGames;"));
-  assert.ok(/const pullStartGeneration = writeGenerationRef\.current;\s*const listed = await gamesRepository\.listGames\(\);/.test(pull), "Generation vor dem Laden");
+  assert.ok(/const pullStartGeneration = writeGenerationRef\.current;\s*const listed = await gamesRepository\.listGamesDelta\(remoteCacheRef\.current, getServerNow\(\)\);/.test(pull), "Generation vor dem Laden");
   assert.ok(pull.includes("if (isPullOutdated(pullStartGeneration, writeGenerationRef.current))") && pull.includes("return pullPendingRef.current(attempt + 1)"), "verwerfen + sofort neu laden");
   assert.ok(pull.includes("keepLocallyCreatedGames(mergeRemoteWithPending("));
   const flush = store.slice(store.indexOf("const flushSyncQueue = useCallback"), store.indexOf("flushSyncQueueRef.current = flushSyncQueue;"));

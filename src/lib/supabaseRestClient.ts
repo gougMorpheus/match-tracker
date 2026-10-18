@@ -13,7 +13,7 @@ interface SupabaseResponse<T> {
 }
 
 type QueryMethod = "GET" | "POST" | "PATCH" | "DELETE";
-type FilterOperator = "eq" | "in";
+type FilterOperator = "eq" | "in" | "is";
 
 interface QueryFilter {
   column: string;
@@ -31,7 +31,7 @@ interface UpsertOptions {
 }
 
 interface RealtimeChannel {
-  on: (_event: string, _filter: Record<string, unknown>, _callback: () => void) => RealtimeChannel;
+  on: (_event: string, _filter: Record<string, unknown>, _callback: (change?: unknown) => void) => RealtimeChannel;
   subscribe: (callback?: (status: string) => void) => RealtimeChannel;
   close: () => void;
 }
@@ -170,6 +170,12 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
     return this;
   }
 
+  // Nur "null" (z. B. deleted_at=is.null).
+  is(column: string, value: "null") {
+    this.filters.push({ column, operator: "is", value });
+    return this;
+  }
+
   in(column: string, values: Array<string | number>) {
     this.filters.push({ column, operator: "in", value: values });
     return this;
@@ -210,8 +216,8 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
     }
 
     this.filters.forEach((filter) => {
-      if (filter.operator === "eq") {
-        url.searchParams.set(filter.column, `eq.${filter.value}`);
+      if (filter.operator === "eq" || filter.operator === "is") {
+        url.searchParams.set(filter.column, `${filter.operator}.${filter.value}`);
         return;
       }
 
@@ -303,7 +309,7 @@ class SupabaseQueryBuilder<Row> implements PromiseLike<SupabaseResponse<Row[] | 
 }
 
 class SupabaseRealtimeChannel implements RealtimeChannel {
-  private bindings: Array<{ filter: Record<string, unknown>; callback: () => void; id?: number }> = [];
+  private bindings: Array<{ filter: Record<string, unknown>; callback: (change?: unknown) => void; id?: number }> = [];
   private socket: WebSocket | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private reconnect: ReturnType<typeof setTimeout> | null = null;
@@ -315,7 +321,7 @@ class SupabaseRealtimeChannel implements RealtimeChannel {
   private pendingHeartbeat: string | null = null;
   private statusCallback?: (status: string) => void;
   constructor(private url: string, private apiKey: string, private name: string) {}
-  on(event: string, filter: Record<string, unknown>, callback: () => void) {
+  on(event: string, filter: Record<string, unknown>, callback: (change?: unknown) => void) {
     if (event === "postgres_changes") this.bindings.push({ filter, callback });
     return this;
   }
@@ -376,7 +382,7 @@ class SupabaseRealtimeChannel implements RealtimeChannel {
             this.bindings.forEach(({ filter, callback, id }) => {
               if (Array.isArray(ids) && id !== undefined ? ids.includes(id) :
                 change?.table === filter.table && change?.schema === filter.schema &&
-                  (filter.event === "*" || change?.type === filter.event)) callback();
+                  (filter.event === "*" || change?.type === filter.event)) callback(change);
             });
           }
           if (message.event === "phx_error" || message.event === "phx_close" ||

@@ -13,6 +13,7 @@ import type {
   Turn
 } from "../types/game";
 import { getSupabaseClient } from "../lib/supabase";
+import type { RemoteGameCache, RemoteGameEntry, SlimGameRow } from "../utils/deltaPull";
 import type { Database } from "../types/supabase";
 import type { Json } from "../types/supabase";
 import { createId } from "../utils/id";
@@ -535,13 +536,20 @@ export const getSyncedEventPayload = (
 ): CreateSupabaseEventPayload | null =>
   createSyncedEventPayloads(game).find((event) => event.id === eventId) ?? null;
 
+export const EVENT_PAGE_SIZE = 1000;
+const ID_CHUNK = 100;
+const chunkIds = (ids: string[]): string[][] =>
+  Array.from({ length: Math.ceil(ids.length / ID_CHUNK) }, (_, index) => ids.slice(index * ID_CHUNK, (index + 1) * ID_CHUNK));
+
 const fetchEventsForGameIds = async (gameIds: string[]): Promise<SupabaseEventRecord[]> => {
   if (!gameIds.length) {
     return [];
   }
 
   const supabase = getSupabaseClient();
-  const pageSize = 100;
+  // 1000 = PostgREST max_rows des Projekts (geprueft 18.10.2026). Seite < pageSize beendet das Laden; deshalb darf
+  // pageSize NIE groesser als max_rows sein (sonst wuerde eine gekappte Seite als letzte gelten).
+  const pageSize = EVENT_PAGE_SIZE;
   const events: SupabaseEventRecord[] = [];
 
   for (let page = 0; ; page += 1) {
@@ -651,6 +659,43 @@ export const gamesRepository = {
         events.filter((event) => event.game_id === game.id)
       )
     );
+  },
+
+  // Delta-Abgleich (#679): schlanke Liste + nur geaenderte/neue/markierte/aktive Spiele voll laden. Ergebnis wie listGames.
+  listGamesDelta(cache: RemoteGameCache, now = Date.now()): Promise<Game[]> {
+    return cache.exclusive(async () => {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("games")
+      .select("id,version,flow_version")
+      .is("deleted_at", "null")
+      .order("created_at", { ascending: false });
+    if (error) {
+      throw new Error(`Spiele konnten nicht geladen werden: ${error.message}`);
+    }
+    const slim = ((data ?? []) as SlimGameRow[]);
+    const plan = cache.plan(slim, now);
+    const rows: SupabaseGameRecord[] = [];
+    for (const ids of chunkIds(plan.rowIds)) {
+      const result = await supabase.from("games").select("*").in("id", ids);
+      if (result.error) {
+        throw new Error(`Spiele konnten nicht geladen werden: ${result.error.message}`);
+      }
+      rows.push(...((result.data ?? []) as SupabaseGameRecord[]));
+    }
+    const events: SupabaseEventRecord[] = [];
+    for (const ids of chunkIds(plan.eventIds)) events.push(...await fetchEventsForGameIds(ids));
+    cache.apply(slim, plan, rows, events, now);
+    return cache.list(slim).map((entry) => mapSupabaseGameToAppGame(entry.row, entry.events));
+    });
+  },
+
+  // Live-Ansicht: genau ein Spiel (Zeile + Events), roh fuer Pausen-/Aktivitaetspruefung.
+  async getGameEntryById(gameId: string): Promise<RemoteGameEntry | "deleted" | null> {
+    const row = await fetchGameRecordById(gameId);
+    if (!row) return null;
+    if (isSupabaseGameDeleted(row)) return "deleted";
+    return { row, events: await fetchEventsForGameIds([gameId]) };
   },
 
   async getGameById(gameId: string): Promise<Game> {

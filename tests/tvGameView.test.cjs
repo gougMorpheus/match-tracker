@@ -9,8 +9,8 @@ const runTvGameViewTests = () => {
   const react = {
     createContext: () => ({}),
     useMemo: fn => fn(),
-    useContext: () => new Proxy({ games: [] }, { get: (obj,key) => {
-      assert.equal(key, 'games', 'TV must only read the already loaded games list from the store'); return obj[key];
+    useContext: () => new Proxy({ games: [], liveViewPause: null, resumeLiveView: () => {} }, { get: (obj,key) => {
+      assert.ok(['games','liveViewPause','resumeLiveView'].includes(key), 'TV must only read the already loaded games list (and the live pause state) from the store'); return obj[key];
     }}),
     useState: initial => { const i = cursor++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial;
       return [state[i], value => { state[i] = typeof value === 'function' ? value(state[i]) : value; }]; },
