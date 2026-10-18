@@ -3637,6 +3637,8 @@ button.stats-table__row.is-active {
 .tv-phase__clock strong { font-size: calc(var(--tv-unit) * 3.1); line-height: 1.15; }
 .tv-deficit strong { font-size: calc(var(--tv-unit) * 1.1); }
 .tv-deficit span { display: block; font-size: var(--tv-small); color: var(--muted); }
+.tv-live-paused { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6em; margin: 0.4em 0; padding: 0.5em 0.8em; border: 1px solid var(--accent, #3b82f6); border-radius: 10px; font-size: var(--tv-small); }
+.tv-live-paused button { font: inherit; padding: 0.3em 0.9em; border-radius: 8px; cursor: pointer; }
 .tv-chart { display: flex; flex-direction: column; gap: .5em; }
 .tv-legend { display: flex; flex-wrap: wrap; gap: .4em 1em; font-size: var(--tv-small); color: var(--muted); }
 .tv-legend > span { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

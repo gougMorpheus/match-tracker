@@ -3,6 +3,16 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-18 – Delta-Abgleich, seltener abfragen, Live-Ansicht nur ein Spiel (Egress, #679)
+- Fehlerbild: Supabase-Org über dem Egress-Kontingent (12,4 von 5,5 GB). Jeder Abgleich lud alle Spiele (auch gelöschte) mit allen Events in 100er-Seiten (~1 MB roh / ~120 KB gzip), alle 15 s und zusätzlich nach jeder Realtime-Meldung, in jedem sichtbaren Tab, auch in TV-/View-only-Ansichten (Smart-TV ~250 Vollabzüge/h).
+- Ursache: kein Delta, Polling unabhängig von Realtime, TV lud alles.
+- Jetzt (`src/utils/deltaPull.ts`, `listGamesDelta`): schlanke Liste `id,version,flow_version` mit `deleted_at=is.null`; volle Zeile/Events nur für neue Spiele, geänderte `version`/`flow_version`, markierte Spiele (eigenes Schreiben, Realtime-Payload mit `game_id`) und aktive Spiele (< 12 h). Vollabzug als Sicherheitsnetz alle 10 min sowie beim Start, Tab-Rückkehr, online und Realtime-(Wieder)verbindung. Fehlt ein Spiel in der Liste, gilt es als gelöscht. Abgleiche laufen nacheinander. Zusammenführung (#23/#25/#26, Konflikte) unverändert.
+- Warum aktive Spiele immer: `mt_put_event`/`mt_revoke_event` erhöhen `flow_version` nur bei Ablauf-Events; CP/Punkte/Notizen ändern keine Version, und ein Revoke ist für anon per RLS unsichtbar (kein Realtime).
+- Takt: 60 s mit verbundenem Realtime, sonst 15 s. Realtime lädt gezielt das betroffene Spiel.
+- Live-Ansicht (View only/TV, ?tv=1): nur das gezeigte Spiel (30 s mit Realtime, sonst 10 s; statt bisher 3 s + Vollabzug). Nach Spielende angehalten; nach 15 min ohne neues Event Hinweis „Live-Aktualisierung pausiert“ mit Knopf „Weiter live“.
+- Event-Seiten 1000 statt 100 (PostgREST `max_rows` = 1000 geprüft; Seitengröße darf nie größer als `max_rows` sein).
+- Keine Schemaänderung. Tests `tests/deltaAbgleich.test.cjs`.
+
 ## 2026-10-16 – Spielzeile nach langsamem Speichern nachsenden
 - Fehlerbild: Wurde „Weiter“ gedrückt, während die Spielzeile noch gespeichert wurde, fehlte der Auto-CP-Merker (`notes.optionsMeta.autoCommandPointAwards`) in der DB, obwohl die CP-Events gespeichert waren. Die Anzeige bündelte dann nicht als „(auto CP each)“.
 - Ursache: `enqueueSyncQueueItem` überspringt ein neues `upsert-game`, solange schon eines für das Spiel in der Queue steht – auch wenn dieses gerade gesendet wird. Nach dem Speichern wurde der Eintrag entfernt; die Änderung während des Speicherns ging nie raus.

@@ -36,8 +36,10 @@ import {
   getEventPayloadFingerprint,
   getGameSnapshotFingerprint,
   getSyncedEventPayload,
+  mapSupabaseGameToAppGame,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
+import { RemoteGameCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId } from "../utils/deltaPull";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -160,6 +162,9 @@ interface GameStoreValue {
   createGame: (input: CreateGameInput) => Promise<Game>;
   getGame: (gameId: string) => Game | undefined;
   refreshGames: () => Promise<void>;
+  // Live-Ansicht (View only/TV): angehalten nach Spielende ("ended") bzw. 15 min ohne neues Event ("idle").
+  liveViewPause: "ended" | "idle" | null;
+  resumeLiveView: () => void;
   updateGameDetails: (gameId: string, input: CreateGameInput) => Promise<void>;
   updateStatsEligibilityOverrides: (gameId: string, overrides: StatsEligibilityOverrides) => Promise<void>;
   setTimerCorrections: (input: TimerCorrectionInput) => Promise<void>;
@@ -422,9 +427,18 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const scheduleRemoteRefreshRef = useRef<(() => void) | null>(null);
   // Zaehler fuer eigenes Schreiben und lokales Anlegen (siehe isPullOutdated / keepLocallyCreatedGames).
   const writeGenerationRef = useRef(0);
+  // Delta-Abgleich (#679): Server-Stände je Spiel; eigenes Schreiben/Realtime markiert Spiele zum Nachladen.
+  const remoteCacheRef = useRef<RemoteGameCache>(new RemoteGameCache());
+  const realtimeConnectedRef = useRef(false);
+  const lastPullStartRef = useRef(0);
+  const refreshGamesRef = useRef<(() => Promise<void>) | null>(null);
+  const liveViewRef = useRef<{ gameId: string | null; since: number; pause: "ended" | "idle" | null }>({ gameId: null, since: 0, pause: null });
+  const [liveViewPause, setLiveViewPause] = useState<"ended" | "idle" | null>(null);
   const locallyCreatedSaveGenerationRef = useRef<Map<string, number>>(new Map());
   const bumpWriteGeneration = (gameId?: string) => {
     writeGenerationRef.current += 1;
+    // Eigene Aenderung (auch CP/Punkte/Notizen ohne Versionserhoehung): Spiel beim naechsten Abgleich voll nachladen.
+    if (gameId) remoteCacheRef.current.markDirty(gameId); else remoteCacheRef.current.requestFull();
     if (gameId && locallyCreatedSaveGenerationRef.current.has(gameId)) {
       locallyCreatedSaveGenerationRef.current.set(gameId, writeGenerationRef.current);
     }
@@ -817,7 +831,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     try {
       // Veraltete Antworten (vor dem eigenen Schreiben gelesen) ersetzen den neueren lokalen Stand nicht.
       const pullStartGeneration = writeGenerationRef.current;
-      const listed = await gamesRepository.listGames();
+      const listed = await gamesRepository.listGamesDelta(remoteCacheRef.current, getServerNow());
       if (isPullOutdated(pullStartGeneration, writeGenerationRef.current)) {
         // Waehrend des Ladens wurde selbst gespeichert/angelegt: Antwort kann aelter sein -> verwerfen, sofort neu laden.
         if (attempt < 3) return pullPendingRef.current(attempt + 1);
@@ -1041,6 +1055,57 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   flushSyncQueueRef.current = flushSyncQueue;
 
+  // Live-Ansicht = Spielseite im Modus View only (TV, ?tv=1, abgeschlossene Spiele, Zuschauer).
+  const getLiveGameId = useCallback((): string | null => {
+    if (typeof window === "undefined") return null;
+    const { gameId } = getGameRouteAccess(window.location.hash, window.location.search);
+    return gameId && isGameViewOnly(gameId) ? gameId : null;
+  }, [isGameViewOnly]);
+
+  const loadLiveGame = useCallback(async (gameId: string): Promise<void> => {
+    const live = liveViewRef.current;
+    if (live.gameId !== gameId) {
+      liveViewRef.current = { gameId, since: getServerNow(), pause: null };
+      setLiveViewPause(null);
+    } else if (live.pause) {
+      return;
+    }
+    try {
+      const entry = await remoteCacheRef.current.exclusive(() => gamesRepository.getGameEntryById(gameId));
+      if (getLiveGameId() !== gameId || queueRef.current.some((item) => item.gameId === gameId)) return;
+      if (entry === null) return;
+      holdBlockedLocalGames();
+      if (entry === "deleted") {
+        // Auf einem anderen Geraet geloescht (Zeile mit deleted_at vorhanden).
+        remoteCacheRef.current.entries.delete(gameId);
+        const nextGames = gamesRef.current.filter((game) => game.id !== gameId);
+        gamesRef.current = nextGames;
+        setGames(nextGames);
+        saveCachedGames(nextGames);
+        return;
+      }
+      remoteCacheRef.current.entries.set(gameId, entry);
+      const remoteGame = mapSupabaseGameToAppGame(entry.row, entry.events);
+      const nextGames = sortGames([remoteGame, ...gamesRef.current.filter((game) => game.id !== gameId)]);
+      gamesRef.current = nextGames;
+      setGames(nextGames);
+      saveCachedGames(nextGames);
+      setLastSyncAt(getNowIso());
+      setSyncStatus("success");
+      const pause = getLiveViewPause(entry, liveViewRef.current.since, getServerNow());
+      if (liveViewRef.current.gameId === gameId && pause !== liveViewRef.current.pause) {
+        liveViewRef.current = { ...liveViewRef.current, pause };
+        setLiveViewPause(pause);
+      }
+    } catch { /* Naechster Takt bzw. Realtime versucht es erneut; letzter Stand bleibt sichtbar. */ }
+  }, [getLiveGameId]);
+
+  const resumeLiveView = useCallback(() => {
+    liveViewRef.current = { ...liveViewRef.current, since: getServerNow(), pause: null };
+    setLiveViewPause(null);
+    void refreshGamesRef.current?.();
+  }, []);
+
   const refreshGames = useCallback(async () => {
     if (!canAttemptRemoteSync()) {
       setIsLoading(false);
@@ -1055,6 +1120,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       return;
     }
 
+    lastPullStartRef.current = Date.now();
+    const liveGameId = getLiveGameId();
+    if (liveGameId && !queueRef.current.length) {
+      // Live-Ansicht: nur das gezeigte Spiel laden, kein Vollabzug.
+      setIsLoading(!gamesRef.current.some((game) => game.id === liveGameId));
+      await loadLiveGame(liveGameId);
+      setIsLoading(false);
+      return;
+    }
     setSyncStatus("syncing");
     setIsLoading(gamesRef.current.length === 0);
     if (queueRef.current.length) {
@@ -1063,7 +1137,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       await pullRemoteGames();
     }
     setIsLoading(false);
-  }, [flushSyncQueue, pullRemoteGames]);
+  }, [flushSyncQueue, getLiveGameId, loadLiveGame, pullRemoteGames]);
+
+  refreshGamesRef.current = refreshGames;
 
   const scheduleRemoteRefresh = useCallback(() => {
     if (!canAttemptRemoteSync()) {
@@ -1105,6 +1181,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     const handleOnline = () => {
       retryAttemptRef.current = 0;
+      remoteCacheRef.current.requestFull();
       void refreshGames();
     };
     const handleOffline = () => {
@@ -1122,6 +1199,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       if (resumeSyncTimerRef.current) {
         window.clearTimeout(resumeSyncTimerRef.current);
       }
+      remoteCacheRef.current.requestFull();
       resumeSyncTimerRef.current = window.setTimeout(() => {
         resumeSyncTimerRef.current = null;
         void refreshGames();
@@ -1149,59 +1227,57 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     }
 
     const supabase = getSupabaseClient();
+    // Realtime-Payload: betroffenes Spiel gezielt nachladen (Delta); ohne game_id Vollabzug.
+    const onChange = (change?: unknown) => {
+      const gameId = getRealtimeGameId(change);
+      if (gameId) remoteCacheRef.current.markDirty(gameId); else remoteCacheRef.current.requestFull();
+      const liveGameId = getLiveGameId();
+      if (liveGameId && (gameId !== liveGameId || liveViewRef.current.pause)) return;
+      scheduleRemoteRefresh();
+    };
     const channel = supabase
       .channel("match-tracker-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "games" },
-        () => scheduleRemoteRefresh()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "events" },
-        () => scheduleRemoteRefresh()
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "games" }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, onChange)
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") scheduleRemoteRefresh();
+        realtimeConnectedRef.current = status === "SUBSCRIBED";
+        if (status === "SUBSCRIBED") {
+          // (Wieder) verbunden: Meldungen koennen gefehlt haben -> Vollabzug (ausser direkt nach einem).
+          if (getServerNow() - remoteCacheRef.current.lastFullAt > 10000) remoteCacheRef.current.requestFull();
+          scheduleRemoteRefresh();
+        }
       });
 
     return () => {
+      realtimeConnectedRef.current = false;
       void supabase.removeChannel(channel);
     };
-  }, [scheduleRemoteRefresh]);
+  }, [getLiveGameId, scheduleRemoteRefresh]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      void refreshGames();
-    }, 15000);
-
-    return () => window.clearInterval(interval);
-  }, [refreshGames]);
-
-  useEffect(() => {
-    let busy = false;
-    let cancelled = false;
-    const pullViewerGame = async () => {
-      const { gameId } = getGameRouteAccess(window.location.hash, window.location.search);
-      if (busy || document.hidden || !canAttemptRemoteSync() || !gameId || !isGameViewOnly(gameId) ||
-          isGameCompletedForDisplay(gamesRef.current.find((game) => game.id === gameId))) return;
-      busy = true;
-      try {
-        const remoteGame = await gamesRepository.getGameById(gameId);
-        if (cancelled || !isGameViewOnly(gameId) ||
-            getGameRouteAccess(window.location.hash, window.location.search).gameId !== gameId) return;
-        holdBlockedLocalGames();
-        const nextGames = sortGames([remoteGame, ...gamesRef.current.filter((game) => game.id !== gameId)]);
-        gamesRef.current = nextGames;
-        setGames(nextGames);
-        saveCachedGames(nextGames);
-      } catch { /* Full refresh/retry handles errors; keep last synced display. */ }
-      finally { busy = false; }
+    // Takt: 60 s mit Realtime, sonst 15 s; Live-Ansicht 30 s bzw. 10 s, angehalten nach Spielende/Inaktivitaet.
+    const tick = () => {
+      if (!canAttemptRemoteSync()) return;
+      const liveGameId = getLiveGameId();
+      if (liveGameId && liveViewRef.current.gameId === liveGameId && liveViewRef.current.pause) return;
+      if (Date.now() - lastPullStartRef.current >= getPollIntervalMs(realtimeConnectedRef.current, Boolean(liveGameId))) {
+        void refreshGames();
+      }
     };
-    void pullViewerGame();
-    const interval = window.setInterval(() => void pullViewerGame(), 3000);
-    return () => { cancelled = true; window.clearInterval(interval); };
-  }, [gameAccessModes, isGameViewOnly]);
+    const interval = window.setInterval(tick, 5000);
+    // Wechsel Liste <-> Live-Ansicht: sofort passend laden.
+    const onRoute = () => scheduleRemoteRefresh();
+    window.addEventListener("hashchange", onRoute);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("hashchange", onRoute);
+    };
+  }, [getLiveGameId, refreshGames, scheduleRemoteRefresh]);
+
+  useEffect(() => {
+    // Moduswechsel (z. B. View only gewaehlt): Live-Ansicht sofort laden. Ersetzt das fruehere 3-s-Nachladen.
+    if (getLiveGameId()) scheduleRemoteRefresh();
+  }, [gameAccessModes, getLiveGameId, scheduleRemoteRefresh]);
 
   useEffect(
     () => () => {
@@ -2775,6 +2851,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       createGame,
       getGame,
       refreshGames,
+      liveViewPause,
+      resumeLiveView,
       updateGameDetails,
       updateStatsEligibilityOverrides,
       setAutoCommandPointEnabled,
@@ -2830,6 +2908,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       endTimeout,
       retrySync,
       refreshGames,
+      liveViewPause,
+      resumeLiveView,
       setAutoCommandPointEnabled,
       setGameAccessMode,
       setTimerCorrections,

@@ -32,6 +32,7 @@ const { runAufstellungOrderTests } = require("./aufstellungOrder.test.cjs");
 const { runPushZzTests } = require("./pushZz.test.cjs");
 const { runAbgleichAutoCpTests } = require("./abgleichAutoCp.test.cjs");
 const { runSpielzeileNachsendenTests } = require("./spielzeileNachsenden.test.cjs");
+const { runDeltaAbgleichTests } = require("./deltaAbgleich.test.cjs");
 
 const suites = [
   ["pushAbo", runPushAboTests],
@@ -68,7 +69,8 @@ const suites = [
   ["aufstellungOrder", runAufstellungOrderTests],
   ["pushZz", runPushZzTests],
   ["abgleichAutoCp", runAbgleichAutoCpTests],
-  ["spielzeileNachsenden", runSpielzeileNachsendenTests]
+  ["spielzeileNachsenden", runSpielzeileNachsendenTests],
+  ["deltaAbgleich", runDeltaAbgleichTests]
 ];
 
 const main = async () => {
