@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiveViewPause = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
+exports.getLiveViewPause = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 // Delta-Abgleich (#679, Egress): Statt bei jedem Abgleich alle Spiele mit allen Events zu laden, wird eine schlanke
 // Liste (id, version, flow_version; geloeschte schon serverseitig gefiltert) geholt. Volle Zeilen bzw. Events nur fuer
@@ -126,6 +126,10 @@ const getPollIntervalMs = (realtimeConnected, liveGameView) => liveGameView ? (r
 exports.getPollIntervalMs = getPollIntervalMs;
 // Live-Ansicht (View only/TV): nach Spielende oder 15 min ohne neues Event anhalten.
 exports.LIVE_VIEW_IDLE_MS = 15 * 60 * 1000;
+// Realtime in der Live-Ansicht: nur das eigene gezeigte Spiel. Bei "idle" angehalten; bei "ended" weiter durchlassen,
+// damit z. B. ein Undo des Spielendes das Spiel neu laedt und die Pause aufhebt (nur bei echten Aenderungen, kaum Verkehr).
+const shouldLiveViewFollowRealtime = (liveGameId, changeGameId, pause) => changeGameId === liveGameId && pause !== "idle";
+exports.shouldLiveViewFollowRealtime = shouldLiveViewFollowRealtime;
 const getLiveViewPause = (entry, liveSinceMs, now) => {
     if (!entry)
         return null;

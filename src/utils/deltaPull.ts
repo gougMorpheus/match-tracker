@@ -122,6 +122,11 @@ export const getPollIntervalMs = (realtimeConnected: boolean, liveGameView: bool
 
 // Live-Ansicht (View only/TV): nach Spielende oder 15 min ohne neues Event anhalten.
 export const LIVE_VIEW_IDLE_MS = 15 * 60 * 1000;
+
+// Realtime in der Live-Ansicht: nur das eigene gezeigte Spiel. Bei "idle" angehalten; bei "ended" weiter durchlassen,
+// damit z. B. ein Undo des Spielendes das Spiel neu laedt und die Pause aufhebt (nur bei echten Aenderungen, kaum Verkehr).
+export const shouldLiveViewFollowRealtime = (liveGameId: string, changeGameId: string | null, pause: "ended" | "idle" | null): boolean =>
+  changeGameId === liveGameId && pause !== "idle";
 export const getLiveViewPause = (entry: RemoteGameEntry | null, liveSinceMs: number, now: number): "ended" | "idle" | null => {
   if (!entry) return null;
   if (entry.row.ended_at) return "ended";

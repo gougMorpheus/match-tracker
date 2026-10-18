@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/loadBrowserModule.cjs");
 const { createGameInput } = require("./helpers/gameFixtures.cjs");
-const { RemoteGameCache, FULL_PULL_INTERVAL_MS, LIVE_VIEW_IDLE_MS, getRealtimeGameId, getPollIntervalMs, getLiveViewPause } =
+const { RemoteGameCache, FULL_PULL_INTERVAL_MS, LIVE_VIEW_IDLE_MS, getRealtimeGameId, getPollIntervalMs, getLiveViewPause, shouldLiveViewFollowRealtime } =
   require("../.test-dist/utils/deltaPull.js");
 
 // #679 Delta-Abgleich: Events nur fuer geaenderte/neue/markierte/aktive Spiele; Vollabzug als Sicherheitsnetz.
@@ -102,6 +102,21 @@ const runDeltaAbgleichTests = async () => {
   assert.equal(getLiveViewPause(live, NOW, NOW + LIVE_VIEW_IDLE_MS), "idle", "15 min ohne neues Event");
   assert.equal(getLiveViewPause(live, NOW + 60000, NOW + LIVE_VIEW_IDLE_MS), null, "Weiter live setzt Zeitpunkt neu");
   assert.equal(getLiveViewPause({ ...live, row: { ...live.row, ended_at: iso(NOW) } }, NOW, NOW), "ended");
+
+  // TV: Spiel beendet -> Pause "ended"; Realtime des eigenen Spiels kommt durch, fremdes Spiel nicht.
+  const endedEntry = { ...live, row: { ...live.row, ended_at: iso(NOW) } };
+  const endedPause = getLiveViewPause(endedEntry, NOW, NOW + 1000);
+  assert.equal(endedPause, "ended");
+  assert.equal(shouldLiveViewFollowRealtime("l", getRealtimeGameId({ table: "games", record: { id: "l" } }), endedPause), true, "eigenes Spiel nach Ende -> laden");
+  assert.equal(shouldLiveViewFollowRealtime("l", getRealtimeGameId({ table: "events", record: { id: "x", game_id: "fremd" } }), endedPause), false, "fremdes Spiel ignoriert");
+  assert.equal(shouldLiveViewFollowRealtime("l", null, endedPause), false, "ohne game_id kein Vollabzug in der Live-Ansicht");
+  // Undo des Spielendes: neu geladener Stand ohne ended_at -> Pause aufgehoben.
+  const reopened = { row: { ...live.row, ended_at: null, version: 2 }, events: [...live.events, ev("l2", "l", NOW + 2000)] };
+  assert.equal(getLiveViewPause(reopened, NOW, NOW + 3000), null, "Pause nach Undo aufgehoben");
+  // "idle" unveraendert: auch eigenes Spiel angehalten (nur "Weiter live"); ohne Pause wie bisher.
+  assert.equal(shouldLiveViewFollowRealtime("l", "l", "idle"), false);
+  assert.equal(shouldLiveViewFollowRealtime("l", "l", null), true);
+  assert.equal(shouldLiveViewFollowRealtime("l", "fremd", null), false);
 
   // Repository gegen Fetch-Mock: Abfragen schlank, 2. Abgleich ohne Events fuer unveraenderte alte Spiele.
   const saved = Object.getOwnPropertyDescriptor(globalThis, "fetch");

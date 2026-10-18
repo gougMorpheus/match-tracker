@@ -230,8 +230,8 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
               {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
             </nav>
           </div>
-          {liveViewPause === "idle" ? <div className="tv-live-paused" role="status">
-            <span>Live-Aktualisierung pausiert: seit 15 min kein neues Ereignis.</span>
+          {liveViewPause ? <div className="tv-live-paused" role="status">
+            <span>{liveViewPause === "ended" ? "Spiel beendet: Live-Aktualisierung pausiert." : "Live-Aktualisierung pausiert: seit 15 min kein neues Ereignis."}</span>
             <button type="button" onClick={resumeLiveView}>Weiter live</button>
           </div> : null}
           <div className="tv-phase__clock"><span>{timeout ? "Time-out" : turn ? completed ? "Letzte Zugzeit" : "Laufende Zugzeit" : "Aufstellungszeit"}</span><strong>{clock(phaseMs)}</strong></div>
