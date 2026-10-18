@@ -3,6 +3,11 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-18 – Delta-Abgleich: alte Löschungen nicht jedes Mal neu laden
+- Fehlerbild: Nach #27 lud jeder Abgleich 24 Spielzeilen und ~770 Events erneut.
+- Ursache: 24 alte Spiele sind nur über `notes.deletedMeta` gelöscht (`deleted_at` leer). Sie stehen in der schlanken Liste, wurden aber (richtig) nicht angezeigt und daher nicht im Cache gehalten → jedes Mal „neu“.
+- Jetzt: Platzhalter im Cache (nicht angezeigt); erneut geladen nur bei geänderter Version. Vollabzug lädt für sie keine Events (wie vor #27).
+
 ## 2026-10-18 – Delta-Abgleich, seltener abfragen, Live-Ansicht nur ein Spiel (Egress, #679)
 - Fehlerbild: Supabase-Org über dem Egress-Kontingent (12,4 von 5,5 GB). Jeder Abgleich lud alle Spiele (auch gelöschte) mit allen Events in 100er-Seiten (~1 MB roh / ~120 KB gzip), alle 15 s und zusätzlich nach jeder Realtime-Meldung, in jedem sichtbaren Tab, auch in TV-/View-only-Ansichten (Smart-TV ~250 Vollabzüge/h).
 - Ursache: kein Delta, Polling unabhängig von Realtime, TV lud alles.

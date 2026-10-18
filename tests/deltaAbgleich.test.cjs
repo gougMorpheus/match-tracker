@@ -71,6 +71,17 @@ const runDeltaAbgleichTests = async () => {
   r = pull(NOW + FULL_PULL_INTERVAL_MS + 4000);
   assert.deepEqual(r.list.map((e) => e.row.id), ["aktiv"]);
 
+  // Alte Loeschung nur in notes (deleted_at leer): nicht anzeigen, aber auch nicht bei jedem Abgleich neu laden.
+  const legacyDeleted = row("legacy", 1, 1, oldAt, { notes: JSON.stringify({ deletedMeta: { deletedAt: iso(oldAt) } }) });
+  rows = [legacyDeleted, rows[1]];
+  r = pull(NOW + FULL_PULL_INTERVAL_MS + 4500);
+  assert.deepEqual(r.list.map((e) => e.row.id), ["aktiv"], "Loeschung in notes -> nicht in der Liste");
+  r = pull(NOW + FULL_PULL_INTERVAL_MS + 4600);
+  assert.ok(!r.plan.rowIds.includes("legacy") && !r.plan.eventIds.includes("legacy"), "geloeschter Platzhalter wird nicht neu geladen");
+  r = pull(NOW + 2 * FULL_PULL_INTERVAL_MS + 5000);
+  assert.equal(r.plan.full, true); assert.ok(!r.plan.eventIds.includes("legacy"), "Vollabzug: keine Events fuer geloeschte");
+  rows = [rows[1]];
+
   // Markierung WAEHREND des Ladens bleibt bestehen (Antwort kann aelter sein).
   const slim = slimOf(rows); const plan = cache.plan(slim, NOW + FULL_PULL_INTERVAL_MS + 5000);
   cache.markDirty("aktiv");

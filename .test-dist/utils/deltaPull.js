@@ -48,9 +48,14 @@ class RemoteGameCache {
     isFullRequested() { return this.fullSeq > this.fullDoneSeq; }
     plan(slim, now) {
         const full = this.isFullRequested() || !this.lastFullAt || now - this.lastFullAt >= exports.FULL_PULL_INTERVAL_MS;
+        const unchangedTombstone = (row) => {
+            const entry = this.entries.get(row.id);
+            return Boolean(entry?.deleted && entry.row.version === row.version && entry.row.flow_version === row.flow_version);
+        };
         if (full) {
-            const ids = slim.map((row) => row.id);
-            return { full, rowIds: ids, eventIds: ids, dirtyMark: this.markSeq, fullMark: this.fullSeq };
+            // Wie frueher: Events nur fuer nicht geloeschte Spiele.
+            return { full, rowIds: slim.map((row) => row.id), eventIds: slim.filter((row) => !unchangedTombstone(row)).map((row) => row.id),
+                dirtyMark: this.markSeq, fullMark: this.fullSeq };
         }
         const rowIds = [];
         const eventIds = [];
@@ -59,6 +64,8 @@ class RemoteGameCache {
             const changed = !entry || entry.row.version !== row.version || entry.row.flow_version !== row.flow_version;
             if (changed)
                 rowIds.push(row.id);
+            if (!changed && entry.deleted)
+                continue;
             if (changed || this.dirty.has(row.id) || now - (0, exports.getLastActivityMs)(entry) < exports.ACTIVE_WINDOW_MS)
                 eventIds.push(row.id);
         }
@@ -73,12 +80,16 @@ class RemoteGameCache {
         for (const { id } of slim) {
             const previous = this.entries.get(id);
             const row = rowById.get(id) ?? (plan.rowIds.includes(id) ? undefined : previous?.row);
-            if (!row || (0, supabaseGameMapping_1.isSupabaseGameDeleted)(row))
+            if (!row)
                 continue;
+            if ((0, supabaseGameMapping_1.isSupabaseGameDeleted)(row)) {
+                next.set(id, { row, events: [], deleted: true });
+                continue;
+            }
             const fetchedEvents = eventsById.get(id);
             if (!fetchedEvents && !previous)
                 continue;
-            next.set(id, { row, events: fetchedEvents ?? previous.events });
+            next.set(id, { row, events: fetchedEvents ?? (previous.deleted ? [] : previous.events) });
         }
         this.entries = next;
         for (const id of plan.eventIds)
@@ -94,7 +105,7 @@ class RemoteGameCache {
     }
     // Reihenfolge der schlanken Liste (created_at absteigend) = Reihenfolge des frueheren Vollabzugs.
     list(slim) {
-        return slim.map((row) => this.entries.get(row.id)).filter((entry) => Boolean(entry));
+        return slim.map((row) => this.entries.get(row.id)).filter((entry) => Boolean(entry && !entry.deleted));
     }
 }
 exports.RemoteGameCache = RemoteGameCache;
