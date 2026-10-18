@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/loadBrowserModule.cjs");
 const { createGameInput } = require("./helpers/gameFixtures.cjs");
-const { RemoteGameCache, FULL_PULL_INTERVAL_MS, LIVE_VIEW_IDLE_MS, getRealtimeGameId, getPollIntervalMs, getLiveViewPause, shouldLiveViewFollowRealtime } =
+const { RemoteGameCache, FULL_PULL_INTERVAL_MS, LIVE_VIEW_IDLE_MS, getRealtimeGameId, getPollIntervalMs, getLiveViewPause, shouldLiveViewFollowRealtime, liveViewBlocksLoad } =
   require("../.test-dist/utils/deltaPull.js");
 
 // #679 Delta-Abgleich: Events nur fuer geaenderte/neue/markierte/aktive Spiele; Vollabzug als Sicherheitsnetz.
@@ -110,6 +110,8 @@ const runDeltaAbgleichTests = async () => {
   assert.equal(shouldLiveViewFollowRealtime("l", getRealtimeGameId({ table: "games", record: { id: "l" } }), endedPause), true, "eigenes Spiel nach Ende -> laden");
   assert.equal(shouldLiveViewFollowRealtime("l", getRealtimeGameId({ table: "events", record: { id: "x", game_id: "fremd" } }), endedPause), false, "fremdes Spiel ignoriert");
   assert.equal(shouldLiveViewFollowRealtime("l", null, endedPause), false, "ohne game_id kein Vollabzug in der Live-Ansicht");
+  assert.equal(liveViewBlocksLoad(endedPause), false, "bei Spielende darf das Laden nicht gesperrt sein");
+  assert.equal(liveViewBlocksLoad("idle"), true); assert.equal(liveViewBlocksLoad(null), false);
   // Undo des Spielendes: neu geladener Stand ohne ended_at -> Pause aufgehoben.
   const reopened = { row: { ...live.row, ended_at: null, version: 2 }, events: [...live.events, ev("l2", "l", NOW + 2000)] };
   assert.equal(getLiveViewPause(reopened, NOW, NOW + 3000), null, "Pause nach Undo aufgehoben");
