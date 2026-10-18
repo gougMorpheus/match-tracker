@@ -3,6 +3,10 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-18 – TV: bei Spielende nur „Spiel beendet“
+- In der TV-Live-Ansicht zeigt die Pause wegen Spielende nur noch „Spiel beendet“ (kein „Weiter live“, kein Pausentext). Wiederaufnahme kommt weiter per Realtime an (#29/#30 unverändert).
+- „15 min ohne Ereignis“: Hinweis und „Weiter live“ unverändert.
+
 ## 2026-10-18 – TV folgt auch nach Spielende (Undo)
 - In der TV-/Ansichts-Live-Ansicht kommen bei Pause „Spiel beendet“ Realtime-Meldungen des eigenen Spiels weiter durch; eine echte Änderung (z. B. Undo des Spielendes) lädt das Spiel und hebt die Pause auf.
 - Nachtrag (#30): Das Laden der Live-Ansicht war bei jeder Pause gesperrt; jetzt nur bei „15 min ohne Ereignis“, damit die Meldung bei Spielende auch wirklich lädt.

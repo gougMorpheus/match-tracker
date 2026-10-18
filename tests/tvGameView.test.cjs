@@ -5,11 +5,12 @@ const { createBaseGame } = require('./helpers/gameFixtures.cjs');
 const runTvGameViewTests = () => {
   const saved = Object.fromEntries(['document','navigator','setTimeout','clearTimeout'].map(k => [k,Object.getOwnPropertyDescriptor(globalThis,k)]));
   const state = [], effects = [], pending = [], timers = new Map();
+  const storeState = { pause: null, resumed: 0 };
   let cursor = 0, timerId = 0;
   const react = {
     createContext: () => ({}),
     useMemo: fn => fn(),
-    useContext: () => new Proxy({ games: [], liveViewPause: null, resumeLiveView: () => {} }, { get: (obj,key) => {
+    useContext: () => new Proxy({ games: [], liveViewPause: storeState.pause, resumeLiveView: () => { storeState.resumed += 1; } }, { get: (obj,key) => {
       assert.ok(['games','liveViewPause','resumeLiveView'].includes(key), 'TV must only read the already loaded games list (and the live pause state) from the store'); return obj[key];
     }}),
     useState: initial => { const i = cursor++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial;
@@ -113,6 +114,21 @@ const runTvGameViewTests = () => {
     assert.equal(content(deficit(tree)),'Bob gewinnt durch Aufgabe','Conceding overrides points without inventing a VP advantage');
     finished.finishReason='interrupted'; tree=render(TvGameView,structuredClone(finished));
     assert.equal(content(deficit(tree)),'Spiel beendet');
+    // Live-Pause: ohne Pause kein Hinweis.
+    const paused = tree => nodes(tree).find(n => n.props?.className === 'tv-live-paused');
+    tree=render(TvGameView,structuredClone(finished));
+    assert.equal(paused(tree),undefined);
+    // Spielende ("ended"): nur "Spiel beendet", kein Knopf, kein Pausentext.
+    storeState.pause='ended'; tree=render(TvGameView,structuredClone(finished));
+    assert.equal(content(paused(tree)),'Spiel beendet');
+    assert.equal(nodes(paused(tree)).filter(n => n.type === 'button').length,0,'ended: kein Weiter-live-Knopf');
+    assert.doesNotMatch(content(tree),/Live-Aktualisierung pausiert|Weiter live/);
+    // 15 min ohne Ereignis ("idle"): Hinweis und Knopf unveraendert.
+    storeState.pause='idle'; tree=render(TvGameView,structuredClone(next));
+    assert.equal(content(paused(tree)),'Live-Aktualisierung pausiert: seit 15 min kein neues Ereignis.Weiter live');
+    const resume = nodes(paused(tree)).find(n => n.type === 'button');
+    assert.equal(resume.props.children,'Weiter live'); resume.props.onClick(); assert.equal(storeState.resumed,1);
+    storeState.pause=null;
 
   } finally {
     for(const effect of effects) effect?.cleanup?.();
