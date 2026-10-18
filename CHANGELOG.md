@@ -3,6 +3,10 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-18 – TV folgt auch nach Spielende (Undo)
+- In der TV-/Ansichts-Live-Ansicht kommen bei Pause „Spiel beendet“ Realtime-Meldungen des eigenen Spiels weiter durch; eine echte Änderung (z. B. Undo des Spielendes) lädt das Spiel und hebt die Pause auf.
+- Hinweis mit „Weiter live“ erscheint jetzt auch bei Spielende. „15 min ohne Ereignis“ und Realtime fremder Spiele unverändert.
+
 ## 2026-10-18 – Delta-Abgleich: alte Löschungen nicht jedes Mal neu laden
 - Fehlerbild: Nach #27 lud jeder Abgleich 24 Spielzeilen und ~770 Events erneut.
 - Ursache: 24 alte Spiele sind nur über `notes.deletedMeta` gelöscht (`deleted_at` leer). Sie stehen in der schlanken Liste, wurden aber (richtig) nicht angezeigt und daher nicht im Cache gehalten → jedes Mal „neu“.

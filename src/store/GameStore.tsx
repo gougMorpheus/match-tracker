@@ -39,7 +39,7 @@ import {
   mapSupabaseGameToAppGame,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
-import { RemoteGameCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId } from "../utils/deltaPull";
+import { RemoteGameCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -1232,7 +1232,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       const gameId = getRealtimeGameId(change);
       if (gameId) remoteCacheRef.current.markDirty(gameId); else remoteCacheRef.current.requestFull();
       const liveGameId = getLiveGameId();
-      if (liveGameId && (gameId !== liveGameId || liveViewRef.current.pause)) return;
+      if (liveGameId && !shouldLiveViewFollowRealtime(liveGameId, gameId, liveViewRef.current.pause)) return;
       scheduleRemoteRefresh();
     };
     const channel = supabase
