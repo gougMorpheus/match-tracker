@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiveViewPause = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
+exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 // Delta-Abgleich (#679, Egress): Statt bei jedem Abgleich alle Spiele mit allen Events zu laden, wird eine schlanke
 // Liste (id, version, flow_version; geloeschte schon serverseitig gefiltert) geholt. Volle Zeilen bzw. Events nur fuer
@@ -130,6 +130,9 @@ exports.LIVE_VIEW_IDLE_MS = 15 * 60 * 1000;
 // damit z. B. ein Undo des Spielendes das Spiel neu laedt und die Pause aufhebt (nur bei echten Aenderungen, kaum Verkehr).
 const shouldLiveViewFollowRealtime = (liveGameId, changeGameId, pause) => changeGameId === liveGameId && pause !== "idle";
 exports.shouldLiveViewFollowRealtime = shouldLiveViewFollowRealtime;
+// Laden der Live-Ansicht: nur "idle" sperrt (bis "Weiter live"); bei "ended" laden Realtime/Rueckkehr das Spiel einmal neu.
+const liveViewBlocksLoad = (pause) => pause === "idle";
+exports.liveViewBlocksLoad = liveViewBlocksLoad;
 const getLiveViewPause = (entry, liveSinceMs, now) => {
     if (!entry)
         return null;

@@ -5,6 +5,7 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
 ## 2026-10-18 – TV folgt auch nach Spielende (Undo)
 - In der TV-/Ansichts-Live-Ansicht kommen bei Pause „Spiel beendet“ Realtime-Meldungen des eigenen Spiels weiter durch; eine echte Änderung (z. B. Undo des Spielendes) lädt das Spiel und hebt die Pause auf.
+- Nachtrag (#30): Das Laden der Live-Ansicht war bei jeder Pause gesperrt; jetzt nur bei „15 min ohne Ereignis“, damit die Meldung bei Spielende auch wirklich lädt.
 - Hinweis mit „Weiter live“ erscheint jetzt auch bei Spielende. „15 min ohne Ereignis“ und Realtime fremder Spiele unverändert.
 
 ## 2026-10-18 – Delta-Abgleich: alte Löschungen nicht jedes Mal neu laden

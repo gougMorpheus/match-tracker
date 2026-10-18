@@ -127,6 +127,9 @@ export const LIVE_VIEW_IDLE_MS = 15 * 60 * 1000;
 // damit z. B. ein Undo des Spielendes das Spiel neu laedt und die Pause aufhebt (nur bei echten Aenderungen, kaum Verkehr).
 export const shouldLiveViewFollowRealtime = (liveGameId: string, changeGameId: string | null, pause: "ended" | "idle" | null): boolean =>
   changeGameId === liveGameId && pause !== "idle";
+
+// Laden der Live-Ansicht: nur "idle" sperrt (bis "Weiter live"); bei "ended" laden Realtime/Rueckkehr das Spiel einmal neu.
+export const liveViewBlocksLoad = (pause: "ended" | "idle" | null): boolean => pause === "idle";
 export const getLiveViewPause = (entry: RemoteGameEntry | null, liveSinceMs: number, now: number): "ended" | "idle" | null => {
   if (!entry) return null;
   if (entry.row.ended_at) return "ended";
