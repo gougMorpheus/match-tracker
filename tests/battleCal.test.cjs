@@ -48,15 +48,20 @@ const runBattleCalTests = () => {
   assert.match(bc, /const SUPABASE_URL = "__BC_SUPABASE_URL__";/); assert.match(bc, /const SUPABASE_KEY = "__BC_SUPABASE_KEY__";/);
   assert.doesNotMatch(bc, /sessionStorage\.setItem|localStorage\.setItem\([^)]*[Pp]assword/, "Passwort nie im Browser-Speicher");
   assert.match(bc, /localStorage\.setItem\(CLOUD_PROFILE_KEY, JSON\.stringify\(publicProfile\(cloudProfile\)\)\)/);
-  assert.match(bc, /return \{ id: String\(profile\.id\), name: String\(profile\.name \|\| ""\), created_at: profile\.created_at \|\| null \};/);
+  assert.match(bc, /return \{ id: String\(profile\.id\), name: String\(profile\.name \|\| ""\), created_at: profile\.created_at \|\| null, has_password: profile\.has_password !== false \};/);
   assert.match(bc, /window\.__BC_ENABLED = localStorage\.getItem\(KEY\) === "1"/, "gleicher Schalter wie die App");
   assert.match(bc, /const KEY = "match-tracker\.feature\.battle-cal";/);
-  const sqlAll = read("supabase/migrations/20261019_01_battlecal_basis.sql") + read("supabase/migrations/20261019_02_battlecal_app.sql");
+  const sqlAll = read("supabase/migrations/20261019_01_battlecal_basis.sql") + read("supabase/migrations/20261019_02_battlecal_app.sql") + read("supabase/migrations/20261019_03_battlecal_ohne_passwort.sql");
   const used = [...new Set([...bc.matchAll(/bcRpc\("(bc_[a-z_]+)"/g)].map((m) => m[1]))];
   assert.ok(used.length >= 18, `bc-RPCs in der App: ${used.length}`);
   for (const name of used) assert.match(sqlAll, new RegExp(`create or replace function public\\.${name}\\(`), `${name} existiert`);
   assert.match(bc, /UMZUG_SOURCE_ORIGINS = \["https:\/\/battle-cal\.netlify\.app"\]/, "Umzug nur von der alten Origin");
   assert.match(bc, /function sanitizeCompareHtml/);
+  // Profile ohne Passwort (Migration 03): keine Abfrage beim Speichern, Passwort setzen/aendern
+  assert.match(bc, /if \(!profileHasPassword\(cloudProfile\)\) return "";/);
+  assert.match(bc, /has_password: profile\.has_password !== false/);
+  assert.match(bc, /bcRpc\("bc_profile_set_password", \{ p_profile_id: cloudProfile\.id, p_password: oldPassword, p_new_password: nextPassword \}\)/);
+  assert.match(bc, /id="cloudProfilePasswordBtn">Passwort setzen</);
   // UX B: eingebettet durchsichtig und bis zum Fensterrand (nur mit Schalter, nur gleiche Origin ueber frameElement)
   assert.match(bc, /if \(!window\.__BC_EMBEDDED \|\| !window\.__BC_ENABLED\) return;/);
   assert.match(bc, /document\.body\.style\.background = "transparent";/);
@@ -82,6 +87,16 @@ const runBattleCalTests = () => {
     assert.match(m[0], /security definer set search_path = battlecal/); assert.match(m[0], /require_profile\(p_profile_id, p_password, false\)/);
   }
   assert.match(read("supabase/migrations/20261019_02_battlecal_app.rollback.sql"), /drop function if exists public\.bc_roster_import/);
+  // Migration 03: Profile ohne Passwort + Passwort setzen (nur bcrypt, nie Klartext gespeichert/ausgegeben)
+  const m3 = read("supabase/migrations/20261019_03_battlecal_ohne_passwort.sql");
+  assert.match(m3, /alter column password_hash drop not null/); assert.match(m3, /set password_hash = null where password_hash = '!'/);
+  assert.match(m3, /if p\.password_hash is null then return p; end if;/);
+  assert.match(m3, /function public\.bc_profile_set_password\(p_profile_id uuid, p_password text, p_new_password text\)/);
+  assert.match(m3, /password_hash = extensions\.crypt\(p_new_password, extensions\.gen_salt\('bf'\)\)/);
+  assert.match(m3, /'has_password', p\.password_hash is not null/);
+  assert.doesNotMatch(m3.replace(/--.*$/gm, ""), /games|events|mt_|publication|raise notice/i, "Migration 03 fasst nur battlecal/bc_* an");
+  const rb3 = read("supabase/migrations/20261019_03_battlecal_ohne_passwort.rollback.sql");
+  assert.match(rb3, /drop function if exists public\.bc_profile_set_password/); assert.match(rb3, /set password_hash = '!' where password_hash is null/);
 
   // SQL: statische Regeln
   const sql = read("supabase/migrations/20261019_01_battlecal_basis.sql").replace(/--.*$/gm, ""); // nur Code, ohne Kommentare
@@ -121,6 +136,17 @@ const runBattleCalTests = () => {
     psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_02_battlecal_app.sql"));
     psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_02_battlecal_app.sql"));
     psql(...db, "-f", path.join(__dirname, "../supabase/tests/battlecal_app_local_test.sql"));
+    psql(...db, "-c", "truncate battlecal.army_weapons, battlecal.army_units, battlecal.army_rosters, battlecal.results, battlecal.profiles");
+    // Migration 03 (Profile ohne Passwort): Import-Zustand mit Sperrwert '!' nachbilden, 03 zweimal, Tests, Rollback 03
+    psql(...db, "-c", "insert into battlecal.profiles (name, password_hash) values ('ZZ-Import', '!')");
+    psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_03_battlecal_ohne_passwort.sql"));
+    psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_03_battlecal_ohne_passwort.sql"));
+    psql(...db, "-f", path.join(__dirname, "../supabase/tests/battlecal_nopw_local_test.sql"));
+    psql(...db, "-c", "insert into battlecal.profiles (name, password_hash) values ('ZZ-Null', null)");
+    psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_03_battlecal_ohne_passwort.rollback.sql"));
+    assert.equal(psql(...db, "-Atc", "select password_hash from battlecal.profiles where name='ZZ-Null'").trim(), "!", "Rollback 03: ohne Passwort -> Sperrwert");
+    assert.equal(psql(...db, "-Atc", "select attnotnull from pg_attribute where attrelid='battlecal.profiles'::regclass and attname='password_hash'").trim(), "t");
+    assert.equal(psql(...db, "-Atc", "select count(*) from pg_proc where proname='bc_profile_set_password'").trim(), "0");
     psql(...db, "-c", "truncate battlecal.army_weapons, battlecal.army_units, battlecal.army_rosters, battlecal.results, battlecal.profiles");
     psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_02_battlecal_app.rollback.sql"));
     assert.equal(psql(...db, "-Atc", "select count(*) from pg_proc where proname in ('bc_roster_import','bc_results_upsert_many')").trim(), "0");

@@ -153,8 +153,8 @@ rep('''        try {
             body: JSON.stringify({ name })
           });
           cloudProfile = profile;''',
-    '''        const password = cloudProfilePassword || await requestPassword(`Cloud-Profil "${cloudProfile.name}" umbenennen`, "Profil-Passwort oder Admin-Passwort");
-        if (!password) return;
+    '''        const password = !profileHasPassword(cloudProfile) ? "" : (cloudProfilePassword || await requestPassword(`Cloud-Profil "${cloudProfile.name}" umbenennen`, "Profil-Passwort oder Admin-Passwort"));
+        if (password === null) return;
         try {
           updateSyncStatus("loading");
           const profile = await bcRpc("bc_profile_rename", { p_profile_id: cloudProfile.id, p_password: password, p_name: name });
@@ -178,7 +178,7 @@ rep_re(r'''        const password = window\.prompt\(`Löschpasswort für Cloud-P
           return;
         \}
         if \(!window\.confirm''',
-    '''        const password = await requestPassword(`Cloud-Profil "${name}" löschen`, "Profil-Passwort oder Admin-Passwort");
+    '''        const password = await requestPassword(`Cloud-Profil "${name}" löschen`, profileHasPassword(cloudProfile) ? "Profil-Passwort oder Admin-Passwort" : "Profil ohne Passwort: nur mit Admin-Passwort");
         if (!password) return;
         if (!window.confirm''')
 rep('''          await supabaseRequest(`/rest/v1/battle_profiles?id=eq.${encodeURIComponent(cloudProfile.id)}`, {
@@ -197,6 +197,80 @@ rep('''          showToast(`Cloud-Profil ${name} gelöscht.`);
             return;
           }''')
 
+# ---------- Profile ohne Passwort (Migration 03): Speichern ohne Abfrage, Passwort setzen/aendern ----------
+rep('''            <button type="button" id="cloudProfileRenameBtn">Umbenennen</button>''',
+    '''            <button type="button" id="cloudProfileRenameBtn">Umbenennen</button>
+            <button type="button" id="cloudProfilePasswordBtn">Passwort setzen</button>''')
+rep('''        cloudProfileRenameBtn: document.getElementById("cloudProfileRenameBtn"),''',
+    '''        cloudProfileRenameBtn: document.getElementById("cloudProfileRenameBtn"),
+        cloudProfilePasswordBtn: document.getElementById("cloudProfilePasswordBtn"),''')
+rep('''        ids.cloudProfileRenameBtn.addEventListener("click", async () => {
+          await renameCloudProfile();
+        });''',
+    '''        ids.cloudProfileRenameBtn.addEventListener("click", async () => {
+          await renameCloudProfile();
+        });
+
+        ids.cloudProfilePasswordBtn.addEventListener("click", async () => {
+          await setCloudProfilePassword();
+        });''')
+rep('''        ids.cloudProfileRenameBtn.disabled = !cloudProfile;
+        ids.cloudProfileDeleteBtn.disabled = !cloudProfile;''',
+    '''        ids.cloudProfileRenameBtn.disabled = !cloudProfile;
+        ids.cloudProfileDeleteBtn.disabled = !cloudProfile;
+        updateProfilePasswordButton();
+      }
+
+      function updateProfilePasswordButton() {
+        ids.cloudProfileRenameBtn.disabled = !cloudProfile;
+        ids.cloudProfileDeleteBtn.disabled = !cloudProfile;
+        ids.cloudProfilePasswordBtn.disabled = !cloudProfile;
+        ids.cloudProfilePasswordBtn.textContent = cloudProfile && !profileHasPassword(cloudProfile) ? "Passwort setzen" : "Passwort ändern";''')
+rep('''        cloudProfilePassword = "";
+        saveCloudProfile();
+        updateSyncStatus("loading");''', '''        cloudProfilePassword = "";
+        updateProfilePasswordButton();
+        saveCloudProfile();
+        updateSyncStatus("loading");''')
+rep('''      async function deleteCloudProfile() {''',
+    '''      // Profil ohne Passwort (wie im Original): Passwort frei setzen. Mit Passwort: altes oder Admin-Passwort noetig.
+      async function setCloudProfilePassword() {
+        if (!cloudProfile) {
+          showToast("Kein Cloud-Profil ausgewählt.");
+          return;
+        }
+        const hadPassword = profileHasPassword(cloudProfile);
+        let oldPassword = "";
+        if (hadPassword) {
+          oldPassword = cloudProfilePassword || await requestPassword(`Passwort für "${cloudProfile.name}" ändern`, "Bisheriges Profil-Passwort oder Admin-Passwort");
+          if (!oldPassword) return;
+        }
+        const nextPassword = await requestPassword(`Neues Passwort für "${cloudProfile.name}"`, "Danach wird es zum Speichern, Umbenennen und Löschen gebraucht.");
+        if (!nextPassword) return;
+        const repeated = await requestPassword("Neues Passwort wiederholen", "Zur Kontrolle noch einmal eingeben.");
+        if (repeated === null) return;
+        if (repeated !== nextPassword) {
+          showToast("Passwörter stimmen nicht überein.");
+          return;
+        }
+        try {
+          updateSyncStatus("loading");
+          const profile = await bcRpc("bc_profile_set_password", { p_profile_id: cloudProfile.id, p_password: oldPassword, p_new_password: nextPassword });
+          cloudProfile = publicProfile(profile);
+          cloudProfilePassword = nextPassword;
+          await loadCloudProfiles();
+          renderCloudProfiles();
+          saveCloudProfile();
+          markSynced();
+          showToast(hadPassword ? "Passwort geändert." : "Passwort gesetzt.");
+        } catch (error) {
+          updateSyncStatus("error", "Passwort konnte nicht gesetzt werden.");
+          if (error?.kind === "forbidden") cloudProfilePassword = "";
+          showToast(cloudErrorText(error, "Passwort konnte nicht gesetzt werden."));
+        }
+      }
+
+      async function deleteCloudProfile() {''')
 # ---------- Historie ----------
 rep('''          const rows = await supabaseRequest(`/rest/v1/battle_results?select=id,created_at,custom_title,inputs,outputs&profile_id=eq.${encodeURIComponent(cloudProfile.id)}&order=created_at.desc&limit=${HISTORY_LIMIT}`);''',
     '''          const rows = await bcRpc("bc_results_list", { p_profile_id: cloudProfile.id, p_limit: HISTORY_LIMIT }) || [];''')
@@ -293,7 +367,12 @@ rep_block('''      async function pushLocalHistoryToCloud() {''', '''      funct
 
       function publicProfile(profile) {
         if (!profile || typeof profile !== "object" || !profile.id) return null;
-        return { id: String(profile.id), name: String(profile.name || ""), created_at: profile.created_at || null };
+        return { id: String(profile.id), name: String(profile.name || ""), created_at: profile.created_at || null, has_password: profile.has_password !== false };
+      }
+
+      // Nur ein ausdrueckliches has_password=false gilt als "ohne Passwort" (sonst sicherheitshalber mit Abfrage).
+      function profileHasPassword(profile) {
+        return !profile || profile.has_password !== false;
       }
 
       function cloudErrorText(error, fallback) {
@@ -307,6 +386,7 @@ rep_block('''      async function pushLocalHistoryToCloud() {''', '''      funct
       // Profil-Passwort fuer Schreiben: einmal pro Sitzung abfragen, serverseitig pruefen, nur im Speicher halten.
       async function ensureProfilePassword() {
         if (!cloudProfile) throw Object.assign(new Error("Kein Cloud-Profil"), { kind: "not_found" });
+        if (!profileHasPassword(cloudProfile)) return "";  // Profil ohne Passwort: Speichern ohne Abfrage (wie im Original)
         if (cloudProfilePassword) return cloudProfilePassword;
         const password = await requestPassword(`Profil-Passwort für "${cloudProfile.name}"`, "Zum Speichern in der Cloud. Wird nur bis zum Neuladen der Seite gemerkt.");
         if (!password) throw Object.assign(new Error("Abgebrochen"), { kind: "cancelled" });
@@ -320,6 +400,11 @@ rep_block('''      async function pushLocalHistoryToCloud() {''', '''      funct
         try {
           return await action(password);
         } catch (error) {
+          if (error?.kind === "forbidden" && password === "" && cloudProfile) {
+            // Inzwischen wurde ein Passwort gesetzt (anderes Geraet): ab jetzt abfragen.
+            cloudProfile = { ...cloudProfile, has_password: true };
+            renderCloudProfiles();
+          }
           if (error?.kind === "forbidden" && password === cloudProfilePassword) cloudProfilePassword = "";
           throw error;
         }
