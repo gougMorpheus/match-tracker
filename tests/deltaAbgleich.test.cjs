@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/loadBrowserModule.cjs");
 const { createGameInput } = require("./helpers/gameFixtures.cjs");
-const { RemoteGameCache, FULL_PULL_INTERVAL_MS, LIVE_VIEW_IDLE_MS, getRealtimeGameId, getPollIntervalMs, getLiveViewPause, shouldLiveViewFollowRealtime, liveViewBlocksLoad } =
+const { RemoteGameCache, FULL_PULL_INTERVAL_MS, FULL_EVENTS_WINDOW_MS, RESUME_FULL_AFTER_HIDDEN_MS, shouldFullPullOnResume, LIVE_VIEW_IDLE_MS, getRealtimeGameId, getPollIntervalMs, getLiveViewPause, shouldLiveViewFollowRealtime, liveViewBlocksLoad } =
   require("../.test-dist/utils/deltaPull.js");
 
 // #679 Delta-Abgleich: Events nur fuer geaenderte/neue/markierte/aktive Spiele; Vollabzug als Sicherheitsnetz.
@@ -52,7 +52,16 @@ const runDeltaAbgleichTests = async () => {
   assert.deepEqual(eventsOf(r.list, "alt"), ["a1", "a2"], "altes Spiel noch aus Cache");
   r = pull(NOW + FULL_PULL_INTERVAL_MS + 1);
   assert.equal(r.plan.full, true, "Sicherheitsnetz: Vollabzug nach Intervall");
-  assert.deepEqual(eventsOf(r.list, "alt"), ["a1"], "Revoke im alten Spiel spaetestens beim Vollabzug");
+  // Egress (19.10.): Vollabzug laedt Events nur fuer Spiele mit Aktivitaet < 7 Tage -> altes Spiel (30 Tage) aus dem Cache.
+  assert.ok(!r.plan.eventIds.includes("alt") && r.plan.eventIds.includes("aktiv"), "Vollabzug: keine Events fuer alte Spiele");
+  assert.deepEqual(r.plan.rowIds.sort(), ["aktiv", "alt"], "Vollabzug: alle Spielzeilen");
+  assert.deepEqual(eventsOf(r.list, "alt"), ["a1", "a2"], "Revoke im alten Spiel (> 7 Tage) erst nach Neustart (bewusste Grenze)");
+  {
+    const fresh = new RemoteGameCache(); const slim = slimOf(rows); const plan = fresh.plan(slim, NOW + FULL_PULL_INTERVAL_MS + 1);
+    assert.ok(plan.full && plan.eventIds.includes("alt"), "Neustart: alle Events (Cache leer)");
+    fresh.apply(slim, plan, rows, events.filter((e) => plan.eventIds.includes(e.game_id)), NOW + FULL_PULL_INTERVAL_MS + 1);
+    assert.deepEqual(eventsOf(fresh.list(slim), "alt"), ["a1"], "Revoke im alten Spiel nach Neustart sichtbar");
+  }
 
   // Ablauf-Event / Spielzeile geaendert (flow_version / version) -> Zeile + Events.
   rows = [row("alt", 3, 6, oldAt, { ended_at: iso(oldAt) }), row("aktiv", 3, 9, activeAt)];
@@ -89,6 +98,35 @@ const runDeltaAbgleichTests = async () => {
   assert.equal(cache.isDirty("aktiv"), true, "spaete Markierung bleibt");
   cache.requestFull();
   assert.equal(cache.plan(slim, NOW + FULL_PULL_INTERVAL_MS + 6000).full, true, "requestFull -> Vollabzug");
+
+  // Egress (19.10.): Intervall 30 min, Rueckkehr nur nach > 5 min Hintergrund als Vollabzug, 7-Tage-Fenster im Vollabzug
+  assert.equal(FULL_PULL_INTERVAL_MS, 30 * 60 * 1000); assert.equal(RESUME_FULL_AFTER_HIDDEN_MS, 5 * 60 * 1000);
+  assert.equal(FULL_EVENTS_WINDOW_MS, 7 * DAY);
+  assert.equal(shouldFullPullOnResume(NOW - 5 * 60 * 1000, NOW), false, "genau 5 min -> kein Vollabzug");
+  assert.equal(shouldFullPullOnResume(NOW - 5 * 60 * 1000 - 1, NOW), true, "mehr als 5 min -> Vollabzug");
+  assert.equal(shouldFullPullOnResume(NOW - 60 * 1000, NOW), false);
+  assert.equal(shouldFullPullOnResume(null, NOW), true, "unbekannt -> Vollabzug");
+  {
+    const c = new RemoteGameCache(); const t0 = NOW;
+    const rw = [row("woche", 1, 1, t0 - 3 * DAY, { ended_at: iso(t0 - 3 * DAY) }), row("monat", 1, 1, t0 - 20 * DAY, { ended_at: iso(t0 - 20 * DAY) }),
+      row("grenze", 1, 1, t0 - 7 * DAY + 3600000, { ended_at: iso(t0 - 7 * DAY + 3600000) })];
+    let evs = [ev("w1", "woche", t0 - 3 * DAY), ev("w2", "woche", t0 - 3 * DAY), ev("m1", "monat", t0 - 20 * DAY), ev("m2", "monat", t0 - 20 * DAY), ev("g1", "grenze", t0 - 7 * DAY + 3600000)];
+    const go = (now) => { const sl = slimOf(rw); const pl = c.plan(sl, now); c.apply(sl, pl, rw.filter((x) => pl.rowIds.includes(x.id)), evs.filter((e) => pl.eventIds.includes(e.game_id)), now); return pl; };
+    let pl = go(t0); assert.deepEqual(pl.eventIds.sort(), ["grenze", "monat", "woche"], "Start: alles");
+    pl = go(t0 + 1000); assert.equal(pl.full, false); assert.deepEqual(pl.eventIds, [], "Delta: keine Events alter Spiele (> 12 h)");
+    evs = evs.filter((e) => e.id !== "w2" && e.id !== "m2");
+    pl = go(t0 + FULL_PULL_INTERVAL_MS); assert.equal(pl.full, true);
+    assert.deepEqual(pl.eventIds.sort(), ["grenze", "woche"], "Vollabzug: nur Spiele mit Aktivitaet < 7 Tage");
+    const list = c.list(slimOf(rw));
+    assert.deepEqual(eventsOf(list, "woche"), ["w1"], "Revoke im Spiel der letzten 7 Tage beim Vollabzug erkannt");
+    assert.deepEqual(eventsOf(list, "monat"), ["m1", "m2"], "aelteres Spiel behaelt Events aus dem Cache");
+    // Versionsaenderung oder Markierung laedt auch alte Spiele
+    rw[1] = row("monat", 2, 1, t0 - 20 * DAY, { ended_at: iso(t0 - 20 * DAY) });
+    pl = go(t0 + 2 * FULL_PULL_INTERVAL_MS); assert.ok(pl.eventIds.includes("monat"), "Vollabzug: geaenderte Version -> Events");
+    assert.deepEqual(eventsOf(c.list(slimOf(rw)), "monat"), ["m1"]);
+    c.markDirty("monat"); c.requestFull(); pl = go(t0 + 2 * FULL_PULL_INTERVAL_MS + 1000);
+    assert.ok(pl.full && pl.eventIds.includes("monat"), "Vollabzug: markiertes altes Spiel -> Events");
+  }
 
   // Realtime-Payload
   assert.equal(getRealtimeGameId({ table: "events", record: { id: "e", game_id: "g1" } }), "g1");

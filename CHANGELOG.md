@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Egress: Vollabzug seltener und schlanker (SPIELTAG-2026-10-19.md, Vorschläge 1 und 2)
+- Anlass: Nach #27/#28 machte der Vollabzug (alle Spiele mit allen Events, ≈ 0,97 MB) ≈ 85 % des Spieltags-Egress aus (alle 10 min und bei jeder Rückkehr in den Tab).
+- Vollabzug spätestens alle 30 min (vorher 10). Bei Rückkehr in den Vordergrund nur nach mehr als 5 min im Hintergrund, sonst normaler Delta-Abgleich.
+- Der Vollabzug lädt alle Spielzeilen, Events aber nur für Spiele mit Aktivität in den letzten 7 Tagen sowie neue/geänderte/markierte Spiele; ältere behalten die Events aus dem Cache. Bewusste Grenze: Revoke eines Nicht-Ablauf-Events in einem älteren Spiel ohne Versionserhöhung erscheint erst nach Neustart der App.
+- Unverändert: Delta-Abgleich, Aktivfenster 12 h, Takt 60/15 s bzw. TV 30/10 s, Vollabzug bei Start, online und Realtime-(Wieder-)Verbindung, TV-Verhalten aus #29–#31.
+- Mock-Messung (Backup-Daten): Rückkehr nach 1 s 3 KB statt ≈ 0,9 MB; Vollabzug ≈ 0,2 MB statt ≈ 0,9 MB. Echte Messung am ersten Spieltag.
+
 ## 2026-10-19 – Battle-Cal: Profile ohne Passwort wie im Original, Passwort setzen/ändern
 - Fehlerbild: Tims importiertes Profil hatte im Original kein Passwort; im Match-Tracker war es gesperrt (nur Lesen). Ursache: `password_hash` war Pflicht, der Import setzte einen Sperrwert.
 - DB-Migration `20261019_03_battlecal_ohne_passwort.sql` (separat ausgeführt): `password_hash` darf NULL sein (= kein Passwort), Sperrwert → NULL. Profile ohne Passwort speichern und umbenennen ohne Passwort (wie im Original). Profil ohne Passwort löschen nur mit Admin-Passwort (Schutz).
