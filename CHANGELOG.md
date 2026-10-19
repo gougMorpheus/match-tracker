@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Battle-Cal: Profile ohne Passwort wie im Original, Passwort setzen/ändern
+- Fehlerbild: Tims importiertes Profil hatte im Original kein Passwort; im Match-Tracker war es gesperrt (nur Lesen). Ursache: `password_hash` war Pflicht, der Import setzte einen Sperrwert.
+- DB-Migration `20261019_03_battlecal_ohne_passwort.sql` (separat ausgeführt): `password_hash` darf NULL sein (= kein Passwort), Sperrwert → NULL. Profile ohne Passwort speichern und umbenennen ohne Passwort (wie im Original). Profil ohne Passwort löschen nur mit Admin-Passwort (Schutz).
+- Neu `bc_profile_set_password`: ohne bisheriges Passwort frei setzbar, sonst nur mit altem oder Admin-Passwort; nur bcrypt-Hash gespeichert. Profil-Liste zeigt `has_password`, nie den Hash.
+- App: keine Passwortabfrage bei Profilen ohne Passwort; Knopf „Passwort setzen“ bzw. „Passwort ändern“ im Profil-Dialog.
+- Profil anlegen verlangt weiterhin ein Passwort (wie das Löschpasswort im Original).
+
 ## 2026-10-19 – Battle-Cal UX (Peppers Befunde A/B/C, freigegeben von Cosy)
 - A: Auf der Battle-Cal-Seite gibt es kein zweites ☰ mehr. Fehlerbild: zwei gleiche ☰ ohne Beschriftung (Match-Tracker und Battle-Cal). „Zurück“ bleibt.
 - B: Eingebettet ist der Hintergrund jetzt durchsichtig, und der iframe endet am unteren Fensterrand. Fehlerbild: dunklerer Kasten mit harter Kante; „Berechnen“ war nur nach Scrollen sichtbar (E). Ursache: Der iframe war höher als das sichtbare Fenster, dadurch lag die feste Leiste unten außerhalb.

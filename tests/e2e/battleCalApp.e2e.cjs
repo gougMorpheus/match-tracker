@@ -19,6 +19,7 @@ const setupDb = () => {
   psql(DB, "-f", path.join(ROOT, "supabase/tests/battlecal_local_stubs.sql"));
   psql(DB, "-f", path.join(ROOT, "supabase/migrations/20261019_01_battlecal_basis.sql"));
   psql(DB, "-f", path.join(ROOT, "supabase/migrations/20261019_02_battlecal_app.sql"));
+  psql(DB, "-f", path.join(ROOT, "supabase/migrations/20261019_03_battlecal_ohne_passwort.sql"));
   psql(DB, "-c", `insert into vault.decrypted_secrets (name, decrypted_secret) values ('bc_admin_password_hash', extensions.crypt('${ADMIN}', extensions.gen_salt('bf')))`);
 };
 const build = () => {
@@ -232,6 +233,49 @@ const run = async () => {
       assert.equal(sql("select count(*) from battlecal.army_rosters where name = 'ZZ Handarmee' and deleted_at is null"), "1");
       await page.click("#armyEditorCloseBtn");
       assert.ok(!(await storageDump()).includes(PW));
+    });
+    await step("Profil ohne Passwort (wie importiertes Profil): Speichern ohne Abfrage, Umbenennen ohne Abfrage, Passwort setzen, danach Abfrage", async () => {
+      const id = sql("insert into battlecal.profiles (name, password_hash) values ('ZZ-OhnePW', null) returning id").split("\n")[0];
+      await page.reload(); await page.waitForTimeout(600);
+      await menu("#cloudProfileOpenBtn");
+      await page.selectOption("#cloudProfileSelect", id); await page.waitForTimeout(600);
+      assert.equal((await page.textContent("#cloudProfilePasswordBtn")).trim(), "Passwort setzen");
+      await page.click("#cloudProfileCloseBtn");
+      const before = sql(`select count(*) from battlecal.results where profile_id = '${id}' and deleted_at is null`);
+      await page.evaluate(() => document.getElementById("calculatorForm").requestSubmit()); await page.waitForTimeout(900);
+      assert.equal(await page.isVisible("#bcPasswordInput"), false, "keine Passwortabfrage ohne Passwort");
+      assert.equal(Number(sql(`select count(*) from battlecal.results where profile_id = '${id}' and deleted_at is null`)), Number(before) + 1);
+      promptAnswer = "ZZ-OhnePW-neu";
+      await menu("#cloudProfileOpenBtn"); await page.click("#cloudProfileRenameBtn"); await toast(/umbenannt/);
+      assert.equal(await page.isVisible("#bcPasswordInput"), false);
+      assert.equal(sql(`select name from battlecal.profiles where id = '${id}'`), "ZZ-OhnePW-neu");
+      // Passwort setzen (frei, da keins gesetzt), zweimal eingeben
+      await page.click("#cloudProfilePasswordBtn");
+      await page.waitForSelector("#bcPasswordInput"); await enterPassword("zz-neu-pw"); await page.waitForTimeout(150);
+      await page.waitForSelector("#bcPasswordInput"); await enterPassword("zz-neu-pw");
+      await toast(/Passwort gesetzt/);
+      assert.equal(sql(`select (password_hash like '$2%')::text from battlecal.profiles where id = '${id}'`), "true");
+      assert.equal((await page.textContent("#cloudProfilePasswordBtn")).trim(), "Passwort ändern");
+      assert.ok(!(await storageDump()).includes("zz-neu-pw"), "neues Passwort nicht im Browser-Speicher");
+      await page.click("#cloudProfileCloseBtn");
+      // nach Neuladen fragt Speichern wieder nach dem Passwort
+      await page.reload(); await page.waitForTimeout(600);
+      await page.evaluate(() => document.getElementById("calculatorForm").requestSubmit());
+      await page.waitForSelector("#bcPasswordInput"); await enterPassword("zz-neu-pw"); await page.waitForTimeout(900);
+      assert.equal(Number(sql(`select count(*) from battlecal.results where profile_id = '${id}' and deleted_at is null`)), Number(before) + 2);
+      // Aendern nach Neuladen: altes Passwort wird abgefragt; falsches abgelehnt, richtiges aendert
+      const changePw = async (oldPw, nextPw) => {
+        await page.click("#cloudProfilePasswordBtn");
+        for (const v of [oldPw, nextPw, nextPw]) { await page.waitForSelector("#bcPasswordInput"); await enterPassword(v); await page.waitForTimeout(150); }
+      };
+      await page.reload(); await page.waitForTimeout(600); await menu("#cloudProfileOpenBtn");
+      const hash1 = sql(`select password_hash from battlecal.profiles where id = '${id}'`);
+      await changePw("falsch", "zz-pw-2"); await toast(/Passwort ist falsch/);
+      assert.equal(sql(`select password_hash from battlecal.profiles where id = '${id}'`), hash1);
+      await changePw("zz-neu-pw", "zz-pw-2"); await toast(/Passwort geändert/);
+      assert.notEqual(sql(`select password_hash from battlecal.profiles where id = '${id}'`), hash1);
+      assert.ok(!(await storageDump()).includes("zz-pw-2"));
+      await page.click("#cloudProfileCloseBtn");
     });
     await step("Match-Tracker-Huelle: #/battle-cal bettet /battle-cal/ ein (nur mit Schalter)", async () => {
       const p3 = await ctx.newPage(); p3.setDefaultTimeout(8000);
