@@ -1,6 +1,6 @@
-// Battle-Cal (Vorschau) hinter einem Schalter, standardmaessig AUS.
-// Einschalten: einmal die App mit ?battlecal=1 (oder #/...?battlecal=1) oeffnen -> merkt sich das Geraet im localStorage.
-// Ausschalten: ?battlecal=0. Ohne Schalter: kein Menueeintrag, /#/battle-cal fuehrt zur Spieleliste.
+// Battle-Cal hinter einem Schalter, seit Stufe E (19.10.2026) standardmaessig AN.
+// Ausschalten: einmal die App mit ?battlecal=0 (oder #/...?battlecal=0) oeffnen -> merkt sich das Geraet im localStorage ("0").
+// Wieder einschalten: ?battlecal=1. Ausgeschaltet: kein Menueeintrag, /#/battle-cal fuehrt zur Spieleliste.
 export const BATTLE_CAL_FLAG_KEY = "match-tracker.feature.battle-cal";
 export const BATTLE_CAL_ROUTE = "/battle-cal";
 
@@ -20,10 +20,11 @@ export const syncBattleCalFlagFromUrl = (): void => {
   const value = readUrlFlag(); const s = storage();
   if (!s || value === null) return;
   if (value === "1") s.setItem(BATTLE_CAL_FLAG_KEY, "1");
-  else if (value === "0") s.removeItem(BATTLE_CAL_FLAG_KEY);
+  else if (value === "0") s.setItem(BATTLE_CAL_FLAG_KEY, "0");
 };
 
-export const isBattleCalEnabled = (): boolean => storage()?.getItem(BATTLE_CAL_FLAG_KEY) === "1";
+// Standard AN: nur ein ausdrueckliches "0" schaltet aus (ohne localStorage ebenfalls AN).
+export const isBattleCalEnabled = (): boolean => storage()?.getItem(BATTLE_CAL_FLAG_KEY) !== "0";
 
 export const getBattleCalMenuItems = (): Array<{ label: string; onClick: () => void }> =>
   isBattleCalEnabled() ? [{ label: "Battle-Cal", onClick: () => { window.location.hash = BATTLE_CAL_ROUTE; } }] : [];
