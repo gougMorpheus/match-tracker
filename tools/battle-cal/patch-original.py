@@ -42,6 +42,32 @@ GATE = r'''<script>
         window.__BC_ENABLED = localStorage.getItem(KEY) === "1";
       } catch { window.__BC_ENABLED = false; }
       window.__BC_EMBEDDED = window.top !== window;
+      // UX-Befund B: eingebettet im Match-Tracker (gleiche Origin) Hintergrund durchsichtig und den iframe bis zum unteren
+      // Fensterrand ziehen. Dann scrollt nur Battle-Cal, und die feste Leiste unten ("Berechnen") ist sichtbar.
+      if (!window.__BC_EMBEDDED || !window.__BC_ENABLED) return;
+      let frame = null;
+      try { frame = window.frameElement; } catch { frame = null; }
+      if (!frame) return;
+      document.documentElement.style.background = "transparent";
+      document.body.style.background = "transparent";
+      frame.style.background = "transparent";
+      frame.style.colorScheme = "dark";
+      const host = window.parent;
+      const fit = () => {
+        try {
+          if (!frame.isConnected) return;
+          const top = frame.getBoundingClientRect().top + host.scrollY;
+          frame.style.minHeight = "320px";
+          frame.style.height = `${Math.max(320, Math.floor(host.innerHeight - top - 12))}px`;
+        } catch {}
+      };
+      fit();
+      // nach Schriften/Layout der Huelle nochmals messen
+      window.addEventListener("load", fit);
+      setTimeout(fit, 300);
+      setTimeout(fit, 1200);
+      host.addEventListener("resize", fit);
+      window.addEventListener("pagehide", () => { try { host.removeEventListener("resize", fit); } catch {} });
     })();
   </script>
 '''

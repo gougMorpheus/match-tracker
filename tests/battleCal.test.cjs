@@ -34,7 +34,9 @@ const runBattleCalTests = () => {
   assert.doesNotMatch(read("src/pages/GamePage.tsx"), /BattleCal|battle-cal/i, "Spielmenue/TV unveraendert");
   const page = read("src/pages/BattleCalPage.tsx");
   assert.doesNotMatch(page, /supabase|fetch\(|rest\/v1/i, "Seite selbst ohne Datenaufrufe");
-  assert.match(page, /<iframe[\s\S]*src=\{BATTLE_CAL_APP_URL\}/); assert.match(page, /BATTLE_CAL_APP_URL = "\/battle-cal\/"/);
+  assert.match(page, /<iframe[\s\S]*src=\{BATTLE_CAL_APP_URL\}/);
+  assert.doesNotMatch(page, /FloatingMenu|actions=/, "UX A: kein zweites ☰ (Match-Tracker-Menue) auf der Battle-Cal-Seite");
+  assert.match(page, /onBack=\{onBack\}/, "UX A: Zurück bleibt"); assert.match(page, /BATTLE_CAL_APP_URL = "\/battle-cal\/"/);
 
   // D2: Battle-Cal-App (statische Seite) nur ueber public.bc_*; kein Klartext-Passwort im Browser-Speicher
   const bc = read("src/battle-cal/battle-cal.html");
@@ -55,8 +57,15 @@ const runBattleCalTests = () => {
   for (const name of used) assert.match(sqlAll, new RegExp(`create or replace function public\\.${name}\\(`), `${name} existiert`);
   assert.match(bc, /UMZUG_SOURCE_ORIGINS = \["https:\/\/battle-cal\.netlify\.app"\]/, "Umzug nur von der alten Origin");
   assert.match(bc, /function sanitizeCompareHtml/);
+  // UX B: eingebettet durchsichtig und bis zum Fensterrand (nur mit Schalter, nur gleiche Origin ueber frameElement)
+  assert.match(bc, /if \(!window\.__BC_EMBEDDED \|\| !window\.__BC_ENABLED\) return;/);
+  assert.match(bc, /document\.body\.style\.background = "transparent";/);
+  assert.match(bc, /frame\.style\.height = `\$\{Math\.max\(320, Math\.floor\(host\.innerHeight - top - 12\)\)\}px`;/);
+  assert.match(bc, /host\.removeEventListener\("resize", fit\)/);
   const vite = read("vite.config.mjs");
   assert.match(vite, /fileName: "battle-cal\/index\.html"/); assert.match(vite, /VITE_SUPABASE_PUBLISHABLE_KEY/);
+  // UX C: Match-Tracker-Titel auf der Battle-Cal-Seite nur optisch ausgeblendet
+  assert.match(read("src/styles/index.css"), /body:has\(iframe\.battle-cal-frame\) \.app-header \.header-title-row h1 \{[^}]*clip: rect\(0 0 0 0\);/);
   // Umzugsseite (alte Site): nur an die Match-Tracker-Origin, nie das alte Passwort
   const umzug = read("tools/battle-cal/umzug/umzug.html");
   assert.match(umzug, /PROD_TARGET = "https:\/\/40k-match-tracker\.netlify\.app\/battle-cal\/\?umzug=1"/);
