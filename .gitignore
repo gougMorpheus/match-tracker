@@ -6,3 +6,4 @@ vite.config.js
 vite.config.d.ts
 .env*
 !.env.example
+.test-e2e-dist/

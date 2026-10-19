@@ -15,8 +15,26 @@ const versionFilePlugin = () => ({
   }
 });
 
+// Battle-Cal (hinter Schalter): statische Seite /battle-cal/ aus src/battle-cal/battle-cal.html.
+// Supabase-URL und Publishable Key des Match-Trackers werden wie fuer die App aus VITE_* eingesetzt (nichts im Repo).
+const battleCalPlugin = () => {
+  let env = {};
+  return {
+    name: "match-tracker-battle-cal",
+    configResolved(config) { env = config.env || {}; },
+    generateBundle() {
+      const url = String(env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+      const key = String(env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "").trim();
+      const html = readFileSync(new URL("./src/battle-cal/battle-cal.html", import.meta.url), "utf8")
+        .replace('"__BC_SUPABASE_URL__"', () => JSON.stringify(url || "__BC_SUPABASE_URL__"))
+        .replace('"__BC_SUPABASE_KEY__"', () => JSON.stringify(key || "__BC_SUPABASE_KEY__"));
+      this.emitFile({ type: "asset", fileName: "battle-cal/index.html", source: html });
+    }
+  };
+};
+
 export default defineConfig({
-  plugins: [react(), versionFilePlugin()],
+  plugins: [react(), versionFilePlugin(), battleCalPlugin()],
   define: {
     "import.meta.env.VITE_APP_BUILD": JSON.stringify(appBuild)
   },

@@ -32,7 +32,47 @@ const runBattleCalTests = () => {
   assert.match(app, /normalized === BATTLE_CAL_ROUTE && isBattleCalEnabled\(\)/);
   for (const page of ["GamesPage", "StatsPage"]) assert.match(read(`src/pages/${page}.tsx`), /\.\.\.getBattleCalMenuItems\(\)/, page);
   assert.doesNotMatch(read("src/pages/GamePage.tsx"), /BattleCal|battle-cal/i, "Spielmenue/TV unveraendert");
-  assert.doesNotMatch(read("src/pages/BattleCalPage.tsx"), /supabase|fetch\(|rest\/v1/i, "Platzhalter ohne Datenaufrufe");
+  const page = read("src/pages/BattleCalPage.tsx");
+  assert.doesNotMatch(page, /supabase|fetch\(|rest\/v1/i, "Seite selbst ohne Datenaufrufe");
+  assert.match(page, /<iframe[\s\S]*src=\{BATTLE_CAL_APP_URL\}/); assert.match(page, /BATTLE_CAL_APP_URL = "\/battle-cal\/"/);
+
+  // D2: Battle-Cal-App (statische Seite) nur ueber public.bc_*; kein Klartext-Passwort im Browser-Speicher
+  const bc = read("src/battle-cal/battle-cal.html");
+  assert.doesNotMatch(bc, /supabaseRequest|battle_profiles|battle_results|\/rest\/v1\/(?!rpc\/)/, "kein direkter Tabellenzugriff");
+  assert.equal((bc.match(/\bfetch\(/g) || []).length, 1, "genau ein fetch (bcRpc)");
+  assert.match(bc, /fetch\(`\$\{SUPABASE_URL\}\/rest\/v1\/rpc\/\$\{name\}`/);
+  assert.match(bc, /if \(!\/\^bc_\[a-z_\]\+\$\/\.test\(name\)\)/, "nur bc_* aufrufbar");
+  assert.doesNotMatch(bc, /rgvpxnmbuyxqplsfonzm|sb_publishable_|delete_password|storedPassword/, "altes Projekt/Key/Client-Passwortpruefung entfernt");
+  assert.match(bc, /const SUPABASE_URL = "__BC_SUPABASE_URL__";/); assert.match(bc, /const SUPABASE_KEY = "__BC_SUPABASE_KEY__";/);
+  assert.doesNotMatch(bc, /sessionStorage\.setItem|localStorage\.setItem\([^)]*[Pp]assword/, "Passwort nie im Browser-Speicher");
+  assert.match(bc, /localStorage\.setItem\(CLOUD_PROFILE_KEY, JSON\.stringify\(publicProfile\(cloudProfile\)\)\)/);
+  assert.match(bc, /return \{ id: String\(profile\.id\), name: String\(profile\.name \|\| ""\), created_at: profile\.created_at \|\| null \};/);
+  assert.match(bc, /window\.__BC_ENABLED = localStorage\.getItem\(KEY\) === "1"/, "gleicher Schalter wie die App");
+  assert.match(bc, /const KEY = "match-tracker\.feature\.battle-cal";/);
+  const sqlAll = read("supabase/migrations/20261019_01_battlecal_basis.sql") + read("supabase/migrations/20261019_02_battlecal_app.sql");
+  const used = [...new Set([...bc.matchAll(/bcRpc\("(bc_[a-z_]+)"/g)].map((m) => m[1]))];
+  assert.ok(used.length >= 18, `bc-RPCs in der App: ${used.length}`);
+  for (const name of used) assert.match(sqlAll, new RegExp(`create or replace function public\\.${name}\\(`), `${name} existiert`);
+  assert.match(bc, /UMZUG_SOURCE_ORIGINS = \["https:\/\/battle-cal\.netlify\.app"\]/, "Umzug nur von der alten Origin");
+  assert.match(bc, /function sanitizeCompareHtml/);
+  const vite = read("vite.config.mjs");
+  assert.match(vite, /fileName: "battle-cal\/index\.html"/); assert.match(vite, /VITE_SUPABASE_PUBLISHABLE_KEY/);
+  // Umzugsseite (alte Site): nur an die Match-Tracker-Origin, nie das alte Passwort
+  const umzug = read("tools/battle-cal/umzug/umzug.html");
+  assert.match(umzug, /PROD_TARGET = "https:\/\/40k-match-tracker\.netlify\.app\/battle-cal\/\?umzug=1"/);
+  assert.match(umzug, /postMessage\(\{ type: "bc-umzug-data", payload: buildPayload\(\) \}, targetOrigin\)/);
+  assert.doesNotMatch(umzug, /postMessage\([^)]*"\*"\)/, "nie an beliebige Origin");
+  assert.match(umzug, /cloudProfile: profile && profile\.id \? \{ id: String\(profile\.id\), name: String\(profile\.name \|\| ""\) \}/);
+
+  // Migration 02: gleiche Regeln
+  const sql2 = read("supabase/migrations/20261019_02_battlecal_app.sql").replace(/--.*$/gm, "");
+  assert.doesNotMatch(sql2, /alter publication|supabase_realtime|pgrst|db_schemas|create policy|public\.(games|events)\b|function public\.mt_/i);
+  assert.doesNotMatch(sql2, /grant [^;]* on (all )?tables?[^;]* to (anon|authenticated)/i);
+  for (const name of ["bc_roster_import", "bc_results_upsert_many"]) {
+    const m = sql2.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?end \\$\\$;`)); assert.ok(m, name);
+    assert.match(m[0], /security definer set search_path = battlecal/); assert.match(m[0], /require_profile\(p_profile_id, p_password, false\)/);
+  }
+  assert.match(read("supabase/migrations/20261019_02_battlecal_app.rollback.sql"), /drop function if exists public\.bc_roster_import/);
 
   // SQL: statische Regeln
   const sql = read("supabase/migrations/20261019_01_battlecal_basis.sql").replace(/--.*$/gm, ""); // nur Code, ohne Kommentare
@@ -67,6 +107,14 @@ const runBattleCalTests = () => {
     psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_01_battlecal_basis.sql"));
     psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_01_battlecal_basis.sql"));
     const out = execFileSync("psql", [...args, ...db, "-f", path.join(__dirname, "../supabase/tests/battlecal_local_test.sql")], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    // Migration 02 (zweimal = idempotent), App-Tests, Rollback 02 (lange IDs vorhanden -> Grenzen bleiben, Funktionen weg)
+    psql(...db, "-c", "truncate battlecal.army_weapons, battlecal.army_units, battlecal.army_rosters, battlecal.results, battlecal.profiles");
+    psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_02_battlecal_app.sql"));
+    psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_02_battlecal_app.sql"));
+    psql(...db, "-f", path.join(__dirname, "../supabase/tests/battlecal_app_local_test.sql"));
+    psql(...db, "-c", "truncate battlecal.army_weapons, battlecal.army_units, battlecal.army_rosters, battlecal.results, battlecal.profiles");
+    psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_02_battlecal_app.rollback.sql"));
+    assert.equal(psql(...db, "-Atc", "select count(*) from pg_proc where proname in ('bc_roster_import','bc_results_upsert_many')").trim(), "0");
     psql(...db, "-f", path.join(__dirname, "../supabase/migrations/20261019_01_battlecal_basis.rollback.sql"));
     assert.equal(psql(...db, "-Atc", "select count(*) from pg_namespace where nspname='battlecal'").trim(), "0");
     psql("-c", "drop database bctest_ci");

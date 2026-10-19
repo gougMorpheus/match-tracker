@@ -174,7 +174,10 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 
 
 ## Battle-Cal (ab 19.10.2026, in Arbeit)
-- Plan: /home/box/ops/files/match-tracker/battle-cal-integration/PLAN.md (Box). Daten aus dem alten Projekt battle-cal folgen später (Dashboard-Backup, kein Wiederherstellen).
+- Plan: /home/box/ops/files/match-tracker/battle-cal-integration/PLAN.md (Box). Daten aus dem alten Projekt battle-cal folgen später (Weg 2 in Klärung; bis dahin kein Wiederherstellen, kein Import). Frist 14.11.2026.
 - DB: Schema `battlecal` (nicht per REST freigegeben), Zugriff nur über `public.bc_*` (SECURITY DEFINER). Admin-Passwort-Hash im Vault (`bc_admin_password_hash`), nie im Repo.
 - App: `/#/battle-cal` + Menüeintrag nur mit Schalter (`localStorage["match-tracker.feature.battle-cal"]="1"`, per `?battlecal=1`/`?battlecal=0`).
 - Lokale SQL-Tests: `BC_LOCAL_PG="-h /tmp -p 54329" npm test` (Stubs `supabase/tests/battlecal_local_stubs.sql`, nie gegen Live).
+- App: `src/battle-cal/battle-cal.html` (aus dem Original per `tools/battle-cal/patch-original.py`), Build -> `dist/battle-cal/index.html`, eingebettet von `src/pages/BattleCalPage.tsx` (iframe). Nur `bcRpc()` -> `/rest/v1/rpc/bc_*`. Profil-Passwort nur im Arbeitsspeicher.
+- E2E lokal: `PW_MODULE=<pfad>/playwright npm run test:battlecal-e2e` (RPC-Mock `tests/e2e/bcRpcMock.cjs` -> lokales Postgres, nie Live).
+- Umzug alte Site: `tools/battle-cal/umzug/` (nicht deployt).

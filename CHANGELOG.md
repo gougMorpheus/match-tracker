@@ -3,6 +3,27 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Battle-Cal-App im Match-Tracker (D2, hinter Schalter, Standard AUS)
+- `/#/battle-cal` bettet jetzt die Battle-Cal-App ein (statische Seite `/battle-cal/`, erzeugt aus `src/battle-cal/battle-cal.html`). Funktionsumfang wie das Original (gougMorpheus/battle-cal `index.html`, Commit a8ce471). Erzeugt mit `tools/battle-cal/patch-original.py`; die Rechenlogik ist unverändert.
+- Daten nur noch über `public.bc_*` (ein `fetch` auf `/rest/v1/rpc/bc_*`), kein direkter Tabellenzugriff. Altes Projekt und alter Key sind entfernt. URL und Key des Match-Trackers setzt der Build ein (`vite.config.mjs`).
+- Passwörter:
+  - Schreiben (Historie, Armeen) verlangt das Profil-Passwort. Es wird einmal pro Sitzung abgefragt, serverseitig geprüft und nur im Arbeitsspeicher gehalten (nie localStorage/sessionStorage).
+  - Umbenennen und Löschen eines Profils gehen mit Profil-Passwort oder Admin-Passwort. Das alte Master-Passwort und die Prüfung im Browser entfallen.
+  - Löschen ist weich.
+- Armeeliste importieren ersetzt jetzt in einem Aufruf (`bc_roster_import`). Eine Armee wird mit `bc_roster_get` in einem Aufruf geladen (vorher je Einheit ein Aufruf).
+- Umzug vorbereitet:
+  - Die neue Seite nimmt mit `?umzug=1` Daten per postMessage nur von `https://battle-cal.netlify.app` an. Sie fragt vorher nach, überspringt doppelte Einträge und bereinigt das Vergleichs-HTML.
+  - Datei-Import im Format `battle-cal-umzug` ist möglich.
+  - Die Umzugsseite für die alte Site liegt in `tools/battle-cal/umzug/`. Sie ist NICHT deployt, es gibt keine Weiterleitung.
+- DB-Migration `20261019_02_battlecal_app.sql` (separat ausgeführt):
+  - ID-Grenzen auf 500 Zeichen, weil die Original-App längere IDs erzeugt
+  - `bc_roster_import`, `bc_results_upsert_many`
+  - Rollback: `…battlecal_app.rollback.sql`
+  - MT-Tabellen, mt_* und Realtime unverändert.
+- Tests:
+  - battleCal ist um statische Regeln für App, Umzug und Migration 02 erweitert (lokaler SQL-Lauf inkl. 02 und Rollback).
+  - Neu `npm run test:battlecal-e2e`: Browser gegen den lokalen RPC-Mock mit lokalem Postgres, 16 Schritte, alles außerhalb localhost blockiert.
+
 ## 2026-10-19 – Battle-Cal Basis (hinter Schalter, Standard AUS)
 - Service Worker: Nur „/“ bzw. „/index.html“ werden als App-Hülle gespeichert. Unterseiten (z. B. /battle-cal/) bekommen einen eigenen Cache-Eintrag und überschreiben die Match-Tracker-App nicht mehr. Offline-Verhalten der App unverändert.
 - Neue Route `/#/battle-cal` (Platzhalter) und Menüeintrag „Battle-Cal“ im Hauptmenü (Liste, Statistik), nur sichtbar mit Schalter: `?battlecal=1` einmal öffnen (merkt sich das Gerät), `?battlecal=0` schaltet ab. Ohne Schalter ändert sich nichts.
