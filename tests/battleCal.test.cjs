@@ -57,6 +57,11 @@ const runBattleCalTests = () => {
   for (const name of used) assert.match(sqlAll, new RegExp(`create or replace function public\\.${name}\\(`), `${name} existiert`);
   assert.match(bc, /UMZUG_SOURCE_ORIGINS = \["https:\/\/battle-cal\.netlify\.app"\]/, "Umzug nur von der alten Origin");
   assert.match(bc, /function sanitizeCompareHtml/);
+  // UX B: eingebettet durchsichtig und bis zum Fensterrand (nur mit Schalter, nur gleiche Origin ueber frameElement)
+  assert.match(bc, /if \(!window\.__BC_EMBEDDED \|\| !window\.__BC_ENABLED\) return;/);
+  assert.match(bc, /document\.body\.style\.background = "transparent";/);
+  assert.match(bc, /frame\.style\.height = `\$\{Math\.max\(320, Math\.floor\(host\.innerHeight - top - 12\)\)\}px`;/);
+  assert.match(bc, /host\.removeEventListener\("resize", fit\)/);
   const vite = read("vite.config.mjs");
   assert.match(vite, /fileName: "battle-cal\/index\.html"/); assert.match(vite, /VITE_SUPABASE_PUBLISHABLE_KEY/);
   // Umzugsseite (alte Site): nur an die Match-Tracker-Origin, nie das alte Passwort
