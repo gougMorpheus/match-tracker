@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Battle-Cal UX (Peppers Befunde A/B/C, freigegeben von Cosy)
+- A: Auf der Battle-Cal-Seite gibt es kein zweites ☰ mehr. Fehlerbild: zwei gleiche ☰ ohne Beschriftung (Match-Tracker und Battle-Cal). „Zurück“ bleibt.
+- B: Eingebettet ist der Hintergrund jetzt durchsichtig, und der iframe endet am unteren Fensterrand. Fehlerbild: dunklerer Kasten mit harter Kante; „Berechnen“ war nur nach Scrollen sichtbar (E). Ursache: Der iframe war höher als das sichtbare Fenster, dadurch lag die feste Leiste unten außerhalb.
+- C: Der Match-Tracker-Titel „Battle-Cal“ ist auf dieser Seite nur optisch ausgeblendet (bleibt für Screenreader). Fehlerbild: Überschrift dreifach.
+- D bleibt wie im Original (Entscheidung Cosy 19.10.): „Berechnen“ speichert den Eintrag lokal im Verlauf (Original a8ce471 `calculateAndStore`, `saveHistory()`).
+- Keine DB-Änderung.
+
 ## 2026-10-19 – Battle-Cal-App im Match-Tracker (D2, hinter Schalter, Standard AUS)
 - `/#/battle-cal` bettet jetzt die Battle-Cal-App ein (statische Seite `/battle-cal/`, erzeugt aus `src/battle-cal/battle-cal.html`). Funktionsumfang wie das Original (gougMorpheus/battle-cal `index.html`, Commit a8ce471). Erzeugt mit `tools/battle-cal/patch-original.py`; die Rechenlogik ist unverändert.
 - Daten nur noch über `public.bc_*` (ein `fetch` auf `/rest/v1/rpc/bc_*`), kein direkter Tabellenzugriff. Altes Projekt und alter Key sind entfernt. URL und Key des Match-Trackers setzt der Build ein (`vite.config.mjs`).
