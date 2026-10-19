@@ -54,10 +54,19 @@ const run = async () => {
     const sql = (q) => psql(DB, "-c", q).trim();
     let savedInputs = null; let savedOutputs = null;
 
-    await step("Schalter AUS: Hinweis, keine Datenaufrufe", async () => {
+    await step("Schalter AUS (?battlecal=0, gemerkt): Hinweis, keine Datenaufrufe", async () => {
+      await page.goto(`${APP}/battle-cal/?battlecal=0`); await page.waitForTimeout(500);
       await page.goto(`${APP}/battle-cal/`); await page.waitForTimeout(500);
       assert.equal(await page.isVisible("#bcDisabledNote"), true); assert.equal(await page.isHidden("#bcAppRoot"), true);
       assert.equal(mock.log.length, 0);
+    });
+    await step("Standard AN (frischer Browser ohne Schalter): App laedt Profile", async () => {
+      const fresh = await browser.newContext({ serviceWorkers: "block" }); const fp = await fresh.newPage(); fp.setDefaultTimeout(8000);
+      await fp.goto(`${APP}/battle-cal/`);
+      await fp.waitForFunction(() => document.getElementById("cloudProfileSelect")?.options.length >= 1);
+      assert.equal(await fp.isHidden("#bcDisabledNote"), true);
+      await fp.goto(`${APP}/#/battle-cal`); await fp.waitForSelector("iframe.battle-cal-frame");
+      await fresh.close(); mock.log.length = 0;
     });
     await step("Schalter AN (?battlecal=1): App laedt Profile per bc_profiles_list", async () => {
       await page.goto(`${APP}/battle-cal/?battlecal=1`);

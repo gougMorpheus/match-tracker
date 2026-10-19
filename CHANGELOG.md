@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Stufe E: Battle-Cal für alle an, alte Site leitet um
+- Schalter Battle-Cal jetzt standardmäßig AN (Menüeintrag, `#/battle-cal`, `/battle-cal/`). `?battlecal=0` schaltet auf dem Gerät aus (gemerkt als "0"), `?battlecal=1` wieder ein. Ohne localStorage: AN.
+- Hinweis bei ausgeschaltetem Schalter: „Battle-Cal ist auf diesem Gerät ausgeschaltet.“ mit Link zum Einschalten.
+- Alte Site battle-cal.netlify.app (direkter Netlify-Deploy, nicht aus dem Repo): `/umzug.html` (Umzugsseite aus `tools/battle-cal/umzug/`) bleibt erreichbar, alles andere `301` auf `https://40k-match-tracker.netlify.app/?battlecal=1#/battle-cal`.
+- Tests: Standard AN, AUS gemerkt, Wiedereinschalten, ohne localStorage AN; E2E frischer Browser ohne Schalter.
+
 ## 2026-10-19 – Battle-Cal: Passwort ändern fragt das alte Passwort immer ab (Bugfix aus Peppers Retest von #35)
 - Fehlerbild: Nach „Passwort setzen“ oder Speichern in derselben Sitzung meldete „Passwort ändern“ auch mit falschem altem Passwort „Passwort geändert.“.
 - Ursache: `setCloudProfilePassword` nahm `oldPassword = cloudProfilePassword || await requestPassword(...)`. Das gemerkte Sitzungs-Passwort (nach „Passwort setzen“ das gerade gesetzte) wurde als altes Passwort geschickt, die Abfrage des alten Passworts entfiel; der erste sichtbare Dialog war schon „Neues Passwort …“. Die DB-Prüfung in `bc_profile_set_password` war korrekt, sie bekam nur das richtige Passwort.

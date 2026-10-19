@@ -1,4 +1,4 @@
-# Umzugsseite für battle-cal.netlify.app (vorbereitet, NICHT deployt)
+# Umzugsseite für battle-cal.netlify.app (seit Stufe E, 19.10.2026, live)
 
 Stand 19.10.2026. Nur gebaut und lokal getestet (`tests/battleCalApp.e2e.cjs`, Teil „Umzug“). Auf der alten Netlify-Site ist **nichts** geändert,
 es gibt **keine** Weiterleitung.
@@ -18,3 +18,11 @@ es gibt **keine** Weiterleitung.
    `/umzug.html  /umzug.html  200` vor `/*  https://40k-match-tracker.netlify.app/#/battle-cal  301!`.
 3. Voraussetzung: Der Battle-Cal-Schalter im Match-Tracker ist dann für alle an (oder entfernt). Mit Schalter AUS zeigt `/battle-cal/`
    nur den Hinweis „noch nicht freigeschaltet“.
+
+## Stand Stufe E (19.10.2026)
+Live per direktem Netlify-Deploy auf der alten Site (Paket: `umzug.html` + `_redirects`, nicht aus dem battle-cal-Repo):
+```
+/umzug.html  /umzug.html  200
+/*  https://40k-match-tracker.netlify.app/?battlecal=1#/battle-cal  301!
+```
+Achtung: Die alte Site baut weiter automatisch aus dem battle-cal-Repo (main). Ein Push dorthin würde diesen Deploy überschreiben.

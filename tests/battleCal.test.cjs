@@ -11,11 +11,16 @@ const runBattleCalTests = () => {
     globalThis.window = { location: { hash: "#/games", search: "" },
       localStorage: { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: (k) => data.delete(k) } };
     const f = loadBrowserModule("src/utils/battleCalFeature.ts");
-    // Standard: AUS -> kein Menueeintrag
+    // Standard (Stufe E): AN ohne gespeicherten Wert -> Menueeintrag
     f.syncBattleCalFlagFromUrl();
-    assert.equal(f.isBattleCalEnabled(), false);
+    assert.equal(f.isBattleCalEnabled(), true, "Standard AN");
+    assert.deepEqual(f.getBattleCalMenuItems().map((i) => i.label), ["Battle-Cal"], "Standard AN = Menueeintrag");
+    // Ausschalten per 0 (Hash), bleibt gemerkt; kein Menueeintrag
+    window.location.hash = "#/games?battlecal=0"; f.syncBattleCalFlagFromUrl();
+    assert.equal(f.isBattleCalEnabled(), false); assert.equal(data.get("match-tracker.feature.battle-cal"), "0");
+    window.location.hash = "#/games"; f.syncBattleCalFlagFromUrl(); assert.equal(f.isBattleCalEnabled(), false, "AUS bleibt gemerkt");
     assert.deepEqual(f.getBattleCalMenuItems(), [], "Schalter aus = kein Menueeintrag");
-    // Einschalten per Query (Hash oder Suche), Ausschalten per 0
+    // Wieder einschalten per Query (Hash oder Suche)
     window.location.hash = "#/games?battlecal=1"; f.syncBattleCalFlagFromUrl();
     assert.equal(f.isBattleCalEnabled(), true);
     const items = f.getBattleCalMenuItems();
@@ -23,7 +28,10 @@ const runBattleCalTests = () => {
     items[0].onClick(); assert.equal(window.location.hash, "/battle-cal");
     window.location.hash = "#/games"; f.syncBattleCalFlagFromUrl(); assert.equal(f.isBattleCalEnabled(), true, "bleibt gemerkt");
     window.location.search = "?battlecal=0"; f.syncBattleCalFlagFromUrl(); assert.equal(f.isBattleCalEnabled(), false);
+    window.location.search = "?battlecal=1"; f.syncBattleCalFlagFromUrl(); assert.equal(f.isBattleCalEnabled(), true);
     window.location.search = "";
+    // ohne localStorage (privat/gesperrt): AN
+    data.clear(); assert.equal(f.isBattleCalEnabled(), true);
   } finally {
     for (const [k, d] of Object.entries(keep)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
   }
@@ -49,7 +57,8 @@ const runBattleCalTests = () => {
   assert.doesNotMatch(bc, /sessionStorage\.setItem|localStorage\.setItem\([^)]*[Pp]assword/, "Passwort nie im Browser-Speicher");
   assert.match(bc, /localStorage\.setItem\(CLOUD_PROFILE_KEY, JSON\.stringify\(publicProfile\(cloudProfile\)\)\)/);
   assert.match(bc, /return \{ id: String\(profile\.id\), name: String\(profile\.name \|\| ""\), created_at: profile\.created_at \|\| null, has_password: profile\.has_password !== false \};/);
-  assert.match(bc, /window\.__BC_ENABLED = localStorage\.getItem\(KEY\) === "1"/, "gleicher Schalter wie die App");
+  assert.match(bc, /window\.__BC_ENABLED = localStorage\.getItem\(KEY\) !== "0"/, "gleicher Schalter wie die App (Standard AN)");
+  assert.match(bc, /else if \(q === "0"\) localStorage\.setItem\(KEY, "0"\)/, "?battlecal=0 schaltet aus (gemerkt)");
   assert.match(bc, /const KEY = "match-tracker\.feature\.battle-cal";/);
   const sqlAll = read("supabase/migrations/20261019_01_battlecal_basis.sql") + read("supabase/migrations/20261019_02_battlecal_app.sql") + read("supabase/migrations/20261019_03_battlecal_ohne_passwort.sql");
   const used = [...new Set([...bc.matchAll(/bcRpc\("(bc_[a-z_]+)"/g)].map((m) => m[1]))];

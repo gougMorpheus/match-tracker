@@ -1084,15 +1084,15 @@
 </head>
 <body>
   <script>
-    // Match-Tracker: Battle-Cal hinter dem Schalter (Standard AUS). Gleicher Schalter wie die App (localStorage, Origin des Match-Trackers).
+    // Match-Tracker: Battle-Cal hinter dem Schalter (seit Stufe E Standard AN, ?battlecal=0 schaltet aus). Gleicher Schalter wie die App (localStorage, Origin des Match-Trackers).
     (() => {
       const KEY = "match-tracker.feature.battle-cal";
       try {
         const q = new URLSearchParams(window.location.search || "").get("battlecal");
         if (q === "1") localStorage.setItem(KEY, "1");
-        else if (q === "0") localStorage.removeItem(KEY);
-        window.__BC_ENABLED = localStorage.getItem(KEY) === "1";
-      } catch { window.__BC_ENABLED = false; }
+        else if (q === "0") localStorage.setItem(KEY, "0");
+        window.__BC_ENABLED = localStorage.getItem(KEY) !== "0";
+      } catch { window.__BC_ENABLED = true; }
       window.__BC_EMBEDDED = window.top !== window;
       // UX-Befund B: eingebettet im Match-Tracker (gleiche Origin) Hintergrund durchsichtig und den iframe bis zum unteren
       // Fensterrand ziehen. Dann scrollt nur Battle-Cal, und die feste Leiste unten ("Berechnen") ist sichtbar.
@@ -1123,8 +1123,8 @@
     })();
   </script>
   <div id="bcDisabledNote" class="container" hidden>
-    <section class="card panel"><h2>Battle-Cal</h2><div class="note-box">Battle-Cal ist auf diesem Gerät noch nicht freigeschaltet.
-      <a href="/">Zum Match-Tracker</a></div></section>
+    <section class="card panel"><h2>Battle-Cal</h2><div class="note-box">Battle-Cal ist auf diesem Gerät ausgeschaltet.
+      <a href="/battle-cal/?battlecal=1">Wieder einschalten</a> · <a href="/">Zum Match-Tracker</a></div></section>
   </div>
   <div id="bcStandaloneBar" class="container" hidden>
     <div class="note-box"><a href="/">← Match-Tracker</a></div>
