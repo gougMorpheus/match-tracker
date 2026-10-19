@@ -242,7 +242,8 @@ rep('''      async function deleteCloudProfile() {''',
         const hadPassword = profileHasPassword(cloudProfile);
         let oldPassword = "";
         if (hadPassword) {
-          oldPassword = cloudProfilePassword || await requestPassword(`Passwort für "${cloudProfile.name}" ändern`, "Bisheriges Profil-Passwort oder Admin-Passwort");
+          // Immer neu abfragen, nie das gemerkte Sitzungs-Passwort als Ersatz nehmen (sonst keine echte Pruefung des alten Passworts).
+          oldPassword = await requestPassword(`Passwort für "${cloudProfile.name}" ändern`, "Bisheriges Profil-Passwort oder Admin-Passwort");
           if (!oldPassword) return;
         }
         const nextPassword = await requestPassword(`Neues Passwort für "${cloudProfile.name}"`, "Danach wird es zum Speichern, Umbenennen und Löschen gebraucht.");
@@ -265,7 +266,7 @@ rep('''      async function deleteCloudProfile() {''',
           showToast(hadPassword ? "Passwort geändert." : "Passwort gesetzt.");
         } catch (error) {
           updateSyncStatus("error", "Passwort konnte nicht gesetzt werden.");
-          if (error?.kind === "forbidden") cloudProfilePassword = "";
+          // Falsches altes Passwort: gemerktes Sitzungs-Passwort bleibt unveraendert (nicht leeren, nicht mit dem neuen ueberschreiben).
           showToast(cloudErrorText(error, "Passwort konnte nicht gesetzt werden."));
         }
       }

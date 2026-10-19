@@ -275,7 +275,15 @@ const run = async () => {
       await changePw("zz-neu-pw", "zz-pw-2"); await toast(/Passwort geändert/);
       assert.notEqual(sql(`select password_hash from battlecal.profiles where id = '${id}'`), hash1);
       assert.ok(!(await storageDump()).includes("zz-pw-2"));
+      // Peppers Fall (ohne Neuladen, Passwort gemerkt): altes Passwort wird trotzdem abgefragt, falsches abgelehnt
+      const hash2 = sql(`select password_hash from battlecal.profiles where id = '${id}'`);
+      await changePw("falsch-123", "zz-pw-3"); await toast(/Passwort ist falsch/);
+      assert.equal(sql(`select password_hash from battlecal.profiles where id = '${id}'`), hash2, "falsches altes Passwort aendert nichts");
       await page.click("#cloudProfileCloseBtn");
+      // gemerktes Sitzungs-Passwort bleibt gueltig: Speichern ohne erneute Abfrage
+      await page.evaluate(() => document.getElementById("calculatorForm").requestSubmit()); await page.waitForTimeout(900);
+      assert.equal(await page.locator("#bcPasswordInput").count(), 0, "keine Abfrage nach falschem Aendern-Versuch");
+      assert.equal(Number(sql(`select count(*) from battlecal.results where profile_id = '${id}' and deleted_at is null`)), Number(before) + 3);
     });
     await step("Match-Tracker-Huelle: #/battle-cal bettet /battle-cal/ ein (nur mit Schalter)", async () => {
       const p3 = await ctx.newPage(); p3.setDefaultTimeout(8000);

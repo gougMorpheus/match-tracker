@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Battle-Cal: Passwort ändern fragt das alte Passwort immer ab (Bugfix aus Peppers Retest von #35)
+- Fehlerbild: Nach „Passwort setzen“ oder Speichern in derselben Sitzung meldete „Passwort ändern“ auch mit falschem altem Passwort „Passwort geändert.“.
+- Ursache: `setCloudProfilePassword` nahm `oldPassword = cloudProfilePassword || await requestPassword(...)`. Das gemerkte Sitzungs-Passwort (nach „Passwort setzen“ das gerade gesetzte) wurde als altes Passwort geschickt, die Abfrage des alten Passworts entfiel; der erste sichtbare Dialog war schon „Neues Passwort …“. Die DB-Prüfung in `bc_profile_set_password` war korrekt, sie bekam nur das richtige Passwort.
+- Fix: Beim Ändern wird das bisherige Passwort (oder Admin-Passwort) immer neu abgefragt. Bei falschem altem Passwort bleibt das gemerkte Sitzungs-Passwort unverändert (weder geleert noch überschrieben). Keine DB-/Schemaänderung.
+- Tests: statischer Test (kein `cloudProfilePassword ||` in `setCloudProfilePassword`), E2E-Fall ohne Neuladen mit „falsch-123“.
+
 ## 2026-10-19 – Egress: Vollabzug seltener und schlanker (SPIELTAG-2026-10-19.md, Vorschläge 1 und 2)
 - Anlass: Nach #27/#28 machte der Vollabzug (alle Spiele mit allen Events, ≈ 0,97 MB) ≈ 85 % des Spieltags-Egress aus (alle 10 min und bei jeder Rückkehr in den Tab).
 - Vollabzug spätestens alle 30 min (vorher 10). Bei Rückkehr in den Vordergrund nur nach mehr als 5 min im Hintergrund, sonst normaler Delta-Abgleich.

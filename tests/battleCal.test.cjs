@@ -95,6 +95,15 @@ const runBattleCalTests = () => {
   assert.match(m3, /password_hash = extensions\.crypt\(p_new_password, extensions\.gen_salt\('bf'\)\)/);
   assert.match(m3, /'has_password', p\.password_hash is not null/);
   assert.doesNotMatch(m3.replace(/--.*$/gm, ""), /games|events|mt_|publication|raise notice/i, "Migration 03 fasst nur battlecal/bc_* an");
+  // Passwort aendern: altes Passwort immer neu abfragen, nie das gemerkte Sitzungs-Passwort als Ersatz (Peppers Retest PR #35)
+  for (const [name, src] of [["battle-cal.html", bc], ["patch-original.py", read("tools/battle-cal/patch-original.py")]]) {
+    const fn = src.slice(src.indexOf("async function setCloudProfilePassword()"), src.indexOf("async function", src.indexOf("async function setCloudProfilePassword()") + 10));
+    assert.ok(fn.length > 200, `${name}: setCloudProfilePassword gefunden`);
+    assert.doesNotMatch(fn, /oldPassword\s*=\s*cloudProfilePassword\s*\|\|/, `${name}: altes Passwort nicht aus cloudProfilePassword`);
+    assert.doesNotMatch(fn, /cloudProfilePassword\s*\|\|/, `${name}: kein cloudProfilePassword-Ersatz`);
+    assert.match(fn, /oldPassword = await requestPassword\(/, `${name}: altes Passwort wird abgefragt`);
+    assert.doesNotMatch(fn.slice(fn.indexOf("catch (error)")), /cloudProfilePassword\s*=/, `${name}: Fehler ueberschreibt/leert gemerktes Passwort nicht`);
+  }
   const rb3 = read("supabase/migrations/20261019_03_battlecal_ohne_passwort.rollback.sql");
   assert.match(rb3, /drop function if exists public\.bc_profile_set_password/); assert.match(rb3, /set password_hash = '!' where password_hash is null/);
 
