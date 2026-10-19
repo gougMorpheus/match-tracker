@@ -8,7 +8,8 @@
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
-    "test": "node ./node_modules/typescript/bin/tsc -p tsconfig.test.json && node -e \"const fs=require('fs');fs.mkdirSync('.test-dist',{recursive:true});fs.writeFileSync('.test-dist/package.json', JSON.stringify({type:'commonjs'}));\" && node ./tests/run-tests.cjs"
+    "test": "node ./node_modules/typescript/bin/tsc -p tsconfig.test.json && node -e \"const fs=require('fs');fs.mkdirSync('.test-dist',{recursive:true});fs.writeFileSync('.test-dist/package.json', JSON.stringify({type:'commonjs'}));\" && node ./tests/run-tests.cjs",
+    "test:battlecal-e2e": "node ./tests/e2e/battleCalApp.e2e.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

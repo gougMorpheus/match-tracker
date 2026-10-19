@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Battle-Cal zieht um</title>
+  <!-- Umzugsseite fuer die ALTE Site battle-cal.netlify.app (Datei dort als /umzug.html ablegen; NOCH NICHT deployen).
+       Liest die lokalen Daten dieses Browsers (localStorage der alten Origin) und gibt sie an Battle-Cal im Match-Tracker weiter:
+       1) "Daten mitnehmen": oeffnet https://40k-match-tracker.netlify.app/battle-cal/?umzug=1, wartet auf "bc-umzug-ready"
+          und schickt die Daten per postMessage NUR an die Match-Tracker-Origin. Die neue Seite fragt vor dem Uebernehmen nach.
+       2) "Als Datei sichern": JSON-Datei, in der neuen App unter Historie -> Importieren einlesbar.
+       Nie uebertragen: das alte Loeschpasswort (aus dem gespeicherten Cloud-Profil wird nur id/name genommen). -->
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0b0f14; color: #e8eef6; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    .card { background: #141d29; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+    h1 { font-size: 1.4rem; margin: 0 0 8px; }
+    p { line-height: 1.5; margin: 8px 0; }
+    .muted { color: #9fb0c4; font-size: 0.92rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    button, a.button { appearance: none; border: 1px solid rgba(255,255,255,0.16); background: #1a2433; color: inherit; border-radius: 10px;
+      padding: 10px 14px; font: inherit; cursor: pointer; text-decoration: none; }
+    button.primary { background: #2f6fed; border-color: #2f6fed; color: #fff; }
+    #status { min-height: 1.5em; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Battle-Cal ist umgezogen</h1>
+      <p>Battle-Cal gehört jetzt zum <strong>Match-Tracker</strong>. Deine Cloud-Profile werden übernommen.</p>
+      <p>Daten, die nur in <strong>diesem Browser</strong> liegen (Historie „Nur lokal“, Armeevergleiche), kannst du hier mitnehmen.</p>
+      <p class="muted" id="summary">Lese lokale Daten …</p>
+      <div class="row">
+        <button type="button" class="primary" id="moveBtn">Daten mitnehmen</button>
+        <button type="button" id="fileBtn">Als Datei sichern</button>
+        <a class="button" id="openLink" href="https://40k-match-tracker.netlify.app/#/battle-cal">Zum Match-Tracker</a>
+      </div>
+      <p id="status" class="muted"></p>
+    </section>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const KEYS = {
+        history: "wh40k-prob-history-v1",
+        compare: "wh40k-army-compare-history-v1",
+        profile: "wh40k-prob-cloud-profile-v1"
+      };
+      const PROD_TARGET = "https://40k-match-tracker.netlify.app/battle-cal/?umzug=1";
+      const isLocal = value => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(value);
+      // Nur fuer lokale Tests: ?target=<lokale URL>, wenn diese Seite selbst lokal laeuft.
+      const params = new URLSearchParams(location.search);
+      const localTarget = params.get("target");
+      const target = isLocal(location.origin) && localTarget && isLocal(new URL(localTarget).origin) ? localTarget : PROD_TARGET;
+      const targetOrigin = new URL(target).origin;
+
+      const readJson = key => { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+      const buildPayload = () => {
+        const history = readJson(KEYS.history);
+        const compare = readJson(KEYS.compare);
+        const profile = readJson(KEYS.profile);
+        return {
+          source: "battle-cal-umzug",
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          from: location.origin,
+          entries: Array.isArray(history) ? history.filter(e => e && e.id && e.createdAt && e.inputs && e.outputs) : [],
+          armyCompareEntries: Array.isArray(compare) ? compare.filter(e => e && e.id && e.html) : [],
+          cloudProfile: profile && profile.id ? { id: String(profile.id), name: String(profile.name || "") } : null
+        };
+      };
+      const status = text => { document.getElementById("status").textContent = text; };
+      const payload = buildPayload();
+      document.getElementById("summary").textContent =
+        `In diesem Browser: ${payload.entries.length} Historien-Einträge, ${payload.armyCompareEntries.length} Armeevergleiche` +
+        (payload.cloudProfile ? `, zuletzt genutztes Cloud-Profil „${payload.cloudProfile.name}“.` : ".");
+
+      let popup = null; let sent = false;
+      window.addEventListener("message", event => {
+        if (event.origin !== targetOrigin || !popup || event.source !== popup) return;
+        const data = event.data || {};
+        if (data.type === "bc-umzug-ready" && !sent) {
+          sent = true;
+          popup.postMessage({ type: "bc-umzug-data", payload: buildPayload() }, targetOrigin);
+          status("Daten übergeben. Bitte im neuen Fenster bestätigen.");
+        }
+        if (data.type === "bc-umzug-done") {
+          const r = data.result || {};
+          status(`Fertig: ${r.history || 0} Historien-Einträge und ${r.compare || 0} Armeevergleiche übernommen.`);
+        }
+      });
+      document.getElementById("moveBtn").addEventListener("click", () => {
+        if (!payload.entries.length && !payload.armyCompareEntries.length) { status("Keine lokalen Daten zum Mitnehmen."); return; }
+        sent = false;
+        const sep = target.includes("?") ? "&" : "?";
+        popup = window.open(`${target}${sep}from=${encodeURIComponent(location.origin)}`, "battle-cal-umzug");
+        status(popup ? "Neues Fenster geöffnet, warte auf Battle-Cal …" : "Fenster wurde blockiert. Bitte Pop-ups erlauben oder „Als Datei sichern“ nutzen.");
+      });
+      document.getElementById("fileBtn").addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify(buildPayload(), null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `battle-cal-umzug-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link); link.click(); link.remove();
+        URL.revokeObjectURL(url);
+        status("Datei gespeichert. Im Match-Tracker unter Battle-Cal → Historie → Importieren einlesen.");
+      });
+    })();
+  </script>
+</body>
+</html>

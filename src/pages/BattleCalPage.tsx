@@ -8,7 +8,10 @@ interface BattleCalPageProps {
   onOpenStats: () => void;
 }
 
-// Platzhalter (Vorschau hinter Schalter). Die eigentliche Battle-Cal-App folgt nach der Datenuebernahme.
+// Battle-Cal (hinter Schalter, Standard AUS). Die App selbst ist die statische Seite /battle-cal/ (src/battle-cal/battle-cal.html);
+// sie spricht die Datenbank nur ueber die RPCs public.bc_* an. Hier wird sie im Match-Tracker-Rahmen eingebettet.
+export const BATTLE_CAL_APP_URL = "/battle-cal/";
+
 export const BattleCalPage = ({ onBack, onCreateGame, onOpenStats }: BattleCalPageProps) => (
   <Layout
     title="Battle-Cal"
@@ -31,11 +34,11 @@ export const BattleCalPage = ({ onBack, onCreateGame, onOpenStats }: BattleCalPa
       />
     }
   >
-    <section className="stack">
-      <div className="card">
-        <h2>Battle-Cal (Vorschau)</h2>
-        <p>Der Battle-Calculator wird hier in den Match-Tracker übernommen. Noch keine Daten, noch keine Funktionen.</p>
-      </div>
-    </section>
+    <iframe
+      className="battle-cal-frame"
+      title="Battle-Cal"
+      src={BATTLE_CAL_APP_URL}
+      style={{ display: "block", width: "100%", height: "calc(100dvh - 96px)", minHeight: 480, border: 0, borderRadius: 12, background: "#0b0f14" }}
+    />
   </Layout>
 );
