@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { getBattleCalMenuItems } from "../utils/battleCalFeature";
 import { FloatingMenu } from "../components/FloatingMenu";
 import { openNotificationsOverview } from "../pwa/pushFollowStore";
 import { GameCard } from "../components/GameCard";
@@ -71,7 +72,8 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
                 items: [
                   { label: "Main", onClick: () => (window.location.hash = "/games") },
                   { label: "Neues Spiel", onClick: onCreateGame },
-                  { label: "Statistik", onClick: onOpenStats }
+                  { label: "Statistik", onClick: onOpenStats },
+                  ...getBattleCalMenuItems()
                 ]
               },
               {

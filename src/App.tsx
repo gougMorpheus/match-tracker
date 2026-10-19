@@ -4,6 +4,8 @@ import { GamesPage } from "./pages/GamesPage";
 import { GamePage } from "./pages/GamePage";
 import { NewGamePage } from "./pages/NewGamePage";
 import { StatsPage } from "./pages/StatsPage";
+import { BattleCalPage } from "./pages/BattleCalPage";
+import { BATTLE_CAL_ROUTE, isBattleCalEnabled, syncBattleCalFlagFromUrl } from "./utils/battleCalFeature";
 import { SyncNotices } from "./components/SyncNotices";
 import { NotificationsCenter } from "./components/NotificationsCenter";
 
@@ -11,6 +13,7 @@ type Route =
   | { view: "games" }
   | { view: "new" }
   | { view: "stats" }
+  | { view: "battle-cal" }
   | { view: "game"; gameId: string; mode?: "overview"; tv?: boolean };
 
 // Alte Links auf die frühere Nur-Lesen-Ansicht (/overview, ?mode=view, ?view=1, ?readonly=1) auf View only umleiten.
@@ -47,6 +50,11 @@ const parseHashRoute = (hash: string): Route => {
     return { view: "stats" };
   }
 
+  // Battle-Cal nur mit eingeschaltetem Schalter (sonst wie bisher: Spieleliste).
+  if (normalized === BATTLE_CAL_ROUTE && isBattleCalEnabled()) {
+    return { view: "battle-cal" };
+  }
+
   return { view: "games" };
 };
 
@@ -67,18 +75,25 @@ const navigate = (route: Route) => {
     return;
   }
 
+  if (route.view === "battle-cal") {
+    window.location.hash = BATTLE_CAL_ROUTE;
+    return;
+  }
+
   window.location.hash = "/games";
 };
 
 const App = () => {
   const [route, setRoute] = useState<Route>(() => {
     normalizeLegacyGameHash();
+    syncBattleCalFlagFromUrl();
     return parseHashRoute(window.location.hash);
   });
 
   useEffect(() => {
     const handleHashChange = () => {
       normalizeLegacyGameHash();
+      syncBattleCalFlagFromUrl();
       setRoute(parseHashRoute(window.location.hash));
     };
     window.addEventListener("hashchange", handleHashChange);
@@ -121,6 +136,14 @@ const App = () => {
         <StatsPage
           onBack={() => navigate({ view: "games" })}
           onCreateGame={() => navigate({ view: "new" })}
+        />
+      ) : null}
+
+      {route.view === "battle-cal" ? (
+        <BattleCalPage
+          onBack={() => navigate({ view: "games" })}
+          onCreateGame={() => navigate({ view: "new" })}
+          onOpenStats={() => navigate({ view: "stats" })}
         />
       ) : null}
     </>
