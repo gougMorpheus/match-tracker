@@ -171,3 +171,10 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Events werden seitenweise geladen (`fetchEventsForGameIds`, 100 je Seite); die Sortierung braucht den eindeutigen Tiebreaker `id` (occurred_at, created_at, id), sonst gehen an Seitengrenzen Events verloren oder kommen doppelt.
 - Zug-Auswahl im Editor (`resolveSelectedTurnKey`): steht die Auswahl auf dem bisher neuesten Zug, folgt sie einem neu hinzugekommenen Zug (auch von anderem Gerät oder nach Neuladen aus veraltetem Cache). Timer an/aus wirkt auf den ausgewählten Zug.
 - Push-Abo-Abgleich (`syncFollowsIfSubscribed`): erst `pushManager.getSubscription()` prüfen (fehlt → neu anlegen, Endpoint geändert → speichern), dann Folgen per `mt_push_set_follows`; meldet der Server `subscribed: false`, wird das Browser-Abo erneuert (`subscribeAndSync(..., { renew: true })`). Panel zeigt „aktiv“ nur nach Erfolg und gleicht beim Öffnen neu ab.
+
+
+## Battle-Cal (ab 19.10.2026, in Arbeit)
+- Plan: /home/box/ops/files/match-tracker/battle-cal-integration/PLAN.md (Box). Daten aus dem alten Projekt battle-cal folgen später (Dashboard-Backup, kein Wiederherstellen).
+- DB: Schema `battlecal` (nicht per REST freigegeben), Zugriff nur über `public.bc_*` (SECURITY DEFINER). Admin-Passwort-Hash im Vault (`bc_admin_password_hash`), nie im Repo.
+- App: `/#/battle-cal` + Menüeintrag nur mit Schalter (`localStorage["match-tracker.feature.battle-cal"]="1"`, per `?battlecal=1`/`?battlecal=0`).
+- Lokale SQL-Tests: `BC_LOCAL_PG="-h /tmp -p 54329" npm test` (Stubs `supabase/tests/battlecal_local_stubs.sql`, nie gegen Live).

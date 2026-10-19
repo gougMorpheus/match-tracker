@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-19 – Battle-Cal Basis (hinter Schalter, Standard AUS)
+- Service Worker: Nur „/“ bzw. „/index.html“ werden als App-Hülle gespeichert. Unterseiten (z. B. /battle-cal/) bekommen einen eigenen Cache-Eintrag und überschreiben die Match-Tracker-App nicht mehr. Offline-Verhalten der App unverändert.
+- Neue Route `/#/battle-cal` (Platzhalter) und Menüeintrag „Battle-Cal“ im Hauptmenü (Liste, Statistik), nur sichtbar mit Schalter: `?battlecal=1` einmal öffnen (merkt sich das Gerät), `?battlecal=0` schaltet ab. Ohne Schalter ändert sich nichts.
+- DB-Migration `20261019_01_battlecal_basis.sql` (separat ausgeführt): Schema `battlecal` (nicht per REST freigegeben, keine anon-Rechte, RLS ohne Policies), leere Tabellen, RPCs `public.bc_*` (SECURITY DEFINER, bcrypt per pgcrypto, Profil-Passwort für Schreiben, Admin-Passwort serverseitig per Vault-Hash, weich löschen). Rollback: `…battlecal_basis.rollback.sql`. MT-Tabellen, mt_* und Realtime unverändert.
+- Tests: swNavigation, battleCal (Schalter, Menü, SQL-Regeln; mit `BC_LOCAL_PG` zusätzlich echter Lauf gegen lokales Test-Postgres).
+
 ## 2026-10-18 – TV: bei Spielende nur „Spiel beendet“
 - In der TV-Live-Ansicht zeigt die Pause wegen Spielende nur noch „Spiel beendet“ (kein „Weiter live“, kein Pausentext). Wiederaufnahme kommt weiter per Realtime an (#29/#30 unverändert).
 - „15 min ohne Ereignis“: Hinweis und „Weiter live“ unverändert.

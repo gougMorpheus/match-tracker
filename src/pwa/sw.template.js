@@ -1,5 +1,6 @@
 /* Service Worker Match-Tracker (Stufe b: echte Push-Meldungen). Build: __APP_BUILD__
  * - App-Huelle: Navigation network-first (Fallback Cache), /assets/* cache-first (gehashte Dateien).
+ *   Nur "/" bzw. "/index.html" landen als App-Huelle im Cache; Unterseiten (z. B. /battle-cal/) unter eigenem Schluessel.
  * - Nie gecacht: alles fremde (Supabase-API, Realtime), version.json, sw.js, Nicht-GET.
  * - Update: neuer Build => neuer Cache-Name, skipWaiting + clients.claim, alte Caches werden geloescht.
  *   Die App prueft zusaetzlich version.json und laedt bei neuem Build neu.
@@ -23,6 +24,8 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+const isAppShellPath = (pathname) => pathname === "/" || pathname === "/index.html";
+
 const isNeverCached = (url) =>
   url.origin !== self.location.origin ||
   url.pathname === "/version.json" ||
@@ -36,13 +39,17 @@ self.addEventListener("fetch", (event) => {
   if (isNeverCached(url)) return; // Browser/Netzwerk direkt, kein SW-Cache (Sync bleibt aktuell)
 
   if (request.mode === "navigate") {
+    // Nur die App-Huelle ("/", "/index.html") wird als /index.html gespeichert. Andere Seiten (z. B. /battle-cal/,
+    // auch als iframe) bekommen einen eigenen Cache-Eintrag und ueberschreiben die Match-Tracker-App nie.
+    const shell = isAppShellPath(url.pathname);
+    const key = shell ? "/index.html" : url.origin + url.pathname;
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) { const copy = response.clone(); caches.open(CACHE).then((cache) => cache.put("/index.html", copy)); }
+          if (response.ok) { const copy = response.clone(); caches.open(CACHE).then((cache) => cache.put(key, copy)); }
           return response;
         })
-        .catch(() => caches.match("/index.html").then((cached) => cached || Response.error()))
+        .catch(() => caches.match(key).then((cached) => cached || Response.error()))
     );
     return;
   }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { getBattleCalMenuItems } from "../utils/battleCalFeature";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { FloatingMenu } from "../components/FloatingMenu";
 import { openNotificationsOverview } from "../pwa/pushFollowStore";
@@ -1343,7 +1344,8 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                 items: [
                   { label: "Main", onClick: onBack },
                   { label: "Neues Spiel", onClick: onCreateGame },
-                  { label: "Statistik", onClick: () => window.location.hash = "/stats" }
+                  { label: "Statistik", onClick: () => window.location.hash = "/stats" },
+                  ...getBattleCalMenuItems()
                 ]
               },
               {
