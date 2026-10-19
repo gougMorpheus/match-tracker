@@ -39,7 +39,7 @@ import {
   mapSupabaseGameToAppGame,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
-import { RemoteGameCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
+import { RemoteGameCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -349,6 +349,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const mutationLocksRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<number | null>(null);
   const resumeSyncTimerRef = useRef<number | null>(null);
+  const hiddenSinceRef = useRef<number | null>(null);
   const retrySyncTimerRef = useRef<number | null>(null);
   const retryAttemptRef = useRef(0);
   const advanceGameRef = useRef<(gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>>(async () => {});
@@ -1189,6 +1190,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     };
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        hiddenSinceRef.current = Date.now();
         if (resumeSyncTimerRef.current) {
           window.clearTimeout(resumeSyncTimerRef.current);
           resumeSyncTimerRef.current = null;
@@ -1199,7 +1201,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       if (resumeSyncTimerRef.current) {
         window.clearTimeout(resumeSyncTimerRef.current);
       }
-      remoteCacheRef.current.requestFull();
+      // Egress: Vollabzug nur nach mehr als 5 min im Hintergrund, sonst normaler Delta-Abgleich.
+      if (shouldFullPullOnResume(hiddenSinceRef.current, Date.now())) remoteCacheRef.current.requestFull();
+      hiddenSinceRef.current = null;
       resumeSyncTimerRef.current = window.setTimeout(() => {
         resumeSyncTimerRef.current = null;
         void refreshGames();

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
+exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 // Delta-Abgleich (#679, Egress): Statt bei jedem Abgleich alle Spiele mit allen Events zu laden, wird eine schlanke
 // Liste (id, version, flow_version; geloeschte schon serverseitig gefiltert) geholt. Volle Zeilen bzw. Events nur fuer
@@ -9,12 +9,20 @@ const supabaseGameMapping_1 = require("./supabaseGameMapping");
 //   Versionen NICHT erhoehen) und Realtime-Meldungen mit game_id,
 // - aktive Spiele (letzte Aktivitaet < ACTIVE_WINDOW_MS): faengt Revoke von Nicht-Ablauf-Events ab. Die sind fuer anon
 //   per RLS unsichtbar (kein Realtime) und erhoehen keine Version.
-// - Sicherheitsnetz: Vollabzug spaetestens alle FULL_PULL_INTERVAL_MS, beim Start, bei Rueckkehr in den Tab, online und
-//   nach (Wieder-)Verbindung von Realtime.
+// - Sicherheitsnetz: Vollabzug spaetestens alle FULL_PULL_INTERVAL_MS, beim Start, bei Rueckkehr in den Tab (nur nach mehr
+//   als RESUME_FULL_AFTER_HIDDEN_MS im Hintergrund), online und nach (Wieder-)Verbindung von Realtime.
+// - Vollabzug (Egress, 19.10.): alle Spielzeilen, Events aber nur fuer Spiele mit Aktivitaet < FULL_EVENTS_WINDOW_MS sowie
+//   neue/geaenderte/markierte Spiele. Aeltere Spiele behalten die Events aus dem Cache (Grenze: Revoke eines
+//   Nicht-Ablauf-Events in einem aelteren Spiel ohne Versionserhoehung erscheint erst nach Neustart der App).
 // Ein Spiel, das in der schlanken Liste fehlt, gilt als geloescht (wie zuvor: geloeschte wurden clientseitig gefiltert).
 // Der Cache haelt nur SERVER-Stände; die Zusammenfuehrung mit lokalen Aenderungen (Queue, #25, #26) bleibt unveraendert.
-exports.FULL_PULL_INTERVAL_MS = 10 * 60 * 1000;
+exports.FULL_PULL_INTERVAL_MS = 30 * 60 * 1000;
 exports.ACTIVE_WINDOW_MS = 12 * 60 * 60 * 1000;
+exports.FULL_EVENTS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+exports.RESUME_FULL_AFTER_HIDDEN_MS = 5 * 60 * 1000;
+// Rueckkehr in den Vordergrund: Vollabzug nur nach laengerer Zeit im Hintergrund (unbekannt -> sicherheitshalber ja).
+const shouldFullPullOnResume = (hiddenSinceMs, now) => hiddenSinceMs === null || now - hiddenSinceMs > exports.RESUME_FULL_AFTER_HIDDEN_MS;
+exports.shouldFullPullOnResume = shouldFullPullOnResume;
 const toMs = (value) => {
     const ms = value ? Date.parse(value) : NaN;
     return Number.isFinite(ms) ? ms : 0;
@@ -53,8 +61,16 @@ class RemoteGameCache {
             return Boolean(entry?.deleted && entry.row.version === row.version && entry.row.flow_version === row.flow_version);
         };
         if (full) {
-            // Wie frueher: Events nur fuer nicht geloeschte Spiele.
-            return { full, rowIds: slim.map((row) => row.id), eventIds: slim.filter((row) => !unchangedTombstone(row)).map((row) => row.id),
+            // Events nur fuer nicht geloeschte Spiele, die neu/geaendert/markiert sind oder Aktivitaet < FULL_EVENTS_WINDOW_MS haben.
+            const needsEvents = (row) => {
+                if (unchangedTombstone(row))
+                    return false;
+                const entry = this.entries.get(row.id);
+                if (!entry || entry.deleted || entry.row.version !== row.version || entry.row.flow_version !== row.flow_version)
+                    return true;
+                return this.dirty.has(row.id) || now - (0, exports.getLastActivityMs)(entry) < exports.FULL_EVENTS_WINDOW_MS;
+            };
+            return { full, rowIds: slim.map((row) => row.id), eventIds: slim.filter(needsEvents).map((row) => row.id),
                 dirtyMark: this.markSeq, fullMark: this.fullSeq };
         }
         const rowIds = [];
