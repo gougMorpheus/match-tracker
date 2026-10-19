@@ -64,6 +64,8 @@ const runBattleCalTests = () => {
   assert.match(bc, /host\.removeEventListener\("resize", fit\)/);
   const vite = read("vite.config.mjs");
   assert.match(vite, /fileName: "battle-cal\/index\.html"/); assert.match(vite, /VITE_SUPABASE_PUBLISHABLE_KEY/);
+  // UX C: Match-Tracker-Titel auf der Battle-Cal-Seite nur optisch ausgeblendet
+  assert.match(read("src/styles/index.css"), /body:has\(iframe\.battle-cal-frame\) \.app-header \.header-title-row h1 \{[^}]*clip: rect\(0 0 0 0\);/);
   // Umzugsseite (alte Site): nur an die Match-Tracker-Origin, nie das alte Passwort
   const umzug = read("tools/battle-cal/umzug/umzug.html");
   assert.match(umzug, /PROD_TARGET = "https:\/\/40k-match-tracker\.netlify\.app\/battle-cal\/\?umzug=1"/);

@@ -131,6 +131,17 @@ textarea {
   font-size: clamp(2rem, 6vw, 2.75rem);
 }
 
+/* UX-Befund C: Auf der Battle-Cal-Seite steht der Titel schon in der App ("40K Battle Calculator").
+   Die Match-Tracker-Ueberschrift nur optisch ausblenden (bleibt fuer Screenreader). */
+body:has(iframe.battle-cal-frame) .app-header .header-title-row h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .app-shell--sticky-header .app-header h1 {
   font-size: clamp(1.3rem, 5vw, 1.7rem);
   margin-top: 0;
