@@ -34,7 +34,9 @@ const runBattleCalTests = () => {
   assert.doesNotMatch(read("src/pages/GamePage.tsx"), /BattleCal|battle-cal/i, "Spielmenue/TV unveraendert");
   const page = read("src/pages/BattleCalPage.tsx");
   assert.doesNotMatch(page, /supabase|fetch\(|rest\/v1/i, "Seite selbst ohne Datenaufrufe");
-  assert.match(page, /<iframe[\s\S]*src=\{BATTLE_CAL_APP_URL\}/); assert.match(page, /BATTLE_CAL_APP_URL = "\/battle-cal\/"/);
+  assert.match(page, /<iframe[\s\S]*src=\{BATTLE_CAL_APP_URL\}/);
+  assert.doesNotMatch(page, /FloatingMenu|actions=/, "UX A: kein zweites ☰ (Match-Tracker-Menue) auf der Battle-Cal-Seite");
+  assert.match(page, /onBack=\{onBack\}/, "UX A: Zurück bleibt"); assert.match(page, /BATTLE_CAL_APP_URL = "\/battle-cal\/"/);
 
   // D2: Battle-Cal-App (statische Seite) nur ueber public.bc_*; kein Klartext-Passwort im Browser-Speicher
   const bc = read("src/battle-cal/battle-cal.html");
