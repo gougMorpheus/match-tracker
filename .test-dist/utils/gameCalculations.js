@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.removeExcludedStatsGames = exports.isGameExcludedFromStats = exports.isStatsEligibleGame = exports.getCountedRounds = exports.createStatsEligibilityReport = void 0;
-exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = void 0;
+exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getActiveTurn = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = void 0;
 exports.getTimeoutDurationMs = getTimeoutDurationMs;
 const timeEventOrder_1 = require("./timeEventOrder");
 const time_1 = require("./time");
@@ -367,18 +367,18 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
         event.action === "setup-pause" ||
         event.action === "setup-resume" ||
         event.action === "round-start" ||
-        event.action === "turn-start");
+        event.action === "turn-start" ||
+        event.action === "turn-resume");
     const orderedEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(setupEvents);
+    // Die Aufstellung kann mehrere Abschnitte haben (Zurueck in die Aufstellung bei laufendem Timer = setup-start).
+    // Jeder Abschnitt endet mit setup-end bzw. sobald ein Zug startet oder weiterlaeuft.
     let startedAt = null;
     let pauseStartedAt = null;
     let pausedDuration = 0;
     let total = 0;
     let setupClosed = false;
     orderedEvents.forEach((event) => {
-        if (setupClosed) {
-            return;
-        }
-        if (event.action === "game-start" && !startedAt) {
+        if (event.action === "game-start" && !startedAt && !setupClosed) {
             startedAt = event.createdAt;
             pauseStartedAt = null;
             pausedDuration = 0;
@@ -402,7 +402,10 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
             pauseStartedAt = null;
             return;
         }
-        if (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start") {
+        if (event.action === "setup-end" ||
+            event.action === "round-start" ||
+            event.action === "turn-start" ||
+            event.action === "turn-resume") {
             const endedAt = event.createdAt;
             if (pauseStartedAt) {
                 pausedDuration += (0, time_2.getDurationMs)(pauseStartedAt, endedAt);
@@ -426,16 +429,20 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
 exports.getSetupBaseDurationMs = getSetupBaseDurationMs;
 const getSetupDurationMs = (game) => clampFloor((0, exports.getSetupBaseDurationMs)(game) + (0, exports.getSetupCorrectionMs)(game));
 exports.getSetupDurationMs = getSetupDurationMs;
+// Aufstellung aktiv: letzter Aufstellungs-Event ist kein setup-end und danach ist kein Zug gestartet/weitergelaufen
+// (genau eine Phase zaehlt, Tim 22.10.).
 const isSetupActive = (game) => {
     const setupEvents = [...game.timeEvents]
         .filter((event) => event.action === "setup-start" ||
         event.action === "setup-end" ||
         event.action === "setup-pause" ||
-        event.action === "setup-resume")
+        event.action === "setup-resume" ||
+        event.action === "turn-start" ||
+        event.action === "turn-resume")
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     const orderedSetupEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(setupEvents);
     const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
-    return Boolean(setupEvents.length && latest?.action !== "setup-end");
+    return Boolean(latest && latest.action !== "setup-end" && latest.action !== "turn-start" && latest.action !== "turn-resume");
 };
 exports.isSetupActive = isSetupActive;
 const isSetupPaused = (game) => {
@@ -447,7 +454,7 @@ const isSetupPaused = (game) => {
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     const orderedSetupEvents = (0, timeEventOrder_1.orderTimeEventsForEvaluation)(setupEvents);
     const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
-    return latest?.action === "setup-pause";
+    return latest?.action === "setup-pause" && (0, exports.isSetupActive)(game);
 };
 exports.isSetupPaused = isSetupPaused;
 const isSetupRunning = (game) => (0, exports.isSetupActive)(game) && !(0, exports.isSetupPaused)(game);
@@ -518,6 +525,19 @@ const getLatestTurn = (game) => (() => {
     return latestRound ? latestRound.turns[latestRound.turns.length - 1] : undefined;
 })();
 exports.getLatestTurn = getLatestTurn;
+// Aktiver Zug (Tim 22.10.: genau EIN Zug zaehlt): der laufende Zug; ist der Timer gestoppt, der zuletzt pausierte offene
+// Zug (dort wurde gestoppt); sonst der neueste Zug. Nach dem Neuladen und fuer Zuschauer/TV ist das der Zug, in dem die Zeit zaehlt.
+const getActiveTurn = (game) => {
+    const turns = game.rounds.flatMap((round) => round.turns);
+    const openTurns = turns.filter((turn) => turn.timing.startedAt && !turn.timing.endedAt);
+    const running = openTurns.find((turn) => !(0, exports.isTurnPaused)(turn));
+    if (running)
+        return running;
+    const lastPauseStart = (turn) => turn.timing.pauses[turn.timing.pauses.length - 1]?.startedAt ?? "";
+    const paused = openTurns.reduce((best, turn) => (!best || lastPauseStart(turn) > lastPauseStart(best) ? turn : best), undefined);
+    return paused ?? (0, exports.getLatestTurn)(game);
+};
+exports.getActiveTurn = getActiveTurn;
 const isRoundActive = (game) => {
     const round = (0, exports.getLatestRound)(game);
     return Boolean(round?.startedAt && !round.endedAt);

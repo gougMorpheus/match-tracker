@@ -11,7 +11,7 @@ import { createTvSnapshot, deriveGameHighlights, deriveScoreLeadHighlights, dete
 import { getNowIso, formatDuration } from "../utils/time";
 import type { Game } from "../types/game";
 import {
-  getCurrentRoundNumber, getCurrentTurnNumber, getLatestTurn,
+  getCurrentRoundNumber, getCurrentTurnNumber, getActiveTurn,
   getPlayerComparablePrimaryScore, getPlayerComparableSecondaryScore, getPlayerComparableTotalScore,
   getPlayerCommandPoints, getPlayerTurnDurationTotalMs, getSetupDurationMs, getTurnDurationMs,
   getPlayerRoundScoreTotal, getPlayerCurrentRoundCommandPointsGained, getPlayerCurrentRoundCommandPointsSpent,
@@ -89,7 +89,8 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false, onShareLink
   const root = useRef<HTMLDivElement>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completed = isGameCompletedForDisplay(game);
-  const turn = getLatestTurn(game);
+  // Aktiver Zug (laeuft bzw. zuletzt gestoppt), nicht stur der neueste: nach Zurueck zaehlt die Zeit im aelteren Zug.
+  const turn = getActiveTurn(game);
   const timeout = isTimeoutActive(game) && !completed;
   const running = !completed && (isSetupRunning(game) || Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn)));
   const status = getTvStatusLabel({ completed, timeout, running, started: Boolean(game.startedAt), hasTurn: Boolean(turn), turnMs: turn ? getTurnDurationMs(turn, game) : 0 });

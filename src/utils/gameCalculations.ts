@@ -619,9 +619,12 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
         event.action === "setup-pause" ||
         event.action === "setup-resume" ||
         event.action === "round-start" ||
-        event.action === "turn-start"
+        event.action === "turn-start" ||
+        event.action === "turn-resume"
     );
   const orderedEvents = orderTimeEventsForEvaluation(setupEvents);
+  // Die Aufstellung kann mehrere Abschnitte haben (Zurueck in die Aufstellung bei laufendem Timer = setup-start).
+  // Jeder Abschnitt endet mit setup-end bzw. sobald ein Zug startet oder weiterlaeuft.
   let startedAt: string | null = null;
   let pauseStartedAt: string | null = null;
   let pausedDuration = 0;
@@ -629,11 +632,7 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
   let setupClosed = false;
 
   orderedEvents.forEach((event) => {
-    if (setupClosed) {
-      return;
-    }
-
-    if (event.action === "game-start" && !startedAt) {
+    if (event.action === "game-start" && !startedAt && !setupClosed) {
       startedAt = event.createdAt;
       pauseStartedAt = null;
       pausedDuration = 0;
@@ -662,7 +661,12 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
       return;
     }
 
-    if (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start") {
+    if (
+      event.action === "setup-end" ||
+      event.action === "round-start" ||
+      event.action === "turn-start" ||
+      event.action === "turn-resume"
+    ) {
       const endedAt = event.createdAt;
       if (pauseStartedAt) {
         pausedDuration += getDurationMs(pauseStartedAt, endedAt);
@@ -689,6 +693,8 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
 export const getSetupDurationMs = (game: Game): number =>
   clampFloor(getSetupBaseDurationMs(game) + getSetupCorrectionMs(game));
 
+// Aufstellung aktiv: letzter Aufstellungs-Event ist kein setup-end und danach ist kein Zug gestartet/weitergelaufen
+// (genau eine Phase zaehlt, Tim 22.10.).
 export const isSetupActive = (game: Game): boolean => {
   const setupEvents = [...game.timeEvents]
     .filter(
@@ -696,13 +702,17 @@ export const isSetupActive = (game: Game): boolean => {
         event.action === "setup-start" ||
         event.action === "setup-end" ||
         event.action === "setup-pause" ||
-        event.action === "setup-resume"
+        event.action === "setup-resume" ||
+        event.action === "turn-start" ||
+        event.action === "turn-resume"
     )
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   const orderedSetupEvents = orderTimeEventsForEvaluation(setupEvents);
   const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
 
-  return Boolean(setupEvents.length && latest?.action !== "setup-end");
+  return Boolean(
+    latest && latest.action !== "setup-end" && latest.action !== "turn-start" && latest.action !== "turn-resume"
+  );
 };
 
 export const isSetupPaused = (game: Game): boolean => {
@@ -718,7 +728,7 @@ export const isSetupPaused = (game: Game): boolean => {
   const orderedSetupEvents = orderTimeEventsForEvaluation(setupEvents);
   const latest = orderedSetupEvents[orderedSetupEvents.length - 1];
 
-  return latest?.action === "setup-pause";
+  return latest?.action === "setup-pause" && isSetupActive(game);
 };
 
 export const isSetupRunning = (game: Game): boolean => isSetupActive(game) && !isSetupPaused(game);
@@ -822,6 +832,21 @@ export const getLatestTurn = (game: Game): Turn | undefined =>
     const latestRound = getLatestRound(game);
     return latestRound ? latestRound.turns[latestRound.turns.length - 1] : undefined;
   })();
+
+// Aktiver Zug (Tim 22.10.: genau EIN Zug zaehlt): der laufende Zug; ist der Timer gestoppt, der zuletzt pausierte offene
+// Zug (dort wurde gestoppt); sonst der neueste Zug. Nach dem Neuladen und fuer Zuschauer/TV ist das der Zug, in dem die Zeit zaehlt.
+export const getActiveTurn = (game: Game): Turn | undefined => {
+  const turns = game.rounds.flatMap((round) => round.turns);
+  const openTurns = turns.filter((turn) => turn.timing.startedAt && !turn.timing.endedAt);
+  const running = openTurns.find((turn) => !isTurnPaused(turn));
+  if (running) return running;
+  const lastPauseStart = (turn: Turn) => turn.timing.pauses[turn.timing.pauses.length - 1]?.startedAt ?? "";
+  const paused = openTurns.reduce<Turn | undefined>(
+    (best, turn) => (!best || lastPauseStart(turn) > lastPauseStart(best) ? turn : best),
+    undefined
+  );
+  return paused ?? getLatestTurn(game);
+};
 
 export const isRoundActive = (game: Game): boolean => {
   const round = getLatestRound(game);

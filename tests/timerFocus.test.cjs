@@ -100,14 +100,9 @@ const runTimerFocusTests = () => {
     const round = createRound();
     const selectedTurn = round.turns[0];
 
-    assert.deepEqual(
-      getDisplayedRoundTurns(round, selectedTurn, true, false).map((turn) => turn.turnNumber),
-      [1, 2]
-    );
-    assert.deepEqual(
-      getDisplayedRoundTurns(round, selectedTurn, false, false).map((turn) => turn.turnNumber),
-      [1]
-    );
+    // Rundenzeit immer ueber alle Zuege der Runde (kein Springen bei Timer aus/an, Pepper 22.10.)
+    void selectedTurn;
+    assert.deepEqual(getDisplayedRoundTurns(round).map((turn) => turn.turnNumber), [1, 2]);
   }
 };
 

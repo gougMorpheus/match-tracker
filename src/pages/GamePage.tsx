@@ -30,6 +30,7 @@ import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOp
 import {
   getCurrentRoundNumber,
   getGameDurationMs,
+  getActiveTurn,
   getLatestTurn,
   getPlayerChallengeTotal,
   getPlayerCommandPoints,
@@ -47,7 +48,6 @@ import {
 import {
   getDisplayedRoundTurns,
   getTimerFocusTurn,
-  getTimerControlTurn,
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
@@ -390,6 +390,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     [game]
   );
   const latestTurn = useMemo(() => (game ? getLatestTurn(game) : undefined), [game]);
+  // Aktiver Zug = der Zug, in dem die Zeit zaehlt (laufend bzw. zuletzt gestoppt). Auswahl/Zuschauer folgen ihm.
+  const activeTurn = useMemo(() => (game ? getActiveTurn(game) : undefined), [game]);
   const statsEligibilityReport = useMemo(
     () => {
       if (!game) {
@@ -582,7 +584,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       return;
     }
 
-    const latestKey = latestTurn ? `${latestTurn.roundNumber}:${latestTurn.turnNumber}` : null;
+    const latestKey = activeTurn ? `${activeTurn.roundNumber}:${activeTurn.turnNumber}` : null;
     const previousLatestKey = previousLatestTurnKeyRef.current;
     previousLatestTurnKeyRef.current = latestKey;
     const snapToLatest = snapToLatestTurnRef.current;
@@ -595,7 +597,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       snapToLatest,
       setupStarted: game.timeEvents.some((event) => event.action === "setup-start")
     }));
-  }, [allTurns, game, latestTurn]);
+  }, [activeTurn, allTurns, game]);
 
   useEffect(() => {
     if (!actionFlash) {
@@ -657,7 +659,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const selectedTurn =
     selectedTurnKey === SETUP_TURN_KEY
       ? undefined
-      : allTurns.find((turn) => turn.key === selectedTurnKey) ?? latestTurn;
+      : allTurns.find((turn) => turn.key === selectedTurnKey) ?? activeTurn;
   const selectedTurnIndex = selectedTurn
     ? allTurns.findIndex((turn) => turn.key === `${selectedTurn.roundNumber}:${selectedTurn.turnNumber}`)
     : -1;
@@ -666,7 +668,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const hasSetupPhase = game.timeEvents.some((event) => event.action === "setup-start");
   const isSetupSelected = selectedTurnKey === SETUP_TURN_KEY;
   const needsStartingPlayerBeforeFirstTurn = !game.startingPlayerId && (isSetupSelected || !latestRound);
-  const timerFocusTurn = isSetupSelected ? undefined : getTimerFocusTurn(selectedTurn, latestTurn);
+  const timerFocusTurn = isSetupSelected ? undefined : getTimerFocusTurn(selectedTurn, activeTurn);
   const canGoBack = selectedTurnIndex > 0 || (selectedTurnIndex === 0 && hasSetupPhase);
   const canGoForwardToExistingTurn =
     (isSetupSelected && allTurns.length > 0) ||
@@ -683,19 +685,20 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const writeDisabled = isMutating || isReadOnly;
   const canNavigateTurns = !isMutating;
   const showOverview = isClosed || isReadOnly;
-  // Timer-Bedienung wirkt bei angesehenem beendetem Vorzug auf den neuesten Zug (Zurück-Fix, kein Fortsetzen beendeter Züge).
-  const timerControlTurn = isSetupSelected ? undefined : getTimerControlTurn(selectedTurn, latestTurn);
-  const timerControlRef = timerControlTurn
-    ? { roundNumber: timerControlTurn.roundNumber, turnNumber: timerControlTurn.turnNumber }
-    : undefined;
-  const isPaused = isTurnPaused(timerControlTurn);
-  const hasActiveTurn = Boolean(timerControlTurn?.timing.startedAt && !timerControlTurn.timing.endedAt);
+  // Timer-Regel (Tim 22.10.): genau EIN Zug bzw. die Aufstellung zaehlt; der Timer-Zustand (laeuft/gestoppt) ist einer fuer
+  // das ganze Spiel. Navigation nimmt ihn mit (Weiter/Zurueck/Rueckgaengig), gestoppt nur per Timer-Knopf, Time-out, Abschluss.
+  const runningTurn =
+    activeTurn?.timing.startedAt && !activeTurn.timing.endedAt && !isTurnPaused(activeTurn) ? activeTurn : undefined;
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
-  const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
-  // Läuft der ANGESEHENE Zug selbst? (für "Weiter" auf einen vorhandenen Folgezug, wie bisher)
-  const isSelectedTurnTimerRunning =
-    !isClosed && !timeoutActive &&
-    ((Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt) && !isTurnPaused(selectedTurn)) || setupRunning);
+  const isTimerRunning = !isClosed && !timeoutActive && (Boolean(runningTurn) || setupRunning);
+  // Ziel fuer Timer an/aus und Time-out: laeuft er, die laufende Phase; ist er gestoppt, die angewaehlte Phase.
+  const timerTargetTurn = setupRunning ? undefined : runningTurn ?? (isSetupSelected ? undefined : selectedTurn);
+  const timerTargetRef = timerTargetTurn
+    ? { roundNumber: timerTargetTurn.roundNumber, turnNumber: timerTargetTurn.turnNumber }
+    : undefined;
+  const selectedTurnRef = selectedTurn
+    ? { roundNumber: selectedTurn.roundNumber, turnNumber: selectedTurn.turnNumber }
+    : undefined;
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Läuft" : "Gestoppt";
   const timerStateKey = isClosed ? "closed" : timeoutActive ? "timeout" : isTimerRunning ? "running" : "stopped";
 
@@ -741,7 +744,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const displayRound =
     timerFocusTurn ? game.rounds.find((round) => round.roundNumber === timerFocusTurn.roundNumber) ?? selectedRound : selectedRound;
   const selectedRoundTurns = displayRound
-    ? getDisplayedRoundTurns(displayRound, displayTurn, isTimerRunning, timeoutActive)
+    ? getDisplayedRoundTurns(displayRound)
     : [];
   const selectedRoundDurationMs = displayRound
     ? Math.max(
@@ -764,9 +767,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     ? game.players.find((player) => player.id === noteDialogPlayerId)
     : undefined;
 
-  const renderFocusTurn = getTimerFocusTurn(timerFocusTurn, latestTurn, viewOnlyActive);
-  useServerSecondTick(!isClosed && (setupActive || shouldRunTimerRenderTicker(renderFocusTurn, timeoutActive, isClosed) ||
-    shouldRunTimerRenderTicker(timerControlTurn, timeoutActive, isClosed)));
+  useServerSecondTick(!isClosed && (setupActive || shouldRunTimerRenderTicker(activeTurn, timeoutActive, isClosed)));
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
@@ -1102,8 +1103,13 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     }
 
     closeEditor();
+    // Rueckgaengig von Weiter/Zurueck = Navigation in die Gegenrichtung ab dem angewaehlten Zug, gleiche Timer-Regel
+    // (laeuft weiter bzw. bleibt gestoppt). Der Store verschiebt nur den Verlaufseintrag.
     if (undoActionLabel.startsWith("Weiter") || undoActionLabel.startsWith("Zurück")) {
-      snapToLatestTurnRef.current = true;
+      const wasAdvance = undoActionLabel.startsWith("Weiter");
+      await undoGameAction(game.id, true);
+      await (wasAdvance ? handleGoBack(false) : handleAdvance(false));
+      return;
     }
     await undoGameAction(game.id);
   };
@@ -1115,7 +1121,10 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
 
     closeEditor();
     if (redoActionLabel.startsWith("Weiter") || redoActionLabel.startsWith("Zurück")) {
-      snapToLatestTurnRef.current = true;
+      const wasAdvance = redoActionLabel.startsWith("Weiter");
+      await redoGameAction(game.id, true);
+      await (wasAdvance ? handleAdvance(false) : handleGoBack(false));
+      return;
     }
     await redoGameAction(game.id);
   };
@@ -1154,11 +1163,11 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   };
 
   const handleStartTimeout = async () => {
-    if (isReadOnly || !timerControlRef || !isTimerRunning) {
+    if (isReadOnly || !timerTargetRef || !isTimerRunning) {
       return;
     }
 
-    await startTimeout(game.id, timerControlRef);
+    await startTimeout(game.id, timerTargetRef);
   };
 
   const handleStartTimeoutFromHold = async () => {
@@ -1167,11 +1176,17 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   };
 
   const handleEndTimeout = async () => {
-    if (isReadOnly || !timerControlRef || !timeoutActive) {
+    if (isReadOnly || !timeoutActive) {
       return;
     }
 
-    await endTimeout(game.id, timerControlRef);
+    // Nach dem Time-out laeuft der Timer im angewaehlten Zug weiter (auch wenn waehrenddessen navigiert wurde).
+    const resumeTurn = selectedTurn ?? activeTurn;
+    await endTimeout(
+      game.id,
+      resumeTurn ? { roundNumber: resumeTurn.roundNumber, turnNumber: resumeTurn.turnNumber } : undefined
+    );
+    if (isSetupSelected && resumeTurn) setSelectedTurnKey(`${resumeTurn.roundNumber}:${resumeTurn.turnNumber}`);
   };
 
   const continueFromSetup = async (startingSlot?: CreateGameInput["startingSlot"]) => {
@@ -1188,7 +1203,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     setStartingPlayerPromptSlot("");
   };
 
-  const handleAdvance = async () => {
+  const handleAdvance = async (recordHistory = true) => {
     if (isMutating || advanceInFlightRef.current || isClosed) {
       return;
     }
@@ -1205,7 +1220,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
         const firstTurn = allTurns[0];
         if (firstTurn) {
           if (!isReadOnly && isTimerRunning) {
-            await advanceGame(game.id, SETUP_TURN_REF, true);
+            await advanceGame(game.id, SETUP_TURN_REF, true, recordHistory);
           }
           setSelectedTurnKey(firstTurn.key);
         }
@@ -1215,17 +1230,9 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       if (canGoForwardToExistingTurn) {
         const nextTurn = allTurns[selectedTurnIndex + 1];
         if (nextTurn) {
-          if (!isReadOnly && isSelectedTurnTimerRunning) {
-            await advanceGame(
-              game.id,
-              selectedTurn
-                ? {
-                    roundNumber: selectedTurn.roundNumber,
-                    turnNumber: selectedTurn.turnNumber
-                  }
-                : undefined,
-              true
-            );
+          if (!isReadOnly && isTimerRunning) {
+            // Laufender Timer zieht in den Folgezug mit; gestoppt bleibt gestoppt (nur Auswahl).
+            await advanceGame(game.id, selectedTurnRef, true, recordHistory);
           }
           setSelectedTurnKey(nextTurn.key);
         }
@@ -1237,49 +1244,30 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       }
 
       snapToLatestTurnRef.current = true;
-      await advanceGame(
-        game.id,
-        selectedTurn
-          ? {
-              roundNumber: selectedTurn.roundNumber,
-              turnNumber: selectedTurn.turnNumber
-            }
-          : undefined,
-        isTimerRunning
-      );
+      await advanceGame(game.id, selectedTurnRef, isTimerRunning, recordHistory);
     } finally {
       advanceInFlightRef.current = false;
     }
   };
 
-  const handleGoBack = async () => {
+  const handleGoBack = async (recordHistory = true) => {
     if (isMutating || !canGoBack) {
       return;
     }
 
     const previousTurn = allTurns[selectedTurnIndex - 1];
-    if (previousTurn) {
-      // Zurück-Fix (dd87ec49): nur Ansicht, keine Timer-Events. Frueher pausierte das den laufenden Zug und setzte den
-      // beendeten Vorzug fort (rewindLastTurn mit keepTimerRunning); die Auswertung ignoriert das -> Zeit ging verloren.
-      setSelectedTurnKey(previousTurn.key);
+    const target = previousTurn ? previousTurn.key : selectedTurnIndex === 0 && hasSetupPhase ? SETUP_TURN_KEY : null;
+    if (!target) {
       return;
     }
 
-    if (selectedTurnIndex === 0 && hasSetupPhase) {
-      if (!isReadOnly) {
-        await rewindLastTurn(
-          game.id,
-          selectedTurn
-            ? {
-                roundNumber: selectedTurn.roundNumber,
-                turnNumber: selectedTurn.turnNumber
-              }
-            : undefined,
-          true
-        );
-      }
-      setSelectedTurnKey(SETUP_TURN_KEY);
+    // Zurueck (Tim 22.10.): der vorherige Zug bzw. die Aufstellung wird aktiv. Laeuft der Timer, zaehlt er ab jetzt dort
+    // (rewindLastTurn: laufenden Zug pausieren, Ziel fortsetzen - die Auswertung oeffnet einen beendeten Zug dafuer wieder);
+    // ist er gestoppt, bleibt er gestoppt (nur Auswahl, keine Events).
+    if (!isReadOnly && isTimerRunning) {
+      await rewindLastTurn(game.id, selectedTurnRef, true, recordHistory);
     }
+    setSelectedTurnKey(target);
   };
 
   // Escape schliesst den obersten offenen Dialog (Menue behandelt FloatingMenu selbst).
@@ -2490,8 +2478,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   setTimeoutHoldOpen(false);
                   void (
                     isTimerRunning
-                      ? pauseActiveTimer(game.id, timerControlRef)
-                      : startGameTimer(game.id, timerControlRef)
+                      ? pauseActiveTimer(game.id, timerTargetRef)
+                      : startGameTimer(game.id, timerTargetRef)
                   );
                 }}
                 disabled={writeDisabled}

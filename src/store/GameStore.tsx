@@ -173,8 +173,8 @@ interface GameStoreValue {
   addCommandPointEvent: (payload: EventPayload & { cpType: CommandPointType }) => Promise<void>;
   addNoteEvent: (payload: EventPayload) => Promise<void>;
   setAutoCommandPointEnabled: (gameId: string, enabled: boolean) => Promise<void>;
-  advanceGame: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
-  rewindLastTurn: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean) => Promise<void>;
+  advanceGame: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>;
+  rewindLastTurn: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>;
   pauseActiveTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   startGameTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   startTimeout: (gameId: string, turnRef?: TurnRef) => Promise<void>;
@@ -182,8 +182,10 @@ interface GameStoreValue {
   reopenGame: (gameId: string) => Promise<void>;
   updateGameEvent: (gameId: string, eventId: string, patch: UpdateSupabaseEventPayload) => Promise<void>;
   deleteGameEvent: (gameId: string, eventId: string) => Promise<void>;
-  undoGameAction: (gameId: string) => Promise<void>;
-  redoGameAction: (gameId: string) => Promise<void>;
+  // navigationByCaller: bei Weiter/Zurueck-Eintraegen navigiert die Spielseite selbst (gleiche Timer-Regel wie die Knoepfe),
+  // der Store verschiebt dann nur den Verlaufseintrag.
+  undoGameAction: (gameId: string, navigationByCaller?: boolean) => Promise<void>;
+  redoGameAction: (gameId: string, navigationByCaller?: boolean) => Promise<void>;
   getUndoActionLabel: (gameId: string) => string | null;
   getRedoActionLabel: (gameId: string) => string | null;
   finishGame: (gameId: string, finishReason?: GameFinishReason) => Promise<void>;
@@ -1358,7 +1360,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const undoGameAction = useCallback(
-    async (gameId: string) =>
+    async (gameId: string, navigationByCaller = false) =>
       runMutation(async () => {
         if (shouldBlockGameWrite(gameId, "undoGameAction")) {
           return;
@@ -1370,7 +1372,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        if (entry.kind === "advance-turn") {
+        if (navigationByCaller && (entry.kind === "advance-turn" || entry.kind === "rewind-turn")) {
+          // nur Verlaufseintrag verschieben
+        } else if (entry.kind === "advance-turn") {
           const currentTurn = getLatestTurn(entry.afterGame);
           await rewindLastTurnRef.current(
             gameId,
@@ -1406,7 +1410,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const redoGameAction = useCallback(
-    async (gameId: string) =>
+    async (gameId: string, navigationByCaller = false) =>
       runMutation(async () => {
         if (shouldBlockGameWrite(gameId, "redoGameAction")) {
           return;
@@ -1418,7 +1422,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           return;
         }
 
-        if (entry.kind === "advance-turn") {
+        if (navigationByCaller && (entry.kind === "advance-turn" || entry.kind === "rewind-turn")) {
+          // nur Verlaufseintrag verschieben
+        } else if (entry.kind === "advance-turn") {
           const currentTurn = getLatestTurn(entry.beforeGame);
           await advanceGameRef.current(
             gameId,
@@ -1908,40 +1914,32 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
             });
           }
 
-          if (setupTurn) {
-            if (!setupTurn.timing.startedAt) {
-              eventsToAdd.push({
-                playerId: setupTurn.playerId,
-                roundNumber: setupTurn.roundNumber,
-                turnNumber: setupTurn.turnNumber,
-                action: "turn-start",
-                createdAt: now
-              });
-            } else if (setupTurn.timing.endedAt || isTurnPaused(setupTurn)) {
-              eventsToAdd.push({
-                playerId: setupTurn.playerId,
-                roundNumber: setupTurn.roundNumber,
-                turnNumber: setupTurn.turnNumber,
-                action: "turn-resume",
-                createdAt: now
-              });
-            }
-          } else {
+          // Navigation aendert den Timer-Zustand nie (Tim 22.10.): laeuft er, laeuft er in R1Z1 weiter; ist er gestoppt,
+          // bleibt er gestoppt (neuer Zug = turn-start + turn-pause, vorhandener Zug bekommt kein Event).
+          const firstTurnPlayerId = setupTurn?.playerId ?? game.startingPlayerId;
+          if (!setupTurn || !setupTurn.timing.startedAt) {
             eventsToAdd.push({
-              playerId: game.startingPlayerId,
+              playerId: firstTurnPlayerId,
               roundNumber: 1,
               turnNumber: 1,
               action: "turn-start",
               createdAt: now
             });
-          }
-
-          if (!keepTimerRunning && setupTurn) {
+            if (!keepTimerRunning) {
+              eventsToAdd.push({
+                playerId: firstTurnPlayerId,
+                roundNumber: 1,
+                turnNumber: 1,
+                action: "turn-pause",
+                createdAt: now
+              });
+            }
+          } else if (keepTimerRunning && (setupTurn.timing.endedAt || isTurnPaused(setupTurn))) {
             eventsToAdd.push({
               playerId: setupTurn.playerId,
               roundNumber: setupTurn.roundNumber,
               turnNumber: setupTurn.turnNumber,
-              action: "turn-pause",
+              action: "turn-resume",
               createdAt: now
             });
           }
@@ -2569,7 +2567,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         ];
 
-        if (targetTurn && targetTurn.timing.startedAt && !targetTurn.timing.endedAt && isTurnPaused(targetTurn)) {
+        // Ziel ist der angewaehlte Zug; ein beendeter Zug wird dafuer wieder geoeffnet (Auswertung, Tim 22.10.).
+        if (targetTurn && targetTurn.timing.startedAt && (targetTurn.timing.endedAt || isTurnPaused(targetTurn))) {
           eventsToAdd.push({
             playerId: targetTurn.playerId,
             roundNumber: targetTurn.roundNumber,
