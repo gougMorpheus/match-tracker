@@ -11,7 +11,7 @@ import { createTvSnapshot, deriveGameHighlights, deriveScoreLeadHighlights, dete
 import { getNowIso, formatDuration } from "../utils/time";
 import type { Game } from "../types/game";
 import {
-  getCurrentRoundNumber, getCurrentTurnNumber, getActiveTurn,
+  getCurrentRoundNumber, getCurrentTurnNumber, getActiveTurn, isSetupActive,
   getPlayerComparablePrimaryScore, getPlayerComparableSecondaryScore, getPlayerComparableTotalScore,
   getPlayerCommandPoints, getPlayerTurnDurationTotalMs, getSetupDurationMs, getTurnDurationMs,
   getPlayerRoundScoreTotal, getPlayerCurrentRoundCommandPointsGained, getPlayerCurrentRoundCommandPointsSpent,
@@ -90,7 +90,9 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false, onShareLink
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completed = isGameCompletedForDisplay(game);
   // Aktiver Zug (laeuft bzw. zuletzt gestoppt), nicht stur der neueste: nach Zurueck zaehlt die Zeit im aelteren Zug.
-  const turn = getActiveTurn(game);
+  // Ist die Aufstellung die aktive Phase (auch nach Zurueck in die Aufstellung, wenn R1Z1 schon existiert), zeigt TV sie.
+  const setupPhaseActive = !completed && isSetupActive(game);
+  const turn = setupPhaseActive ? undefined : getActiveTurn(game);
   const timeout = isTimeoutActive(game) && !completed;
   const running = !completed && (isSetupRunning(game) || Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn)));
   const status = getTvStatusLabel({ completed, timeout, running, started: Boolean(game.startedAt), hasTurn: Boolean(turn), turnMs: turn ? getTurnDurationMs(turn, game) : 0 });

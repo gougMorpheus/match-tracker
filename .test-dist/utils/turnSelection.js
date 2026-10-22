@@ -8,7 +8,9 @@ exports.resolveSelectedTurnKey = exports.SETUP_TURN_KEY = void 0;
 // Fehlerbild ohne diese Regel: Auswahl bleibt auf dem alten Zug, "Timer an" pausiert den laufenden neuen Zug
 // und setzt den alten (beendeten) Zug fort (turn-pause R1Z2 + turn-resume R1Z1).
 exports.SETUP_TURN_KEY = "setup";
-const resolveSelectedTurnKey = ({ current, previousLatestKey, latestKey, turnKeys, snapToLatest, setupStarted, setupRunning = false }) => {
+const resolveSelectedTurnKey = ({ current, previousLatestKey, latestKey, turnKeys, snapToLatest, setupStarted, setupRunning = false, followActive = false, setupActive = false }) => {
+    if (followActive)
+        return setupActive && setupStarted ? exports.SETUP_TURN_KEY : latestKey;
     if (snapToLatest && setupRunning && setupStarted)
         return exports.SETUP_TURN_KEY;
     if (!latestKey)

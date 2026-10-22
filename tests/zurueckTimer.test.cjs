@@ -151,7 +151,7 @@ const runZurueckTimerTests = () => {
   assert.match(setupBranch, /if \(!setupTurn \|\| !setupTurn\.timing\.startedAt\) \{[\s\S]*?"turn-start"[\s\S]*?if \(!keepTimerRunning\) \{[\s\S]*?"turn-pause"/, "Weiter aus Aufstellung: gestoppt bleibt gestoppt");
   assert.match(setupBranch, /else if \(keepTimerRunning && \(setupTurn\.timing\.endedAt \|\| isTurnPaused\(setupTurn\)\)\)/);
   assert.match(store, /targetTurn\.timing\.startedAt && \(targetTurn\.timing\.endedAt \|\| isTurnPaused\(targetTurn\)\)\) \{\s*eventsToAdd\.push\(\{[\s\S]{0,200}"turn-resume"/, "Time-out-Ende setzt im angewaehlten Zug fort");
-  assert.match(read("src/components/TvGameView.tsx"), /const turn = getActiveTurn\(game\);/, "TV zeigt den aktiven Zug");
+  assert.match(read("src/components/TvGameView.tsx"), /const turn = setupPhaseActive \? undefined : getActiveTurn\(game\);/, "TV zeigt die aktive Phase");
 
   // TV: Knopf "Link teilen" (aus #39) bleibt
   assert.match(page, /<TvGameView[\s\S]{0,200}onShareLink=\{\(\) => \{ void handleShareLink\(\); \}\}/);
@@ -206,4 +206,69 @@ const runZurueckTimerTests = () => {
   assert.match(page, /const needsStartingPlayerBeforeFirstTurn = !game\.startingPlayerId && \(isSetupSelected \|\| !latestRound\);/);
 };
 
-module.exports = { runZurueckTimerTests };
+// #43 (Pepper 22.10. A/B): Navigation bei gestopptem Timer schreibt zeitneutrale Markierungen mit vorhandenen Ereignistypen.
+const runGestoppteNavigationTests = () => {
+  const base = createBaseGame({ id: "zz-gestoppt" });
+  const [p1, p2] = base.players.map((p) => p.id);
+  const add = (game, events) => appendLocalTimeEvents(game, events);
+  const ms = (g) => g.rounds.flatMap((r) => r.turns).map((t) => getTurnDurationMs(t, g));
+  const key = (t) => `R${t.roundNumber}Z${t.turnNumber}`;
+  // R1Z1 0-10, R1Z2 10-12, Zurueck laufend (12) -> R1Z1 bis Timer aus (14)
+  const stopped = add(base, [
+    { action: "game-start", playerId: p1, createdAt: at(0) },
+    { action: "round-start", playerId: p1, roundNumber: 1, createdAt: at(0) },
+    ev("turn-start", p1, 1, 1, 0), ev("turn-end", p1, 1, 1, 10), ev("turn-start", p2, 1, 2, 10),
+    ev("turn-pause", p2, 1, 2, 12), ev("turn-resume", p1, 1, 1, 12), ev("turn-pause", p1, 1, 1, 14)
+  ]);
+  const ref = ms(stopped);
+  assert.equal(key(getActiveTurn(stopped)), "R1Z1");
+  // A: gestoppt Weiter -> Z2 (Markierung turn-pause R1Z2), dann Zurueck -> Z1
+  const toZ2 = add(stopped, [ev("turn-pause", p2, 1, 2, 15)]);
+  assert.equal(key(getActiveTurn(toZ2)), "R1Z2", "gestoppter Weiter: Z2 aktiv (aus den Ereignissen, also auch nach Neuladen/auf anderen Geraeten)");
+  assert.deepEqual(ms(toZ2), ref, "Markierung verschiebt keine Zeit"); assertConsistent(toZ2, "Markierung Z2");
+  const backZ1 = add(toZ2, [ev("turn-pause", p1, 1, 1, 16)]);
+  assert.equal(key(getActiveTurn(backZ1)), "R1Z1", "gestoppter Zurueck: Z1 aktiv"); assert.deepEqual(ms(backZ1), ref);
+  // Timer an im per Markierung gewaehlten Z2: Z1 wird ohne Zusatzzeit wieder beendet, Z2 zaehlt ab 17
+  const runZ2 = add(toZ2, [ev("turn-resume", p2, 1, 2, 17)]);
+  const fin = add(runZ2, [ev("turn-end", p2, 1, 2, 20), { action: "game-end", playerId: p2, createdAt: at(20) }]);
+  assert.equal(getTurnDurationMs(turn(fin, 1, 1), fin), 12 * MIN, "R1Z1 = 10 + 2 (12-14), Markierungen ohne Zeit");
+  assert.equal(getTurnDurationMs(turn(fin, 1, 2), fin), 5 * MIN, "R1Z2 = 2 + 3 (17-20)");
+  assertConsistent(fin, "Timer an nach Markierung");
+  assert.equal(key(getActiveTurn(fin)), "R1Z2", "abgeschlossen: wie bisher neuester Zug");
+
+  // Aufstellung 0-5, R1Z1 5-8 (Timer aus); gestoppt Zurueck (setup-pause 9), Timer an (setup-start 10) bis 12, gestoppt Weiter (13)
+  const s0 = add(base, [
+    { action: "game-start", playerId: p1, createdAt: at(0) }, { action: "setup-start", createdAt: at(0) },
+    { action: "setup-end", createdAt: at(5) }, { action: "round-start", playerId: p1, roundNumber: 1, createdAt: at(5) },
+    ev("turn-start", p1, 1, 1, 5), ev("turn-pause", p1, 1, 1, 8)
+  ]);
+  assert.equal(getSetupDurationMs(s0), 5 * MIN); assert.ok(!calc.isSetupActive(s0));
+  const s1 = add(s0, [{ action: "setup-pause", createdAt: at(9) }]);
+  assert.ok(calc.isSetupActive(s1) && calc.isSetupPaused(s1), "gestoppter Zurueck: Aufstellung aktiv (gestoppt)");
+  assert.ok(!calc.isSetupSegmentOpen(s1), "kein offener Abschnitt -> Timer an schreibt setup-start");
+  assert.equal(getSetupDurationMs(s1), 5 * MIN, "Markierung ohne Aufstellungszeit"); assert.deepEqual(ms(s1), ms(s0)); assertConsistent(s1, "setup-pause Markierung");
+  const s2 = add(s1, [{ action: "setup-start", createdAt: at(10) }, { action: "setup-pause", createdAt: at(12) }]);
+  assert.ok(calc.isSetupSegmentOpen(s2) && calc.isSetupPaused(s2));
+  assert.equal(getSetupDurationMs(s2), 7 * MIN, "Aufstellung 5 + 2"); assert.equal(getTurnDurationMs(turn(s2, 1, 1), s2), 3 * MIN);
+  const s3 = add(s2, [{ action: "setup-end", createdAt: at(13) }, ev("turn-pause", p1, 1, 1, 13)]);
+  assert.ok(!calc.isSetupActive(s3), "gestoppter Weiter aus der Aufstellung: Aufstellung beendet");
+  assert.equal(key(getActiveTurn(s3)), "R1Z1"); assert.equal(getSetupDurationMs(s3), 7 * MIN); assert.equal(getTurnDurationMs(turn(s3, 1, 1), s3), 3 * MIN);
+  assertConsistent(s3, "Weiter aus Aufstellung gestoppt");
+
+  // Auswahl folgt im bearbeitbaren Spiel immer der aktiven Phase (keine reine Ansicht)
+  const { resolveSelectedTurnKey, SETUP_TURN_KEY } = require("../.test-dist/utils/turnSelection.js");
+  const sel = { current: "1:2", previousLatestKey: "1:2", latestKey: "1:1", turnKeys: ["1:1", "1:2"], snapToLatest: false, setupStarted: true };
+  assert.equal(resolveSelectedTurnKey({ ...sel, followActive: true }), "1:1");
+  assert.equal(resolveSelectedTurnKey({ ...sel, followActive: true, setupActive: true }), SETUP_TURN_KEY);
+  assert.equal(resolveSelectedTurnKey({ ...sel, followActive: false, previousLatestKey: "1:1" }), "1:2", "Ansichtsmodus (TV/beendet) bleibt frei");
+
+  // Verdrahtung: gestoppte Navigation -> selectPhase (Verlauf advance-turn/rewind-turn, Undo/Redo = Navigation)
+  const page = read("src/pages/GamePage.tsx"); const store = read("src/store/GameStore.tsx");
+  assert.equal((page.match(/await selectPhase\(game\.id,/g) || []).length, 3, "Weiter (Aufstellung/Folgezug) und Zurueck");
+  assert.match(page, /followActive: !viewOnlyActive,\s*setupActive: isSetupActive\(game\)/);
+  assert.match(store, /recordHistory \? \(label === "Weiter" \? "advance-turn" : "rewind-turn"\) : "snapshot"/);
+  assert.equal((store.match(/isSetupPaused\(game\) && isSetupSegmentOpen\(game\)/g) || []).length, 2, "Timer an: setup-resume nur im offenen Abschnitt");
+};
+
+module.exports = { runZurueckTimerTests, runGestoppteNavigationTests };
+

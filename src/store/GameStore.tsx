@@ -75,6 +75,7 @@ import {
   getPlayerSecondaryTotal,
   isSetupActive,
   isSetupPaused,
+  isSetupSegmentOpen,
   isSetupRunning,
   isTimeoutActive,
   isTurnPaused
@@ -175,6 +176,7 @@ interface GameStoreValue {
   setAutoCommandPointEnabled: (gameId: string, enabled: boolean) => Promise<void>;
   advanceGame: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>;
   rewindLastTurn: (gameId: string, turnRef?: TurnRef, keepTimerRunning?: boolean, recordHistory?: boolean) => Promise<void>;
+  selectPhase: (gameId: string, target: TurnRef | null, label: "Weiter" | "Zurück", sourceRef: TurnRef | null, recordHistory?: boolean) => Promise<void>;
   pauseActiveTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   startGameTimer: (gameId: string, turnRef?: TurnRef) => Promise<void>;
   startTimeout: (gameId: string, turnRef?: TurnRef) => Promise<void>;
@@ -2315,6 +2317,69 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     [enqueueTimeEvents, flushSyncQueue, getGame, getPreviousTurnByRef, getTurnByRef, runMutation, shouldBlockGameWrite]
   );
 
+  // Navigation bei GESTOPPTEM Timer (Pepper 22.10., Regel Tim): der Zielzug bzw. die Aufstellung wird aktiv, gespeichert und
+  // auf allen Geraeten sichtbar, und die Navigation steht im Rueckgaengig-Stapel. Dafuer zeitneutrale Markierungen mit
+  // vorhandenen Ereignistypen (keine Schemaaenderung):
+  //   Zug -> Zug X:          turn-pause X (auf beendetem bzw. schon pausiertem Zug in der Auswertung wirkungslos)
+  //   Aufstellung -> Zug X:  setup-end (schliesst den pausierten Abschnitt ohne Zeit) + turn-pause X
+  //   Zug -> Aufstellung:    setup-pause (nach abgeschlossenem Abschnitt wirkungslos; macht die Aufstellung aktiv)
+  // Kein Ereignis startet den Timer; Zeiten bleiben unveraendert.
+  const selectPhase = useCallback(
+    async (gameId: string, target: TurnRef | null, label: "Weiter" | "Zurück", sourceRef: TurnRef | null, recordHistory = true) =>
+      runMutation(async () => {
+        if (shouldBlockGameWrite(gameId, "selectPhase")) {
+          return;
+        }
+
+        const game = getGame(gameId);
+        if (!game || game.status === "completed" || game.endedAt) {
+          return;
+        }
+
+        const now = getNowIso();
+        const eventsToAdd: Array<{
+          action: TimeEventAction;
+          playerId?: PlayerId;
+          roundNumber?: number;
+          turnNumber?: number;
+          createdAt?: string;
+        }> = [];
+
+        if (!target) {
+          if (!game.timeEvents.some((event) => event.action === "setup-start") || isSetupActive(game)) {
+            return;
+          }
+          eventsToAdd.push({ action: "setup-pause", createdAt: now });
+        } else {
+          const targetTurn = getTurnByRef(game, target);
+          if (!targetTurn || !targetTurn.timing.startedAt) {
+            return;
+          }
+          if (isSetupActive(game)) {
+            eventsToAdd.push({ action: "setup-end", createdAt: now });
+          }
+          eventsToAdd.push({
+            playerId: targetTurn.playerId,
+            roundNumber: targetTurn.roundNumber,
+            turnNumber: targetTurn.turnNumber,
+            action: "turn-pause",
+            createdAt: now
+          });
+        }
+
+        enqueueTimeEvents(
+          game,
+          eventsToAdd,
+          sourceRef ? label : `${label} Aufstellung`,
+          sourceRef,
+          recordHistory ? (label === "Weiter" ? "advance-turn" : "rewind-turn") : "snapshot",
+          recordHistory
+        );
+        void flushSyncQueue();
+      }),
+    [enqueueTimeEvents, flushSyncQueue, getGame, getTurnByRef, runMutation, shouldBlockGameWrite]
+  );
+
   useEffect(() => {
     advanceGameRef.current = advanceGame;
     rewindLastTurnRef.current = rewindLastTurn;
@@ -2412,7 +2477,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         }
 
         if (!turnRef && game.timeEvents.some((event) => event.action === "setup-start")) {
-          if (isSetupPaused(game)) {
+          // setup-resume nur in einem offenen Abschnitt; nach gestoppter Navigation zurueck in die Aufstellung beginnt ein neuer.
+          if (isSetupPaused(game) && isSetupSegmentOpen(game)) {
             eventsToAdd.push({
               action: "setup-resume",
               createdAt: now
@@ -2452,12 +2518,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
         } else {
           if (!targetRound) {
-            if (isSetupPaused(game)) {
+            if (isSetupPaused(game) && isSetupSegmentOpen(game)) {
               eventsToAdd.push({
                 action: "setup-resume",
                 createdAt: now
               });
-            } else if (!isSetupActive(game)) {
+            } else if (!isSetupRunning(game)) {
               eventsToAdd.push({
                 action: "setup-start",
                 createdAt: now
@@ -2865,6 +2931,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       addNoteEvent,
       advanceGame,
       rewindLastTurn,
+      selectPhase,
       pauseActiveTimer,
       startGameTimer,
       startTimeout,
@@ -2918,6 +2985,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       resetAllGameTimers,
       reopenGame,
       rewindLastTurn,
+      selectPhase,
       redoGameAction,
       startTimeout,
       startGameTimer,

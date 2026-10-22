@@ -284,6 +284,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     clearError,
     advanceGame,
     rewindLastTurn,
+    selectPhase,
     addScoreEvent,
     addCommandPointEvent,
     addNoteEvent,
@@ -599,9 +600,11 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       turnKeys: allTurns.map((turn) => turn.key),
       snapToLatest,
       setupStarted: game.timeEvents.some((event) => event.action === "setup-start"),
-      setupRunning: isSetupRunning(game)
+      setupRunning: isSetupRunning(game),
+      followActive: !viewOnlyActive,
+      setupActive: isSetupActive(game)
     }));
-  }, [activeTurn, allTurns, game]);
+  }, [activeTurn, allTurns, game, viewOnlyActive]);
 
   useEffect(() => {
     if (!actionFlash) {
@@ -1229,18 +1232,25 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
         if (firstTurn) {
           if (!isReadOnly && isTimerRunning) {
             await advanceGame(game.id, SETUP_TURN_REF, true, recordHistory);
+          } else if (!isReadOnly) {
+            // Gestoppt (auch im Time-out): Zug 1 wird aktiv, zeitneutral gespeichert, im Verlauf (Pepper 22.10. A/B)
+            await selectPhase(game.id, { roundNumber: firstTurn.roundNumber, turnNumber: firstTurn.turnNumber }, "Weiter", null, recordHistory);
           }
           setSelectedTurnKey(firstTurn.key);
+          return;
         }
-        return;
+        // noch kein Zug: weiter unten R1Z1 anlegen (laufend bzw. gestoppt wie die Aufstellung)
       }
 
       if (canGoForwardToExistingTurn) {
         const nextTurn = allTurns[selectedTurnIndex + 1];
         if (nextTurn) {
           if (!isReadOnly && isTimerRunning) {
-            // Laufender Timer zieht in den Folgezug mit; gestoppt bleibt gestoppt (nur Auswahl).
+            // Laufender Timer zieht in den Folgezug mit.
             await advanceGame(game.id, selectedTurnRef, true, recordHistory);
+          } else if (!isReadOnly) {
+            // Gestoppt bleibt gestoppt, der Folgezug wird aber aktiv (gespeichert, alle Geraete, Rueckgaengig).
+            await selectPhase(game.id, { roundNumber: nextTurn.roundNumber, turnNumber: nextTurn.turnNumber }, "Weiter", selectedTurnRef ?? null, recordHistory);
           }
           setSelectedTurnKey(nextTurn.key);
         }
@@ -1271,9 +1281,12 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
 
     // Zurueck (Tim 22.10.): der vorherige Zug bzw. die Aufstellung wird aktiv. Laeuft der Timer, zaehlt er ab jetzt dort
     // (rewindLastTurn: laufenden Zug pausieren, Ziel fortsetzen - die Auswertung oeffnet einen beendeten Zug dafuer wieder);
-    // ist er gestoppt, bleibt er gestoppt (nur Auswahl, keine Events).
+    // ist er gestoppt, bleibt er gestoppt, das Ziel wird aber aktiv (zeitneutrale Markierung, gespeichert, im Verlauf).
     if (!isReadOnly && isTimerRunning) {
       await rewindLastTurn(game.id, selectedTurnRef, true, recordHistory);
+    } else if (!isReadOnly) {
+      const targetRef = previousTurn ? { roundNumber: previousTurn.roundNumber, turnNumber: previousTurn.turnNumber } : null;
+      await selectPhase(game.id, targetRef, "Zurück", selectedTurnRef ?? null, recordHistory);
     }
     setSelectedTurnKey(target);
   };

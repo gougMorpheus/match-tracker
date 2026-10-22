@@ -14,7 +14,7 @@ const { runGameAccessModeTests } = require("./gameAccessMode.test.cjs");
 const { runGameSecurityTests } = require("./gameSecurity.test.cjs");
 const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
-const { runZurueckTimerTests } = require("./zurueckTimer.test.cjs");
+const { runZurueckTimerTests, runGestoppteNavigationTests } = require("./zurueckTimer.test.cjs");
 const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
 const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
 const { runPushATests } = require("./pushA.test.cjs");
@@ -52,6 +52,7 @@ const suites = [
   ["localSync", runLocalSyncTests],
   ["timerFocus", runTimerFocusTests],
   ["zurueckTimer", runZurueckTimerTests],
+  ["gestoppteNavigation", runGestoppteNavigationTests],
   ["serverClock", runServerClockTests],
   ["serverSecondTicker", runServerSecondTickerTests],
   ["gameStoreReadOnly", runGameStoreReadOnlyTests],

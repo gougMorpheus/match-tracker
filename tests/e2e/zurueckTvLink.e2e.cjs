@@ -95,21 +95,40 @@ const run = async () => {
       assert.ok(Math.abs(toSec(await header()) - round) <= 2, "Rundenzeit bleibt (Pepper 2: sprang frueher auf 3s)");
       await still(turnHeader, "Zug 1");
     });
-    await step("Weiter/Zurueck bei gestopptem Timer: keine Events, bleibt gestoppt", async () => {
-      await click("Weiter"); await noModal(); assert.deepEqual(await added(), []); assert.equal(await pill(), "Timer: Gestoppt");
+    // TV in einem zweiten Tab (gleiches Geraet, laedt aus dem gespeicherten Stand = wie Neuladen/anderes Geraet)
+    const tvPage = await ctx.newPage(); tvPage.setDefaultTimeout(8000); tvPage.on("pageerror", (e) => errors.push(String(e)));
+    const tvPhase = async () => { await tvPage.goto(`${APP}/#/game/${games[0].id}?tv=1`); await tvPage.reload();
+      await tvPage.locator(".tv-phase__title").waitFor(); return tvPage.locator(".tv-phase__title").innerText(); };
+    const tvActive = async () => tvPage.locator(".tv-player--active").innerText();
+    let gameIdTv = null;
+    const tvPhaseOf = async (id) => { await tvPage.goto(`${APP}/#/game/${id}?tv=1`); await tvPage.reload();
+      await tvPage.locator(".tv-phase__title").waitFor(); return tvPage.locator(".tv-phase__title").innerText(); };
+    await step("A: Weiter/Zurueck bei gestopptem Timer: Zielzug wird aktiv (zeitneutrale Markierung), gespeichert, TV/Neuladen folgt", async () => {
+      const before = await cached(); const ms = (g) => g.rounds.flatMap((r) => r.turns).map((t) => calc.getTurnDurationMs(t, g));
+      await click("Weiter"); await noModal(); assert.deepEqual(await added(), ["turn-pause R1Z2"]); assert.equal(await pill(), "Timer: Gestoppt");
       assert.match(await turnHeader(), /^Zug 2 /); await still(turnHeader, "Zug 2");
-      await click("Zurück"); await noModal(); assert.deepEqual(await added(), []); assert.equal(await pill(), "Timer: Gestoppt");
+      assert.equal(await tvPhase(), "Runde 1 · Zug 2", "TV nach Neuladen auf dem aktiven Zug Z2"); assert.match(await tvActive(), /ZZ-B/);
+      await click("Zurück"); await noModal(); assert.deepEqual(await added(), ["turn-pause R1Z1"]); assert.equal(await pill(), "Timer: Gestoppt");
+      assert.equal(await tvPhase(), "Runde 1 · Zug 1", "TV nach Zurueck auf Z1"); assert.match(await tvActive(), /ZZ-A/);
+      const after = await cached();
+      assert.deepEqual(ms(after).map((v) => Math.round(v / 1000)), ms(before).map((v) => Math.round(v / 1000)), "Markierung verschiebt keine Zeit");
+      await open(games[0].id); assert.match(await turnHeader(), /^Zug 1 /, "Editor nach Neuladen auf Z1");
     });
-    await step('Undo-Label nach gestopptem Zugwechsel bleibt "Timer aus"; Rueckgaengig waehlt den wieder laufenden Zug an', async () => {
-      await click("Weiter"); await noModal(); assert.deepEqual(await added(), []); assert.match(await turnHeader(), /^Zug 2 /);
+    await step("B: gestoppter Zugwechsel steht im Rueckgaengig-Stapel; Undo/Redo (langer Druck) navigiert, startet nie den Timer", async () => {
+      await click("Weiter"); await noModal(); assert.deepEqual(await added(), ["turn-pause R1Z2"]);
       const undo = page.locator(".game-bottom-dock__undo");
-      assert.match(await undo.innerText(), /Undo: Timer aus/, "Navigation ohne Timer ist keine Aktion");
-      await undo.click(); await page.waitForTimeout(700);
-      await dismiss("Timer läuft"); // Undo aendert den Timer-Zustand -> Hinweis wie beim Timer-Knopf
-      const ev = await events(); assert.equal(ev[ev.length - 1], "turn-resume R1Z1", "turn-pause R1Z1 zurueckgenommen"); mark = ev.length;
-      assert.equal(await pill(), "Timer: Läuft");
-      assert.match(await turnHeader(), /^Zug 1 /, "Anzeige springt auf den laufenden Zug (nichts verdeckt)"); await counts(turnHeader, "Zug 1 nach Undo");
-      await timerBtn("Timer gestoppt"); assert.deepEqual(await added(), ["turn-pause R1Z1"]);
+      assert.match(await undo.innerText(), /Undo: Weiter R1 Z1/, "Label = gestoppter Zugwechsel (nicht Timer aus)");
+      await undo.click(); await page.waitForTimeout(700); await noModal();
+      assert.deepEqual(await added(), ["turn-pause R1Z1"]); assert.equal(await pill(), "Timer: Gestoppt");
+      assert.match(await turnHeader(), /^Zug 1 /); await still(turnHeader, "Zug 1 nach Undo (kein Timerstart)");
+      assert.equal(await tvPhase(), "Runde 1 · Zug 1");
+      const box = await undo.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(1200); await page.mouse.up();
+      await page.locator(".game-bottom-dock__redo-popover").click(); await page.waitForTimeout(700); await noModal();
+      assert.deepEqual(await added(), ["turn-pause R1Z2"]); assert.equal(await pill(), "Timer: Gestoppt");
+      assert.match(await turnHeader(), /^Zug 2 /); await still(turnHeader, "Zug 2 nach Redo");
+      assert.equal(await tvPhase(), "Runde 1 · Zug 2");
+      await click("Zurück"); await noModal(); assert.deepEqual(await added(), ["turn-pause R1Z1"]); assert.match(await turnHeader(), /^Zug 1 /);
     });
     await step("Timer an im angewaehlten Vorzug: zaehlt dort", async () => {
       await timerBtn("Timer läuft");
@@ -149,8 +168,8 @@ const run = async () => {
       await page.locator(".game-bottom-dock__timeout-popover").click(); await dismiss("Time-out aktiv");
       assert.deepEqual(await added(), ["timeout-start R1Z1", "turn-pause R1Z1"]);
       await still(turnHeader, "Zug 1 im Time-out");
-      await click("Weiter"); await noModal(); assert.deepEqual(await added(), [], "Navigation im Time-out schreibt nichts");
-      await click("Zurück"); await noModal(); assert.deepEqual(await added(), []);
+      await click("Weiter"); await noModal(); assert.deepEqual(await added(), ["turn-pause R1Z2"], "Navigation im Time-out: zeitneutrale Markierung");
+      await click("Zurück"); await noModal(); assert.deepEqual(await added(), ["turn-pause R1Z1"]);
       await page.getByRole("button", { name: "Time-out beenden", exact: true }).click(); await dismiss("Timer läuft");
       assert.deepEqual(await added(), ["timeout-end R1Z1", "turn-resume R1Z1"]);
       assert.match(await turnHeader(), /^Zug 1 /); await counts(turnHeader, "Zug 1 nach Time-out");
@@ -171,11 +190,20 @@ const run = async () => {
       assert.deepEqual(await added(), ["setup-end", "turn-resume R1Z1"]);
       assert.match(await turnHeader(), /^Zug 1 /); await counts(turnHeader, "Zug 1");
     });
-    await step("Aufstellung bei gestopptem Timer: Zurueck/Weiter ohne Events, bleibt gestoppt", async () => {
+    await step("Aufstellung bei gestopptem Timer: Zurueck/Weiter mit zeitneutralen Markierungen, bleibt gestoppt, TV folgt", async () => {
+      gameIdTv = games[2].id;
       await timerBtn("Timer gestoppt"); assert.deepEqual(await added(), ["turn-pause R1Z1"]);
-      await click("Zurück"); await noModal(); assert.deepEqual(await added(), []); assert.match(await header(), /^Aufstellung /);
+      const setupBefore = calc.getSetupDurationMs(await cached());
+      await click("Zurück"); await noModal(); assert.deepEqual(await added(), ["setup-pause"]); assert.match(await header(), /^Aufstellung /);
       assert.equal(await pill(), "Timer: Gestoppt"); await still(header, "Aufstellung");
-      await click("Weiter"); await noModal(); assert.deepEqual(await added(), []); assert.equal(await pill(), "Timer: Gestoppt");
+      assert.equal(await tvPhaseOf(games[2].id), "Aufstellung", "TV: Aufstellung aktiv");
+      assert.equal(calc.getSetupDurationMs(await cached()), setupBefore, "Markierung verschiebt keine Aufstellungszeit");
+      await open(games[2].id); assert.match(await header(), /^Aufstellung /, "Neuladen: Aufstellung aktiv");
+      await timerBtn("Timer läuft"); assert.deepEqual(await added(), ["setup-start"], "neuer Abschnitt (kein wirkungsloses setup-resume)");
+      await counts(header, "Aufstellung nach Timer an"); await timerBtn("Timer gestoppt"); assert.deepEqual(await added(), ["setup-pause"]);
+      await click("Weiter"); await noModal(); assert.deepEqual(await added(), ["setup-end", "turn-pause R1Z1"]); assert.equal(await pill(), "Timer: Gestoppt");
+      assert.match(await turnHeader(), /^Zug 1 /); assert.equal(await tvPhaseOf(games[2].id), "Runde 1 · Zug 1");
+      const undo = page.locator(".game-bottom-dock__undo"); assert.match(await undo.innerText(), /Undo: Weiter Aufstellung/);
     });
     await step("Weiter aus laufender Aufstellung: R1Z1 startet laufend (kein automatischer pausierter Start)", async () => {
       await open(games[3].id); assert.equal(await pill(), "Timer: Läuft");
