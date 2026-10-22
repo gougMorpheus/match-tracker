@@ -30,9 +30,10 @@ const clock = (ms: number): string => {
 };
 
 // menu: optionales Spielmenue (bei beendeten Spielen; Funktionen des frueheren Abschlussbildschirms).
+// onShareLink: Knopf "Link teilen" in der TV-Leiste (gleiche Funktion wie der Menuepunkt: Direktlink #/game/<id>?tv=1).
 // fullscreenDocument: Vollbild auf dem ganzen Dokument statt nur der TV-Flaeche, damit Menue-Dialoge im Vollbild sichtbar bleiben.
 // View only: kein "verlassen"-Button mehr; Navigation ueber das Menue (Main).
-export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: Game; onExit?: () => void; menu?: ReactNode; fullscreenDocument?: boolean }) => {
+export const TvGameView = ({ game, menu, fullscreenDocument = false, onShareLink }: { game: Game; onExit?: () => void; menu?: ReactNode; fullscreenDocument?: boolean; onShareLink?: () => void }) => {
   const { games, liveViewPause, resumeLiveView } = useGameStore();
   const [highlightQueue, setHighlightQueue] = useState<TvHighlight[]>([]);
   const snapshot = useRef<TvSnapshot | null>(null);
@@ -227,6 +228,7 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false }: { game: G
           <h2 className="tv-phase__title">{phase}</h2><div className="tv-phase__status"><span className={`tv-chip${running && !timeout ? " tv-chip--running" : ""}`}>{status} · View only</span>
             <nav className="tv-game__controls" aria-label="TV-Anzeige" onFocus={showControls}>
               {fullscreenSupported ? <button type="button" onClick={() => void fullscreen()}>{isFullscreen ? "Full screen verlassen" : "Full screen"}</button> : null}
+              {onShareLink ? <button type="button" className="tv-game__share" onClick={onShareLink}>Link teilen</button> : null}
               {fullscreenError ? <span role="status">Full screen ist hier nicht verfügbar.</span> : null}
             </nav>
           </div>

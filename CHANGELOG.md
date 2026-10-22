@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-22 – „Zurück“ bei laufendem Timer verliert keine Zeit mehr; TV-Knopf „Link teilen“
+- Fehlerbild (Spiel dd87ec49, 16.10.): Nach „Zurück“ bei laufendem Timer zählten ca. 8,6 min von Tims Zug R3Z2 nirgends.
+- Ursache: `handleGoBack` (GamePage) rief `rewindLastTurn(…, keepTimerRunning = true)` auf. Das schrieb `turn-pause` für den laufenden Zug und `turn-resume` für den bereits beendeten Vorzug. Die Auswertung (`buildRoundsFromTimeEvents` in `gameState.ts`) ignoriert `turn-resume` nach `turn-end`, Anzeige und Statistik zählten die Zeit bis zum nächsten „Weiter“ daher keinem Zug zu.
+- Lösung: „Zurück“ auf einen älteren Zug ist nur noch Ansicht und schreibt keine Timer-Events; der laufende Zug läuft weiter (wie im Bearbeiten-Modus). Beim Ansehen eines beendeten älteren Zugs wirken Status, „Timer an/aus“ und Time-out auf den neuesten Zug (`getTimerControlTurn`), ein beendeter Zug wird nie fortgesetzt. „Weiter“ auf einen vorhandenen Folgezug und „Zurück“ in die Aufstellung unverändert. Keine Schemaänderung, alte Spieldaten (dd87ec49) unverändert.
+- TV-Ansicht: Knopf „Link teilen“ in der TV-Leiste neben „Full screen“ (auch bei beendetem Spiel und pausierter Live-Ansicht); gleiche Funktion wie der Menüpunkt (Direktlink `#/game/<id>?tv=1`, kopieren + „Link kopiert“, mobil Teilen-Dialog).
+- Tests: `tests/zurueckTimer.test.cjs` (Ursache mit App-Auswertung belegt, Timer-Ziel, Verdrahtung), `tvGameView` (Knopf), E2E `npm run test:zurueck-e2e` (offline, ZZ-Spiel im lokalen Cache; schlägt gegen den alten Code mit `turn-pause R1Z2` + `turn-resume R1Z1` an).
+
 ## 2026-10-19 – Stufe E: Battle-Cal für alle an, alte Site leitet um
 - Schalter Battle-Cal jetzt standardmäßig AN (Menüeintrag, `#/battle-cal`, `/battle-cal/`). `?battlecal=0` schaltet auf dem Gerät aus (gemerkt als "0"), `?battlecal=1` wieder ein. Ohne localStorage: AN.
 - Hinweis bei ausgeschaltetem Schalter: „Battle-Cal ist auf diesem Gerät ausgeschaltet.“ mit Link zum Einschalten.
