@@ -59,7 +59,7 @@ import { buildSpectatorLink, shareResultMessage, shareSpectatorLink } from "../u
 import { AUTO_CP_SUFFIX, formatCpGroup, formatScoreValue, groupDisplayEvents } from "../utils/eventGrouping";
 import { HIGHLIGHT_ICON, deriveGameHighlights } from "../utils/tvHighlights";
 import { getTvModeHash, isGameCompletedForDisplay, shouldAskGameAccessMode, shouldShowClosedGameTv, shouldShowViewOnly } from "../utils/gameAccessMode";
-import { formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration } from "../utils/time";
+import { berlinWallClockToMs, formatClockTime, formatClockTimeWithSeconds, formatDateLabel, formatDuration, toBerlinDateTimeInput } from "../utils/time";
 
 interface GamePageProps {
   gameId: string;
@@ -210,8 +210,7 @@ const toDateTimeLocalInput = (iso?: string): string => {
     return "";
   }
 
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 19);
+  return toBerlinDateTimeInput(date);
 };
 
 const fromDateTimeLocalInput = (value: string, fallbackIso: string): string => {
@@ -219,9 +218,10 @@ const fromDateTimeLocalInput = (value: string, fallbackIso: string): string => {
     return fallbackIso;
   }
 
-  const normalizedValue = value.length === 16 ? `${value}:00` : value;
-  const date = new Date(normalizedValue);
-  return Number.isNaN(date.getTime()) ? fallbackIso : date.toISOString();
+  // Eingabe ist Berliner Wanduhr (#45).
+  const [datePart, timePart = ""] = value.split("T");
+  const ms = berlinWallClockToMs(datePart, timePart);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : fallbackIso;
 };
 
 const getCrossedScoreLimits = (

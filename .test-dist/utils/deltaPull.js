@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getResumeSyncDelayMs = exports.canRefreshNow = exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
+exports.mergeLiveGameIntoCache = exports.dropSettledForeignQueueItems = exports.getResumeSyncDelayMs = exports.canRefreshNow = exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 // Delta-Abgleich (#679, Egress): Statt bei jedem Abgleich alle Spiele mit allen Events zu laden, wird eine schlanke
 // Liste (id, version, flow_version; geloeschte schon serverseitig gefiltert) geholt. Volle Zeilen bzw. Events nur fuer
@@ -169,3 +169,23 @@ exports.canRefreshNow = canRefreshNow;
 // Rueckkehr in den Tab: Live-Ansicht sofort laden, sonst kurz warten (Netz nach dem Aufwachen).
 const getResumeSyncDelayMs = (liveView, defaultDelayMs) => (liveView ? 0 : defaultDelayMs);
 exports.getResumeSyncDelayMs = getResumeSyncDelayMs;
+// Queue anderer Tabs (Pepper 22.10., #45): Alle Tabs teilen die Queue in localStorage, ein Tab liest sie aber nur beim Start.
+// Ein TV-Tab, der geoeffnet wird, waehrend der Editor-Tab noch eine Aenderung sendet, behielt diesen Eintrag fuer immer: im
+// TV (View only) darf er nicht gesendet werden, wurde nie entfernt und blockierte dann das Nachladen im Hintergrund und
+// verwarf jedes Live-Laden (Spiel mit wartender Aenderung). Meldet localStorage eine neue Queue, fallen hier die Eintraege
+// gesperrter (View only) Spiele weg, die der andere Tab inzwischen gesendet hat. Eigene sendbare Eintraege bleiben.
+const dropSettledForeignQueueItems = (own, shared, isViewOnly) => {
+    const sharedIds = new Set(shared.map((item) => item.id));
+    const next = own.filter((item) => !isViewOnly(item.gameId) || sharedIds.has(item.id));
+    return next.length === own.length ? own : next;
+};
+exports.dropSettledForeignQueueItems = dropSettledForeignQueueItems;
+// Live-Ansicht (TV) und gemeinsamer Spiele-Cache (#45): Die Live-Ansicht laedt nur ihr Spiel, ihre uebrige Spieleliste ist der
+// Stand beim Oeffnen. Schrieb sie die ganze Liste zurueck, kamen inzwischen (weich) geloeschte Spiele wieder in den Cache der
+// anderen Tabs und standen nach dem Neuladen wieder als aktiv in der Liste. Jetzt nur das eigene Spiel ersetzen bzw. entfernen.
+const mergeLiveGameIntoCache = (cached, memory, liveGameId) => {
+    const live = memory.find((game) => game.id === liveGameId);
+    const rest = cached.filter((game) => game.id !== liveGameId);
+    return live ? [live, ...rest] : rest;
+};
+exports.mergeLiveGameIntoCache = mergeLiveGameIntoCache;

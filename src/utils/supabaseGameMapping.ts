@@ -18,7 +18,7 @@ import type { Json } from "../types/supabase";
 import { createId } from "./id";
 import { orderTimeEventsForEvaluation } from "./timeEventOrder";
 import { createTurnTimingTracker } from "./turnTiming";
-import { toLocalDateInput, toLocalTimeInput } from "./time";
+import { berlinWallClockToMs, toLocalDateInput, toLocalTimeInput } from "./time";
 import type { ScoreDetailLevel, StatsEligibilityArea, StatsEligibilityMode, StatsEligibilityOverrides, TimerCorrections } from "../types/game";
 
 export type SupabaseGameRecord = Database["public"]["Tables"]["games"]["Row"];
@@ -70,7 +70,9 @@ export const combineScheduledDateTime = (date: string, time: string): string | n
     return null;
   }
 
-  return new Date(`${date}T${time}:00`).toISOString();
+  // Geplante Zeit ist Berliner Wanduhr (#45), unabhaengig von der Browser-Zeitzone.
+  const ms = berlinWallClockToMs(date, time);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : new Date(`${date}T${time}:00`).toISOString();
 };
 
 export const normalizeOptionalTimestamp = (value?: string | null): string | null => {

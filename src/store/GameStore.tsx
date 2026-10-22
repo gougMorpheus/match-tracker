@@ -39,7 +39,7 @@ import {
   mapSupabaseGameToAppGame,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
-import { RemoteGameCache, canRefreshNow, getResumeSyncDelayMs, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
+import { RemoteGameCache, canRefreshNow, dropSettledForeignQueueItems, getResumeSyncDelayMs, mergeLiveGameIntoCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -92,6 +92,7 @@ import {
   removeSyncQueueItem,
   saveCachedGames,
   saveSyncQueue,
+  SYNC_QUEUE_KEY,
   type SyncQueueItem
 } from "../utils/localSync";
 import { syncRememberedPlayerNames } from "../utils/presets";
@@ -352,6 +353,8 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const gamesRef = useRef(games);
   const queueRef = useRef(syncQueue);
   const gameAccessModesRef = useRef<GameAccessModeState>({});
+  // Live-Ansicht schreibt nur ihr eigenes Spiel in den gemeinsamen Cache (#45, siehe mergeLiveGameIntoCache).
+  const saveGamesCacheRef = useRef<(nextGames: Game[]) => void>(saveCachedGames);
   const flushPromiseRef = useRef<Promise<boolean> | null>(null);
   const mutationLocksRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<number | null>(null);
@@ -364,12 +367,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     gamesRef.current = games;
-    saveCachedGames(games);
+    saveGamesCacheRef.current(games);
     syncRememberedPlayerNames(games);
   }, [games]);
 
+  // Aus localStorage uebernommene Queue (anderer Tab) nicht wieder zurueckschreiben (#45).
+  const queueFromStorageRef = useRef<SyncQueueItem[] | null>(null);
   useEffect(() => {
     queueRef.current = syncQueue;
+    if (queueFromStorageRef.current === syncQueue) return;
     saveSyncQueue(syncQueue);
   }, [syncQueue]);
 
@@ -1069,6 +1075,10 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     const { gameId } = getGameRouteAccess(window.location.hash, window.location.search);
     return gameId && isGameViewOnly(gameId) ? gameId : null;
   }, [isGameViewOnly]);
+  saveGamesCacheRef.current = (nextGames: Game[]) => {
+    const liveGameId = getLiveGameId();
+    saveCachedGames(liveGameId ? mergeLiveGameIntoCache(loadCachedGames(), nextGames, liveGameId) : nextGames);
+  };
 
   const loadLiveGame = useCallback(async (gameId: string): Promise<void> => {
     const live = liveViewRef.current;
@@ -1089,7 +1099,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         const nextGames = gamesRef.current.filter((game) => game.id !== gameId);
         gamesRef.current = nextGames;
         setGames(nextGames);
-        saveCachedGames(nextGames);
+        saveGamesCacheRef.current(nextGames);
         return;
       }
       remoteCacheRef.current.entries.set(gameId, entry);
@@ -1097,7 +1107,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       const nextGames = sortGames([remoteGame, ...gamesRef.current.filter((game) => game.id !== gameId)]);
       gamesRef.current = nextGames;
       setGames(nextGames);
-      saveCachedGames(nextGames);
+      saveGamesCacheRef.current(nextGames);
       setLastSyncAt(getNowIso());
       setSyncStatus("success");
       const pause = getLiveViewPause(entry, liveViewRef.current.since, getServerNow());
@@ -1230,6 +1240,26 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       }
     };
   }, [refreshGames]);
+
+  useEffect(() => {
+    // Queue eines anderen Tabs geaendert (#45): dort inzwischen gesendete Eintraege gesperrter Spiele hier entfernen,
+    // dann die Live-Ansicht nachladen (Realtime-Meldungen davor wurden wegen des wartenden Eintrags verworfen).
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== SYNC_QUEUE_KEY) return;
+      const next = dropSettledForeignQueueItems(queueRef.current, loadSyncQueue(), isGameViewOnly);
+      if (next === queueRef.current) return;
+      queueRef.current = next;
+      queueFromStorageRef.current = next;
+      setSyncQueue(next);
+      const liveGameId = getLiveGameId();
+      if (liveGameId) {
+        remoteCacheRef.current.markDirty(liveGameId);
+        scheduleRemoteRefresh();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [getLiveGameId, isGameViewOnly, scheduleRemoteRefresh]);
 
   useEffect(() => {
     const configError = getSupabaseConfigError();

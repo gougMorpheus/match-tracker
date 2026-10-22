@@ -127,7 +127,8 @@ const normalizeTimeEventsForAppend = (game, timeEvents) => {
 };
 const getMissingGameStartCreatedAt = (game, fallbackCreatedAt) => {
     if (game.scheduledDate && game.scheduledTime) {
-        const scheduledStart = new Date(`${game.scheduledDate}T${game.scheduledTime}:00`);
+        const berlinMs = (0, time_1.berlinWallClockToMs)(game.scheduledDate, game.scheduledTime);
+        const scheduledStart = Number.isFinite(berlinMs) ? new Date(berlinMs) : new Date(`${game.scheduledDate}T${game.scheduledTime}:00`);
         if (!Number.isNaN(scheduledStart.getTime())) {
             return scheduledStart.toISOString();
         }

@@ -4,7 +4,7 @@ import { mapPersistedGame } from "./gameState";
 import { isTransientSupabaseErrorMessage, normalizeSupabaseErrorMessage } from "./supabaseErrors";
 
 const GAMES_CACHE_KEY = "match-tracker.local-games.v1";
-const SYNC_QUEUE_KEY = "match-tracker.sync-queue.v2";
+export const SYNC_QUEUE_KEY = "match-tracker.sync-queue.v2";
 
 type SyncQueueItemBase = {
   id: string;

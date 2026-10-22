@@ -16,6 +16,7 @@ const { runLocalSyncTests } = require("./localSync.test.cjs");
 const { runTimerFocusTests } = require("./timerFocus.test.cjs");
 const { runZurueckTimerTests, runGestoppteNavigationTests, runTvHintergrundTests } = require("./zurueckTimer.test.cjs");
 const { runSyncVersioningTests } = require("./syncVersioning.test.cjs");
+const { runBerlinZeitTests, runQueueCacheTests } = require("./syncBerlin.test.cjs");
 const { runHighlightsScrollTests } = require("./highlightsScroll.test.cjs");
 const { runPushATests } = require("./pushA.test.cjs");
 const { runLeadHighlightsTests } = require("./leadHighlights.test.cjs");
@@ -54,6 +55,8 @@ const suites = [
   ["zurueckTimer", runZurueckTimerTests],
   ["gestoppteNavigation", runGestoppteNavigationTests],
   ["tvHintergrund", runTvHintergrundTests],
+  ["berlinZeit", runBerlinZeitTests],
+  ["queueCache", runQueueCacheTests],
   ["serverClock", runServerClockTests],
   ["serverSecondTicker", runServerSecondTickerTests],
   ["gameStoreReadOnly", runGameStoreReadOnlyTests],

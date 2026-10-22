@@ -18,7 +18,7 @@ import type {
   Turn
 } from "../types/game";
 import { createId, createUuid, isUuid } from "./id";
-import { getNowIso } from "./time";
+import { berlinWallClockToMs, getNowIso } from "./time";
 import { createTurnTimingTracker } from "./turnTiming";
 import { orderTimeEventsForEvaluation } from "./timeEventOrder";
 
@@ -189,7 +189,8 @@ const normalizeTimeEventsForAppend = (game: Game, timeEvents: TimeEventDraft[]):
 
 export const getMissingGameStartCreatedAt = (game: Game, fallbackCreatedAt: string): string => {
   if (game.scheduledDate && game.scheduledTime) {
-    const scheduledStart = new Date(`${game.scheduledDate}T${game.scheduledTime}:00`);
+    const berlinMs = berlinWallClockToMs(game.scheduledDate, game.scheduledTime);
+    const scheduledStart = Number.isFinite(berlinMs) ? new Date(berlinMs) : new Date(`${game.scheduledDate}T${game.scheduledTime}:00`);
     if (!Number.isNaN(scheduledStart.getTime())) {
       return scheduledStart.toISOString();
     }

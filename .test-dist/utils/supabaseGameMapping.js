@@ -41,7 +41,9 @@ const combineScheduledDateTime = (date, time) => {
     if (!date || !time) {
         return null;
     }
-    return new Date(`${date}T${time}:00`).toISOString();
+    // Geplante Zeit ist Berliner Wanduhr (#45), unabhaengig von der Browser-Zeitzone.
+    const ms = (0, time_1.berlinWallClockToMs)(date, time);
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : new Date(`${date}T${time}:00`).toISOString();
 };
 exports.combineScheduledDateTime = combineScheduledDateTime;
 const normalizeOptionalTimestamp = (value) => {

@@ -2,6 +2,8 @@
 // Backup, nur lesend). Alles ausser 127.0.0.1 wird blockiert -> kein Zugriff auf die Live-DB. Realtime gibt es im Mock nicht.
 // Prueft: ein im Hintergrund geoeffneter TV-Tab laedt sein Spiel trotzdem (Anlass Start, kein Polling) und zeigt den Sync;
 // beim Sichtbarwerden laedt die Live-Ansicht sofort. Ein normaler Tab laedt im Hintergrund weiterhin nichts (Egress).
+// #45: TV-Tab mit beim Start uebernommenem Queue-Eintrag des Editor-Tabs zieht im Hintergrund nach, sobald der Editor ihn
+// gesendet hat (storage-Ereignis). Die Live-Ansicht schreibt ein inzwischen weich geloeschtes Spiel nicht in den Cache zurueck.
 const assert = require("node:assert/strict");
 const path = require("node:path"); const http = require("node:http"); const { execFileSync } = require("node:child_process");
 const { chromium } = require(process.env.PW_MODULE || "playwright");
@@ -11,6 +13,9 @@ const fixture = require("./fixtures/zz-tv-hintergrund.json");
 const ROOT = path.join(__dirname, "..", ".."); const OUT = ".test-e2e-dist-tvh";
 const PORT = 4802; const APP = `http://127.0.0.1:${PORT}`; const MOCK = 4798; const ID = fixture.game.id;
 
+const YID = "0000dead-0000-4000-8000-00000000dead"; const mockState = { withY: false, yDeleted: false };
+const gameY = () => ({ ...fixture.game, id: YID, created_at: "2026-10-22T17:00:00.000+00:00", version: fixture.game.version + (mockState.yDeleted ? 1 : 0),
+  deleted_at: mockState.yDeleted ? "2026-10-22T18:51:55.000+00:00" : null });
 const startMock = () => new Promise((resolve) => {
   const hits = [];
   const server = http.createServer((req, res) => {
@@ -21,11 +26,18 @@ const startMock = () => new Promise((resolve) => {
     if (req.method === "OPTIONS") return send(204);
     hits.push({ at: Date.now(), path: url.pathname, select: url.searchParams.get("select") || "" });
     if (url.pathname === "/rest/v1/games") {
-      const select = url.searchParams.get("select") || "*";
-      if (/version/.test(select) && select !== "*") return send(200, [{ id: ID, version: fixture.game.version, flow_version: fixture.game.flow_version }]);
-      return send(200, [fixture.game]);
+      const select = url.searchParams.get("select") || "*"; const idFilter = url.searchParams.get("id");
+      let rows = [fixture.game, ...(mockState.withY ? [gameY()] : [])];
+      if (url.searchParams.get("deleted_at") === "is.null") rows = rows.filter((row) => !row.deleted_at);
+      if (idFilter) rows = rows.filter((row) => idFilter.includes(row.id));
+      if (/version/.test(select) && select !== "*") return send(200, rows.map((row) => ({ id: row.id, version: row.version, flow_version: row.flow_version })));
+      return send(200, rows);
     }
-    if (url.pathname === "/rest/v1/events") return send(200, fixture.events);
+    if (url.pathname === "/rest/v1/events") {
+      const gameIds = url.searchParams.get("game_id") || "";
+      return send(200, [...fixture.events, ...fixture.events.map((e, i) => ({ ...e, id: `0000dead-${String(i).padStart(4, "0")}-4000-8000-${e.id.slice(-12)}`, game_id: YID }))]
+        .filter((e) => !gameIds || gameIds.includes(e.game_id)));
+    }
     return send(404, { message: "nicht im Mock" });
   });
   server.listen(MOCK, "127.0.0.1", () => resolve({ server, hits }));
@@ -72,6 +84,46 @@ const run = async () => {
       assert.equal(hits.filter((h) => h.at >= t && h.path.startsWith("/rest/v1/games")).length, 0);
     });
     await list.ctx.close();
+
+    // #45 A: TV-Tab oeffnet, waehrend der Editor-Tab (gleicher Browser, gemeinsame Queue) noch eine Aenderung sendet.
+    const stale = await hiddenPage();
+    await stale.page.addInitScript((id) => { if (!sessionStorage.getItem("seeded")) { sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("match-tracker.sync-queue.v2", JSON.stringify([{ id: "q-editor", gameId: id, createdAt: new Date().toISOString(), type: "upsert-game" }])); } }, ID);
+    await step("#45 TV im Hintergrund mit Queue-Eintrag des Editor-Tabs: laedt nach, sobald der Editor ihn gesendet hat", async () => {
+      await stale.page.goto(`${APP}/#/game/${ID}?tv=1`); await stale.page.waitForTimeout(2500);
+      const editor = await stale.ctx.newPage(); await editor.goto(`${APP}/#/hilfe-leer`); // gleicher Ursprung, sendet nichts
+      const t = Date.now();
+      await editor.evaluate(() => localStorage.setItem("match-tracker.sync-queue.v2", "[]")); // Editor hat gesendet
+      await stale.page.waitForTimeout(2500);
+      assert.ok(hits.some((h) => h.at >= t && h.path === "/rest/v1/games" && /\*/.test(h.select)), "TV laedt im Hintergrund nach");
+      assert.equal(await stale.page.locator(".tv-phase__title").innerText(), "Runde 1 · Zug 1");
+      assert.match(await header(stale.page), /Sync \d/);
+      await editor.close();
+    });
+    await stale.ctx.close();
+
+    // #45 Punkt 2: weich geloeschtes Spiel darf ueber den Cache der Live-Ansicht nicht zurueckkommen.
+    mockState.withY = true;
+    const del = await browser.newContext({ serviceWorkers: "block" });
+    await del.route((u) => !/^http:\/\/127\.0\.0\.1:(4802|4798)\//.test(u.toString()), (r) => r.abort());
+    await step("#45 Geloeschtes Spiel: Delta-Abgleich entfernt es, die Live-Ansicht schreibt es nicht in den Cache zurueck", async () => {
+      const listPage = await del.newPage(); listPage.on("pageerror", (e) => errors.push(String(e)));
+      const cacheHasY = (p) => p.evaluate((id) => (localStorage.getItem("match-tracker.local-games.v1") || "").includes(id), YID);
+      await listPage.goto(`${APP}/#/games`); await listPage.waitForTimeout(2500);
+      assert.equal(await listPage.locator(".game-card").count(), 2, "Ausgangslage: beide Spiele");
+      const tvPage = await del.newPage(); tvPage.on("pageerror", (e) => errors.push(String(e)));
+      await tvPage.goto(`${APP}/#/game/${ID}?tv=1`); await tvPage.waitForTimeout(2000);
+      mockState.yDeleted = true;
+      await listPage.evaluate(() => window.dispatchEvent(new Event("online"))); await listPage.waitForTimeout(2000);
+      assert.equal(await listPage.locator(".game-card").count(), 1, "Delta-Abgleich entfernt das geloeschte Spiel");
+      assert.equal(await cacheHasY(listPage), false);
+      const t = Date.now(); await tvPage.evaluate(() => window.dispatchEvent(new Event("online"))); await tvPage.waitForTimeout(2000);
+      assert.ok(gameHits(t) >= 1, "Live-Ansicht hat geladen");
+      assert.equal(await cacheHasY(tvPage), false, "Live-Ansicht schreibt das geloeschte Spiel nicht zurueck");
+      await listPage.reload(); await listPage.waitForTimeout(100);
+      assert.equal(await listPage.locator(".game-card").count(), 1, "nach Neuladen sofort (aus dem Cache) nicht mehr da");
+    });
+    await del.close();
     assert.deepEqual(errors, [], "keine Seitenfehler");
     console.log(`TV-Hintergrund E2E: ${results.length} Schritte OK`);
   } finally { await browser.close(); await web.close(); server.close(); }
