@@ -7,7 +7,7 @@ export const registerServiceWorker = (): void => {
       .then((registration) => {
         // Bei jedem Sichtbarwerden nach neuem SW suchen (neue Deploys kommen sicher an).
         document.addEventListener("visibilitychange", () => {
-          if (!document.hidden) void registration.update().catch(() => undefined);
+          if (!document.hidden) void registration?.update().catch(() => undefined);
         });
       })
       .catch(() => undefined);

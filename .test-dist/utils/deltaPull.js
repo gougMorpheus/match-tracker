@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
+exports.getResumeSyncDelayMs = exports.canRefreshNow = exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 // Delta-Abgleich (#679, Egress): Statt bei jedem Abgleich alle Spiele mit allen Events zu laden, wird eine schlanke
 // Liste (id, version, flow_version; geloeschte schon serverseitig gefiltert) geholt. Volle Zeilen bzw. Events nur fuer
@@ -160,3 +160,12 @@ const getLiveViewPause = (entry, liveSinceMs, now) => {
     return now - last >= exports.LIVE_VIEW_IDLE_MS ? "idle" : null;
 };
 exports.getLiveViewPause = getLiveViewPause;
+// Darf jetzt vom Server geladen werden? Normal nur sichtbar und online (Egress). Ausnahme Live-Ansicht (TV/Zuschauer) eines
+// Spiels ohne eigene ausstehende Aenderungen: auch im Hintergrund-Tab, aber nur auf Anlass (Start, Realtime-Meldung zum
+// eigenen Spiel, Rueckkehr) - der Takt (Polling) bleibt im Hintergrund aus. Sonst zeigte ein im Hintergrund geoeffneter
+// TV-Tab dauerhaft den lokalen Stand des anderen Tabs ("Noch kein Sync") und zog erst nach dem Umschalten nach (Pepper 22.10.).
+const canRefreshNow = (input) => input.online && (!input.hidden || (Boolean(input.liveGameId) && input.queueLength === 0));
+exports.canRefreshNow = canRefreshNow;
+// Rueckkehr in den Tab: Live-Ansicht sofort laden, sonst kurz warten (Netz nach dem Aufwachen).
+const getResumeSyncDelayMs = (liveView, defaultDelayMs) => (liveView ? 0 : defaultDelayMs);
+exports.getResumeSyncDelayMs = getResumeSyncDelayMs;

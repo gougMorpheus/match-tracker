@@ -11,7 +11,7 @@ import { createTvSnapshot, deriveGameHighlights, deriveScoreLeadHighlights, dete
 import { getNowIso, formatDuration } from "../utils/time";
 import type { Game } from "../types/game";
 import {
-  getCurrentRoundNumber, getCurrentTurnNumber, getActiveTurn, isSetupActive,
+  getCurrentRoundNumber, getCurrentTurnNumber, getActiveTurn, isSetupActive, getShownActivePlayerId,
   getPlayerComparablePrimaryScore, getPlayerComparableSecondaryScore, getPlayerComparableTotalScore,
   getPlayerCommandPoints, getPlayerTurnDurationTotalMs, getSetupDurationMs, getTurnDurationMs,
   getPlayerRoundScoreTotal, getPlayerCurrentRoundCommandPointsGained, getPlayerCurrentRoundCommandPointsSpent,
@@ -98,7 +98,7 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false, onShareLink
   const status = getTvStatusLabel({ completed, timeout, running, started: Boolean(game.startedAt), hasTurn: Boolean(turn), turnMs: turn ? getTurnDurationMs(turn, game) : 0 });
   // Kopfzeile und „Am Zug“ zeigen den aktiven Zug (wie die Zeiten), nicht den neuesten (Pepper 22.10.: nach Zurück R1Z1/ZZ-B aktiv, TV zeigte R1Z2/ZZ-A).
   const phase = completed ? "Spiel beendet" : turn ? `Runde ${turn.roundNumber} · Zug ${turn.turnNumber}` : "Aufstellung";
-  const activePlayerId = turn?.playerId ?? game.currentPlayerId;
+  const activePlayerId = getShownActivePlayerId(game, turn, setupPhaseActive || (!turn && !completed));
   const phaseMs = timeout ? getTimeoutDurationMs(game) : turn ? getTurnDurationMs(turn, game) : getSetupDurationMs(game);
   const fullscreenSupported = typeof document !== "undefined" && Boolean(
     document.documentElement.requestFullscreen || (document.documentElement as FullscreenElement).webkitRequestFullscreen

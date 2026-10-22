@@ -39,7 +39,7 @@ import {
   mapSupabaseGameToAppGame,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
-import { RemoteGameCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
+import { RemoteGameCache, canRefreshNow, getResumeSyncDelayMs, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -219,6 +219,9 @@ const HISTORY_LIMIT = 50;
 const RESUME_SYNC_DELAY_MS = 1200;
 const SYNC_RETRY_BASE_DELAY_MS = 2000;
 const SYNC_RETRY_MAX_DELAY_MS = 60000;
+
+const isBrowserOnline = (): boolean => typeof navigator === "undefined" || navigator.onLine;
+const isDocumentHidden = (): boolean => typeof document !== "undefined" && document.hidden;
 
 const canAttemptRemoteSync = (): boolean =>
   typeof document === "undefined" ||
@@ -1112,7 +1115,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const refreshGames = useCallback(async () => {
-    if (!canAttemptRemoteSync()) {
+    if (!canRefreshNow({ hidden: isDocumentHidden(), online: isBrowserOnline(), liveGameId: getLiveGameId(), queueLength: queueRef.current.length })) {
       setIsLoading(false);
       return;
     }
@@ -1147,7 +1150,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   refreshGamesRef.current = refreshGames;
 
   const scheduleRemoteRefresh = useCallback(() => {
-    if (!canAttemptRemoteSync()) {
+    if (!canRefreshNow({ hidden: isDocumentHidden(), online: isBrowserOnline(), liveGameId: getLiveGameId(), queueLength: queueRef.current.length })) {
       return;
     }
 
@@ -1211,7 +1214,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       resumeSyncTimerRef.current = window.setTimeout(() => {
         resumeSyncTimerRef.current = null;
         void refreshGames();
-      }, RESUME_SYNC_DELAY_MS);
+      }, getResumeSyncDelayMs(Boolean(getLiveGameId()), RESUME_SYNC_DELAY_MS));
     };
 
     window.addEventListener("online", handleOnline);
