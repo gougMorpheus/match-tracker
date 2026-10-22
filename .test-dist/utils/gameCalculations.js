@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCompletedGameDurationMs = exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.removeExcludedStatsGames = exports.isGameExcludedFromStats = exports.isStatsEligibleGame = exports.getCountedRounds = exports.createStatsEligibilityReport = void 0;
-exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getActiveTurn = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = void 0;
+exports.getGameDurationMs = exports.getGameBaseDurationMs = exports.getCompletedRoundDurationMs = exports.getRoundDurationMs = exports.getRoundBaseDurationMs = exports.isSetupRunning = exports.isSetupPaused = exports.isSetupActive = exports.getSetupDurationMs = exports.isSetupSegmentOpen = exports.getSetupBaseDurationMs = exports.getCompletedTurnDurationMs = exports.getTurnDurationMs = exports.getSetupCorrectionMs = exports.getTotalCorrectionMs = exports.getRoundCorrectionMs = exports.getTurnCorrectionMs = exports.getTurnBaseDurationMs = exports.getPlayerCurrentRoundCommandPointsSpent = exports.getPlayerCurrentRoundCommandPointsGained = exports.getPlayerCommandPointsSpent = exports.getPlayerCommandPointsGained = exports.getPlayerCommandPoints = exports.getPlayerCommandPointEvents = exports.getPlayerCurrentRoundTotalScore = exports.getPlayerCurrentRoundChallengeTotal = exports.getPlayerCurrentRoundSecondaryTotal = exports.getPlayerCurrentRoundPrimaryTotal = exports.getPlayerRoundScoreTotal = exports.hasComparableCommandPointData = exports.getPlayerComparableTotalScore = exports.getPlayerComparableSecondaryScore = exports.getPlayerComparablePrimaryScore = exports.hasLegacyRoundTotalScoreData = exports.hasComparableTotalScoreData = exports.hasDetailedScoreData = exports.getPlayerTotalScore = exports.getPlayerLegacyRoundTotal = exports.getPlayerChallengeTotal = exports.getPlayerSecondaryTotal = exports.getPlayerPrimaryTotal = exports.getPlayerScoreTotal = exports.getPlayerScoreEvents = exports.prepareGamesForStats = exports.prepareGameForStats = exports.removeExcludedStatsGames = exports.isGameExcludedFromStats = exports.isStatsEligibleGame = exports.getCountedRounds = exports.createStatsEligibilityReport = void 0;
+exports.getTurnRecords = exports.createCpScoreCorrelationPoints = exports.createPlayerTurnDurationAggregates = exports.createRoundScoreAggregates = exports.createRoundDurationAggregates = exports.createMatchupAggregates = exports.createArmyAggregates = exports.createStatsOverview = exports.filterGames = exports.getFilterOptions = exports.createInitialGameFilters = exports.createScenarioPerformanceAggregates = exports.createDeploymentLeaders = exports.createMissionLeaders = exports.createPlayerAggregates = exports.createGameSummary = exports.getCurrentTurnNumber = exports.getCurrentRoundNumber = exports.isTurnPaused = exports.isTurnActive = exports.isRoundActive = exports.getActiveTurn = exports.getLatestTurn = exports.getLatestRound = exports.getPlayerTurnDurationTotalMs = exports.isTimeoutActive = exports.getOfficialStatsGameDurationMs = exports.getCompletedGameDurationMs = void 0;
 exports.getTimeoutDurationMs = getTimeoutDurationMs;
 const timeEventOrder_1 = require("./timeEventOrder");
 const time_1 = require("./time");
@@ -427,6 +427,25 @@ const getSetupBaseDurationMs = (game, includeOpenSetup = true) => {
     return total;
 };
 exports.getSetupBaseDurationMs = getSetupBaseDurationMs;
+// Laeuft gerade ein Aufstellungs-Abschnitt (gestartet, nicht abgeschlossen)? Gleiche Abschnittslogik wie
+// getSetupBaseDurationMs. Nach gestoppter Navigation zurueck in die Aufstellung (setup-pause als Markierung nach einem
+// abgeschlossenen Abschnitt) ist keiner offen -> "Timer an" muss dann setup-start schreiben, nicht setup-resume.
+const isSetupSegmentOpen = (game) => {
+    let open = false;
+    let closed = false;
+    (0, timeEventOrder_1.orderTimeEventsForEvaluation)(game.timeEvents).forEach((event) => {
+        if (event.action === "game-start" && !open && !closed)
+            open = true;
+        else if (event.action === "setup-start")
+            open = true;
+        else if (open && (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start" || event.action === "turn-resume")) {
+            open = false;
+            closed = true;
+        }
+    });
+    return open;
+};
+exports.isSetupSegmentOpen = isSetupSegmentOpen;
 const getSetupDurationMs = (game) => clampFloor((0, exports.getSetupBaseDurationMs)(game) + (0, exports.getSetupCorrectionMs)(game));
 exports.getSetupDurationMs = getSetupDurationMs;
 // Aufstellung aktiv: letzter Aufstellungs-Event ist kein setup-end und danach ist kein Zug gestartet/weitergelaufen
@@ -527,12 +546,27 @@ const getLatestTurn = (game) => (() => {
 exports.getLatestTurn = getLatestTurn;
 // Aktiver Zug (Tim 22.10.: genau EIN Zug zaehlt): der laufende Zug; ist der Timer gestoppt, der zuletzt pausierte offene
 // Zug (dort wurde gestoppt); sonst der neueste Zug. Nach dem Neuladen und fuer Zuschauer/TV ist das der Zug, in dem die Zeit zaehlt.
+// Ereignisse, die einen Zug anwaehlen (turn-end schliesst nur und zaehlt nicht).
+const TURN_SELECT_ACTIONS = new Set(["turn-start", "turn-resume", "turn-pause"]);
 const getActiveTurn = (game) => {
     const turns = game.rounds.flatMap((round) => round.turns);
     const openTurns = turns.filter((turn) => turn.timing.startedAt && !turn.timing.endedAt);
     const running = openTurns.find((turn) => !(0, exports.isTurnPaused)(turn));
     if (running)
         return running;
+    // Gestoppter Timer: der Zug des letzten Zug-Ereignisses. Navigation bei gestopptem Timer schreibt dafuer eine zeitneutrale
+    // Markierung (turn-pause auf den Zielzug), damit der gewaehlte Zug gespeichert und auf allen Geraeten aktiv ist (Pepper 22.10.).
+    // Abgeschlossene Spiele: wie bisher (offener pausierter bzw. neuester Zug).
+    const completed = Boolean(game.endedAt) || game.timeEvents.some((event) => event.action === "game-end");
+    const turnEvents = completed
+        ? []
+        : (0, timeEventOrder_1.orderTimeEventsForEvaluation)(game.timeEvents.filter((event) => event.roundNumber && event.turnNumber && TURN_SELECT_ACTIONS.has(event.action)));
+    const lastTurnEvent = turnEvents[turnEvents.length - 1];
+    const marked = lastTurnEvent
+        ? turns.find((turn) => turn.roundNumber === lastTurnEvent.roundNumber && turn.turnNumber === lastTurnEvent.turnNumber && turn.timing.startedAt)
+        : undefined;
+    if (marked)
+        return marked;
     const lastPauseStart = (turn) => turn.timing.pauses[turn.timing.pauses.length - 1]?.startedAt ?? "";
     const paused = openTurns.reduce((best, turn) => (!best || lastPauseStart(turn) > lastPauseStart(best) ? turn : best), undefined);
     return paused ?? (0, exports.getLatestTurn)(game);

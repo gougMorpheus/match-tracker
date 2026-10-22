@@ -690,6 +690,23 @@ export const getSetupBaseDurationMs = (game: Game, includeOpenSetup = true): num
   return total;
 };
 
+// Laeuft gerade ein Aufstellungs-Abschnitt (gestartet, nicht abgeschlossen)? Gleiche Abschnittslogik wie
+// getSetupBaseDurationMs. Nach gestoppter Navigation zurueck in die Aufstellung (setup-pause als Markierung nach einem
+// abgeschlossenen Abschnitt) ist keiner offen -> "Timer an" muss dann setup-start schreiben, nicht setup-resume.
+export const isSetupSegmentOpen = (game: Game): boolean => {
+  let open = false;
+  let closed = false;
+  orderTimeEventsForEvaluation(game.timeEvents).forEach((event) => {
+    if (event.action === "game-start" && !open && !closed) open = true;
+    else if (event.action === "setup-start") open = true;
+    else if (open && (event.action === "setup-end" || event.action === "round-start" || event.action === "turn-start" || event.action === "turn-resume")) {
+      open = false;
+      closed = true;
+    }
+  });
+  return open;
+};
+
 export const getSetupDurationMs = (game: Game): number =>
   clampFloor(getSetupBaseDurationMs(game) + getSetupCorrectionMs(game));
 
@@ -835,11 +852,28 @@ export const getLatestTurn = (game: Game): Turn | undefined =>
 
 // Aktiver Zug (Tim 22.10.: genau EIN Zug zaehlt): der laufende Zug; ist der Timer gestoppt, der zuletzt pausierte offene
 // Zug (dort wurde gestoppt); sonst der neueste Zug. Nach dem Neuladen und fuer Zuschauer/TV ist das der Zug, in dem die Zeit zaehlt.
+// Ereignisse, die einen Zug anwaehlen (turn-end schliesst nur und zaehlt nicht).
+const TURN_SELECT_ACTIONS = new Set(["turn-start", "turn-resume", "turn-pause"]);
+
 export const getActiveTurn = (game: Game): Turn | undefined => {
   const turns = game.rounds.flatMap((round) => round.turns);
   const openTurns = turns.filter((turn) => turn.timing.startedAt && !turn.timing.endedAt);
   const running = openTurns.find((turn) => !isTurnPaused(turn));
   if (running) return running;
+  // Gestoppter Timer: der Zug des letzten Zug-Ereignisses. Navigation bei gestopptem Timer schreibt dafuer eine zeitneutrale
+  // Markierung (turn-pause auf den Zielzug), damit der gewaehlte Zug gespeichert und auf allen Geraeten aktiv ist (Pepper 22.10.).
+  // Abgeschlossene Spiele: wie bisher (offener pausierter bzw. neuester Zug).
+  const completed = Boolean(game.endedAt) || game.timeEvents.some((event) => event.action === "game-end");
+  const turnEvents = completed
+    ? []
+    : orderTimeEventsForEvaluation(
+        game.timeEvents.filter((event) => event.roundNumber && event.turnNumber && TURN_SELECT_ACTIONS.has(event.action))
+      );
+  const lastTurnEvent = turnEvents[turnEvents.length - 1];
+  const marked = lastTurnEvent
+    ? turns.find((turn) => turn.roundNumber === lastTurnEvent.roundNumber && turn.turnNumber === lastTurnEvent.turnNumber && turn.timing.startedAt)
+    : undefined;
+  if (marked) return marked;
   const lastPauseStart = (turn: Turn) => turn.timing.pauses[turn.timing.pauses.length - 1]?.startedAt ?? "";
   const paused = openTurns.reduce<Turn | undefined>(
     (best, turn) => (!best || lastPauseStart(turn) > lastPauseStart(best) ? turn : best),

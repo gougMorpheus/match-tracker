@@ -15,11 +15,17 @@ export interface TurnSelectionInput {
   setupStarted: boolean;
   // Laeuft die Aufstellung, ist sie die aktive Phase (Sprung nach Rueckgaengig eines Timer-Eintrags).
   setupRunning?: boolean;
+  // Bearbeitbares Spiel: die Auswahl IST die aktive Phase (Tim 22.10.: keine reine Ansicht). Jede Navigation schreibt
+  // Ereignisse (bei gestopptem Timer zeitneutrale Markierungen), daher folgt die Auswahl immer der Auswertung.
+  followActive?: boolean;
+  setupActive?: boolean;
 }
 
 export const resolveSelectedTurnKey = ({
-  current, previousLatestKey, latestKey, turnKeys, snapToLatest, setupStarted, setupRunning = false
+  current, previousLatestKey, latestKey, turnKeys, snapToLatest, setupStarted, setupRunning = false,
+  followActive = false, setupActive = false
 }: TurnSelectionInput): string | null => {
+  if (followActive) return setupActive && setupStarted ? SETUP_TURN_KEY : latestKey;
   if (snapToLatest && setupRunning && setupStarted) return SETUP_TURN_KEY;
   if (!latestKey) return null;
   if (snapToLatest || !current) return latestKey;

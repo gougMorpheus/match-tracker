@@ -3,6 +3,22 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-22 – Navigation bei gestopptem Timer macht den Zielzug aktiv, gespeichert und rückgängig machbar
+- Fehlerbild A (Pepper-Nachtest von #42): Bei gestopptem Timer Weiter Z1→Z2: Editor auf Z2, TV (auch nach Neuladen) auf R1Z1; umgekehrt bei Zurück. Ursache: Gestoppte Navigation schrieb kein Ereignis (nur lokale Auswahl), andere Geräte und das Neuladen sahen den alten Zug.
+- Fehlerbild B: Danach hieß das Rückgängig-Label „Timer aus“. Ein Klick stellte den Timer in Z1 wieder an (Z1 lief von 24s auf 41s), während Z2 angezeigt wurde. Ursache: Der gestoppte Zugwechsel stand nicht im Verlauf, also war „Timer aus“ der oberste Eintrag.
+- Lösung ohne Schemaänderung, mit vorhandenen Ereignistypen als zeitneutrale Markierungen (`selectPhase`):
+  - Zug → Zug X: `turn-pause X`.
+  - Aufstellung → Zug X: `setup-end` + `turn-pause X`.
+  - Zug → Aufstellung: `setup-pause`.
+  - Auf einem beendeten bzw. schon pausierten Zug bzw. nach einem abgeschlossenen Aufstellungs-Abschnitt sind sie in der Auswertung wirkungslos.
+  - `getActiveTurn` nimmt bei gestopptem Timer den Zug des letzten anwählenden Ereignisses (turn-start/-resume/-pause). Abgeschlossene Spiele bleiben wie bisher.
+  - Die Auswahl im bearbeitbaren Spiel folgt immer der aktiven Phase.
+  - Der Zugwechsel steht im Verlauf (advance-turn/rewind-turn). Rückgängig und Wiederholen navigieren und starten nie den Timer.
+  - Navigation im Time-out schreibt ebenfalls die Markierung.
+- Dazu: TV zeigt „Aufstellung“, wenn die Aufstellung aktiv ist, auch wenn R1Z1 schon existiert. „Timer an“ in der Aufstellung ohne offenen Abschnitt schreibt `setup-start` statt eines wirkungslosen `setup-resume`.
+- Alte Spiele (Backup nach-loeschen-zz-97f09c67-041bc597, 44 Spiele): 0 geänderte Zeitwerte. Aktiver Zug nur in einem alten offenen Spiel anders (68e4f663, Aufstellung aktiv, wird ohnehin als Aufstellung gezeigt).
+- Tests: E2E 23 Schritte (A, B mit Wiederholen per langem Druck, Aufstellung gestoppt, Time-out), beide schlagen gegen den alten Code an. Neue Unit-Suite `gestoppteNavigation` (Zeitneutralität lokal und DB-Abbildung, aktiver Zug, Aufstellungs-Abschnitt, Auswahl).
+
 ## 2026-10-22 – TV und Übersicht zeigen den aktiven Zug; Verlaufs-Label, Rückgängig von Timer an/aus, Startspieler nach Neuladen
 - Fehlerbild (Pepper-Retest von 6ada487d): Nach Zurück bzw. Rückgängig war R1Z1 mit ZZ-B aktiv und die Zeiten stimmten. Die TV-Ansicht zeigte aber „Runde 1 · Zug 2“ und ZZ-A „Am Zug“. Ursache: Kopfzeile und „Am Zug“ (TV) sowie „aktueller Zug“ (Übersicht) kamen aus dem neuesten Zug (`getCurrentRoundNumber`/`getCurrentTurnNumber`/`currentPlayerId`), die Zeiten aus `getActiveTurn`. Lösung: alles aus `getActiveTurn`.
 - Rückgängig von „Timer aus“/„Timer an“/Time-out nach einem Zugwechsel bei gestopptem Timer: Der Timer lief danach wieder im alten Zug, die Anzeige blieb aber auf dem angewählten Zug, also verdeckt. Jetzt wird der laufende Zug bzw. die Aufstellung angewählt. Das Label „Timer aus“ bleibt nach einer Navigation bei gestopptem Timer korrekt stehen: Die Navigation schreibt nichts und ist kein Verlaufseintrag.
