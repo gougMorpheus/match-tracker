@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent }
 import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
 import { sortEventsNewestFirst } from "../utils/eventOrder";
 import { resolveSelectedTurnKey, SETUP_TURN_KEY } from "../utils/turnSelection";
+
+// Verlaufseintraege, die den Timer-Zustand aendern (Timer an/aus, Time-out starten/beenden)
+const isTimerHistoryLabel = (label: string): boolean => label.startsWith("Timer ") || label.startsWith("Time-out");
 import { useServerSecondTick } from "../utils/useServerSecondTick";
 import { TvGameView } from "../components/TvGameView";
 import { FloatingMenu } from "../components/FloatingMenu";
@@ -595,7 +598,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       latestKey,
       turnKeys: allTurns.map((turn) => turn.key),
       snapToLatest,
-      setupStarted: game.timeEvents.some((event) => event.action === "setup-start")
+      setupStarted: game.timeEvents.some((event) => event.action === "setup-start"),
+      setupRunning: isSetupRunning(game)
     }));
   }, [activeTurn, allTurns, game]);
 
@@ -1111,6 +1115,9 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       await (wasAdvance ? handleGoBack(false) : handleAdvance(false));
       return;
     }
+    // Rueckgaengig von Timer an/aus bzw. Time-out stellt den Timer-Zustand wieder her; laeuft er danach in einem anderen
+    // Zug, wird dieser angewaehlt (nie verdeckt laufen, Tim 22.10.).
+    if (isTimerHistoryLabel(undoActionLabel)) snapToLatestTurnRef.current = true;
     await undoGameAction(game.id);
   };
 
@@ -1126,6 +1133,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       await (wasAdvance ? handleAdvance(false) : handleGoBack(false));
       return;
     }
+    if (isTimerHistoryLabel(redoActionLabel)) snapToLatestTurnRef.current = true;
     await redoGameAction(game.id);
   };
 

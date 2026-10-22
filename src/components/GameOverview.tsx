@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Game, PlayerId } from "../types/game";
 import {
+  getActiveTurn,
   getCurrentRoundNumber,
   getCurrentTurnNumber,
   getPlayerComparablePrimaryScore,
@@ -294,11 +295,10 @@ export const GameOverview = ({ game }: GameOverviewProps) => {
     [game.commandPointEvents, game.rounds, game.scoreEvents, orderedPlayers]
   );
 
-  const currentRoundNumber = getCurrentRoundNumber(game);
-  const currentTurnNumber = getCurrentTurnNumber(game);
-  const currentTurn = game.rounds
-    .flatMap((round) => round.turns)
-    .find((turn) => turn.roundNumber === currentRoundNumber && turn.turnNumber === currentTurnNumber);
+  // Aktiver Zug (Timer-Regel Tim 22.10.: genau ein aktiver Zug), nicht stur der neueste Zug.
+  const currentTurn = getActiveTurn(game);
+  const currentRoundNumber = currentTurn?.roundNumber ?? getCurrentRoundNumber(game);
+  const currentTurnNumber = currentTurn?.turnNumber ?? getCurrentTurnNumber(game);
   const currentTurnDuration = currentTurn ? formatDuration(getTurnDurationMs(currentTurn, game)) : null;
   const showLiveRoundStats = !isGameCompletedForDisplay(game);
 

@@ -1945,11 +1945,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
           }
 
           if (eventsToAdd.length) {
+            // Verlaufs-Label nennt wie sonst den VERLASSENEN Abschnitt (hier die Aufstellung), nicht das Ziel R1Z1.
             enqueueTimeEvents(
               game,
               eventsToAdd,
-              "Weiter",
-              setupTurn ?? currentTurn ?? null,
+              "Weiter Aufstellung",
+              null,
               recordHistory ? "advance-turn" : "snapshot",
               recordHistory,
               (nextGame) =>
@@ -2014,14 +2015,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
               });
             }
 
+            // Label nennt den verlassenen Abschnitt (Aufstellung), wie "Weiter R1 Z1" = aus R1Z1 heraus.
             enqueueTimeEvents(
               game,
               eventsToAdd,
-              "Weiter",
-              {
-                roundNumber: 1,
-                turnNumber: 1
-              },
+              "Weiter Aufstellung",
+              null,
               recordHistory ? "advance-turn" : "snapshot",
               recordHistory,
               (nextGame) =>

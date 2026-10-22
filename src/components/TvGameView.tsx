@@ -94,7 +94,9 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false, onShareLink
   const timeout = isTimeoutActive(game) && !completed;
   const running = !completed && (isSetupRunning(game) || Boolean(turn?.timing.startedAt && !turn.timing.endedAt && !isTurnPaused(turn)));
   const status = getTvStatusLabel({ completed, timeout, running, started: Boolean(game.startedAt), hasTurn: Boolean(turn), turnMs: turn ? getTurnDurationMs(turn, game) : 0 });
-  const phase = completed ? "Spiel beendet" : turn ? `Runde ${getCurrentRoundNumber(game)} · Zug ${getCurrentTurnNumber(game)}` : "Aufstellung";
+  // Kopfzeile und „Am Zug“ zeigen den aktiven Zug (wie die Zeiten), nicht den neuesten (Pepper 22.10.: nach Zurück R1Z1/ZZ-B aktiv, TV zeigte R1Z2/ZZ-A).
+  const phase = completed ? "Spiel beendet" : turn ? `Runde ${turn.roundNumber} · Zug ${turn.turnNumber}` : "Aufstellung";
+  const activePlayerId = turn?.playerId ?? game.currentPlayerId;
   const phaseMs = timeout ? getTimeoutDurationMs(game) : turn ? getTurnDurationMs(turn, game) : getSetupDurationMs(game);
   const fullscreenSupported = typeof document !== "undefined" && Boolean(
     document.documentElement.requestFullscreen || (document.documentElement as FullscreenElement).webkitRequestFullscreen
@@ -206,7 +208,7 @@ export const TvGameView = ({ game, menu, fullscreenDocument = false, onShareLink
   }));
   const chartAvailable = game.scoreDetailLevel === "full" || game.scoreEvents.some(e => e.scoreType === "legacy-total" && e.roundNumber !== undefined);
   const renderPlayer = (i: number) => {
-    const p = game.players[i], active = !completed && game.currentPlayerId === p.id;
+    const p = game.players[i], active = !completed && activePlayerId === p.id;
     return <section style={playerStyle(i)} className={`tv-panel tv-player${active ? " tv-player--active" : ""}`}>
       <div className="tv-player__identity"><div><h1 title={p.name}>{p.name}</h1><p title={p.army.name}>{p.army.name}</p></div>
         <span className="tv-chip">{active ? "Am Zug" : `Spieler ${i + 1}`}</span></div>

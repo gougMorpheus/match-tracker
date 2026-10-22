@@ -158,6 +158,52 @@ const runZurueckTimerTests = () => {
   const tv = read("src/components/TvGameView.tsx");
   assert.match(tv, /\{onShareLink \? <button type="button" className="tv-game__share" onClick=\{onShareLink\}>Link teilen<\/button> : null\}/);
   assert.ok(tv.indexOf("tv-game__share") > tv.indexOf('className="tv-game__controls"'), "Knopf in der TV-Leiste (neben Full screen)");
+
+  // #42 (Pepper 22.10.): TV-Kopfzeile, "Am Zug" und Uebersicht folgen dem AKTIVEN Zug, nicht dem neuesten
+  assert.match(tv, /turn \? `Runde \$\{turn\.roundNumber\} · Zug \$\{turn\.turnNumber\}`/, "TV-Kopfzeile aus dem aktiven Zug");
+  assert.match(tv, /const activePlayerId = turn\?\.playerId \?\? game\.currentPlayerId;/);
+  assert.match(tv, /active = !completed && activePlayerId === p\.id;/, "TV: Am Zug = Spieler des aktiven Zugs");
+  assert.match(read("src/components/GameOverview.tsx"), /const currentTurn = getActiveTurn\(game\);/, "Uebersicht: aktueller Zug = aktiver Zug");
+  {
+    // Szenario Pepper: R1Z1 (ZZ-A) beendet, R1Z2 (ZZ-B) laeuft, Zurueck bei laufendem Timer -> R1Z1 aktiv
+    const g0 = createBaseGame({ id: "tv-aktiv" }); const [a1, b1] = g0.players.map((pl) => pl.id);
+    const t0 = Date.parse("2026-10-22T18:00:00.000Z"); const iso = (sec) => new Date(t0 + sec * 1000).toISOString();
+    const g = appendLocalTimeEvents(g0, [
+      { action: "game-start", playerId: a1, createdAt: iso(0) },
+      { action: "round-start", playerId: a1, roundNumber: 1, createdAt: iso(0) },
+      { action: "turn-start", playerId: a1, roundNumber: 1, turnNumber: 1, createdAt: iso(0) },
+      { action: "turn-end", playerId: a1, roundNumber: 1, turnNumber: 1, createdAt: iso(60) },
+      { action: "turn-start", playerId: b1, roundNumber: 1, turnNumber: 2, createdAt: iso(60) },
+      { action: "turn-pause", playerId: b1, roundNumber: 1, turnNumber: 2, createdAt: iso(120) },
+      { action: "turn-resume", playerId: a1, roundNumber: 1, turnNumber: 1, createdAt: iso(120) }
+    ]);
+    const active = calc.getActiveTurn(g);
+    assert.deepEqual([active.roundNumber, active.turnNumber, active.playerId], [1, 1, a1], "aktiver Zug R1Z1 (ZZ-A)");
+    assert.equal(calc.getCurrentTurnNumber(g), 2, "neuester Zug bleibt R1Z2 - darf fuer die Anzeige nicht genutzt werden");
+  }
+
+  // Punkt 4: Verlaufs-Label nennt den verlassenen Abschnitt; Aufstellung -> R1Z1 heisst "Weiter Aufstellung"
+  assert.equal((store.match(/"Weiter Aufstellung",\s*null,/g) || []).length, 2, "beide Aufstellungs-Zweige");
+  assert.match(page, /const isTimerHistoryLabel = \(label: string\): boolean => label\.startsWith\("Timer "\) \|\| label\.startsWith\("Time-out"\);/);
+  assert.match(page, /if \(isTimerHistoryLabel\(undoActionLabel\)\) snapToLatestTurnRef\.current = true;\s*await undoGameAction\(game\.id\);/);
+  assert.match(page, /if \(isTimerHistoryLabel\(redoActionLabel\)\) snapToLatestTurnRef\.current = true;\s*await redoGameAction\(game\.id\);/);
+  {
+    const { resolveSelectedTurnKey, SETUP_TURN_KEY } = require("../.test-dist/utils/turnSelection.js");
+    const base = { current: "1-1", previousLatestKey: "1-1", latestKey: "1-1", turnKeys: ["1-1", "1-2"], setupStarted: true };
+    assert.equal(resolveSelectedTurnKey({ ...base, snapToLatest: true, setupRunning: true }), SETUP_TURN_KEY, "Undo Timer aus in der Aufstellung -> Aufstellung angewaehlt");
+    assert.equal(resolveSelectedTurnKey({ ...base, current: "1-2", snapToLatest: true, setupRunning: false }), "1-1", "Undo -> laufender Zug angewaehlt");
+  }
+
+  // Punkt 5: Startspieler-Dialog bleibt nach Neuladen aus dem lokalen Cache erhalten (leerer Startspieler bleibt leer)
+  {
+    const { mapPersistedGame } = require("../.test-dist/utils/gameState.js");
+    const g0 = createBaseGame({ id: "ohne-start" });
+    assert.equal(mapPersistedGame({ ...g0, startingPlayerId: "" }).startingPlayerId, "", "kein stilles Setzen von Spieler 1");
+    const legacy = { ...g0 }; delete legacy.startingPlayerId;
+    const mapped = mapPersistedGame(legacy);
+    assert.equal(mapped.startingPlayerId, mapped.players[0].id, "Altdaten ohne Feld: Fallback Spieler 1");
+  }
+  assert.match(page, /const needsStartingPlayerBeforeFirstTurn = !game\.startingPlayerId && \(isSetupSelected \|\| !latestRound\);/);
 };
 
 module.exports = { runZurueckTimerTests };

@@ -13,11 +13,14 @@ export interface TurnSelectionInput {
   turnKeys: string[];
   snapToLatest: boolean;
   setupStarted: boolean;
+  // Laeuft die Aufstellung, ist sie die aktive Phase (Sprung nach Rueckgaengig eines Timer-Eintrags).
+  setupRunning?: boolean;
 }
 
 export const resolveSelectedTurnKey = ({
-  current, previousLatestKey, latestKey, turnKeys, snapToLatest, setupStarted
+  current, previousLatestKey, latestKey, turnKeys, snapToLatest, setupStarted, setupRunning = false
 }: TurnSelectionInput): string | null => {
+  if (snapToLatest && setupRunning && setupStarted) return SETUP_TURN_KEY;
   if (!latestKey) return null;
   if (snapToLatest || !current) return latestKey;
   if (current === SETUP_TURN_KEY && setupStarted) return current;
