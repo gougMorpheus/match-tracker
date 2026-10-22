@@ -43,22 +43,37 @@ const runBerlinZeitTests = () => {
 };
 
 const runQueueCacheTests = () => {
-  const { dropSettledForeignQueueItems, mergeLiveGameIntoCache } = require("../.test-dist/utils/deltaPull.js");
-  // TV-Tab (View only fuer "tv") hat beim Start den Eintrag q1 des Editor-Tabs uebernommen; der Editor hat ihn gesendet.
-  const own = [{ id: "q1", gameId: "tv" }, { id: "q2", gameId: "andere" }, { id: "q3", gameId: "tv" }];
-  const viewOnly = (gameId) => gameId === "tv";
-  assert.deepEqual(dropSettledForeignQueueItems(own, [{ id: "q3", gameId: "tv" }], viewOnly).map((i) => i.id), ["q2", "q3"],
-    "gesendeter fremder Eintrag faellt weg, noch wartender bleibt, eigene sendbare bleiben");
-  assert.equal(dropSettledForeignQueueItems(own, own, viewOnly), own, "unveraendert -> gleiche Liste (kein Neuladen)");
-  assert.deepEqual(dropSettledForeignQueueItems(own, [], () => false), own, "ohne View only: nichts entfernen");
+  const { reconcileQueueWithStorage, mergeQueueWrite, canSendQueueNow, mergeLiveGameIntoCache } = require("../.test-dist/utils/deltaPull.js");
+  // #45/#46: TV-Tab hat beim Start q1 (Editor) uebernommen; der Editor hat q1 gesendet. q9 hat dieser Tab selbst angelegt.
+  const own = [{ id: "q1", gameId: "tv" }, { id: "q3", gameId: "tv" }, { id: "q9", gameId: "x" }];
+  const r1 = reconcileQueueWithStorage(own, [{ id: "q3", gameId: "tv" }], new Set(["q9"]));
+  assert.deepEqual(r1.queue.map((i) => i.id), ["q3", "q9"], "gesendeter fremder Eintrag faellt weg, eigener bleibt immer");
+  assert.deepEqual(r1.missingOwned.map((i) => i.id), ["q9"], "eigener fehlender Eintrag wird zurueckgeschrieben");
+  const r2 = reconcileQueueWithStorage(own, own, new Set()); assert.equal(r2.queue, own, "unveraendert -> gleiche Liste (kein Neuladen)");
+  // Schreiben = nur die eigene Aenderung (Variante 2 / zweiter Tab): fremde ungesendete Eintraege bleiben
+  const stored = [{ id: "a1" }, { id: "a2" }, { id: "b0" }];
+  assert.deepEqual(mergeQueueWrite(stored, [{ id: "a1" }, { id: "b0" }], [{ id: "a1" }, { id: "b0" }, { id: "b1" }], new Set(["b1"])).map((i) => i.id),
+    ["a1", "a2", "b0", "b1"], "neuer Eintrag kommt dazu, a2 (anderer Tab, hier unbekannt) bleibt");
+  assert.deepEqual(mergeQueueWrite(stored, [{ id: "a1" }, { id: "b0" }], [{ id: "b0" }], new Set()).map((i) => i.id), ["a2", "b0"],
+    "nur selbst entfernte (gesendete) fallen weg");
+  assert.deepEqual(mergeQueueWrite(stored, [{ id: "b0", v: 1 }], [{ id: "b0", v: 2 }], new Set()), [{ id: "a1" }, { id: "a2" }, { id: "b0", v: 2 }],
+    "Rebase ersetzt nur den eigenen Eintrag");
+  assert.deepEqual(mergeQueueWrite([{ id: "a1" }], [{ id: "b5" }, { id: "x" }], [{ id: "b5" }, { id: "x" }, { id: "b6" }], new Set(["b5", "b6"])).map((i) => i.id),
+    ["a1", "b5", "b6"], "eigener ungesendeter Eintrag, der in localStorage fehlt, wird ergaenzt; fremder gesendeter (x) nicht wiederbelebt");
+  assert.equal(canSendQueueNow(true), true, "Senden eigener Aenderungen haengt nicht an der Sichtbarkeit");
+  assert.equal(canSendQueueNow(false), false);
   // Live-Ansicht: nur das eigene Spiel im Cache ersetzen; inzwischen geloeschtes Spiel "weg" bleibt weg.
   const cached = [{ id: "a", v: 1 }]; const memory = [{ id: "tv", v: 2 }, { id: "weg", v: 1 }, { id: "a", v: 0 }];
   assert.deepEqual(mergeLiveGameIntoCache(cached, memory, "tv"), [{ id: "tv", v: 2 }, { id: "a", v: 1 }]);
   assert.deepEqual(mergeLiveGameIntoCache([{ id: "tv", v: 1 }, ...cached], [], "tv"), cached, "Live-Spiel geloescht -> entfernt");
   const store = read("src/store/GameStore.tsx");
-  assert.match(store, /window\.addEventListener\("storage", onStorage\)/, "Queue anderer Tabs wird verfolgt");
-  assert.match(store, /if \(event\.key !== SYNC_QUEUE_KEY\) return;\s*const next = dropSettledForeignQueueItems\(queueRef\.current, loadSyncQueue\(\), isGameViewOnly\);/);
-  assert.match(store, /if \(queueFromStorageRef\.current === syncQueue\) return;\s*saveSyncQueue\(syncQueue\);/, "uebernommene Queue nicht zurueckschreiben");
+  assert.match(store, /window\.addEventListener\("storage", onStorage\);\s*reconcile\(\);/, "Queue anderer Tabs wird verfolgt (auch direkt nach dem Start)");
+  assert.equal((store.match(/saveSyncQueue\(/g) || []).length, 2, "nur zwei Schreibstellen");
+  assert.match(store, /saveSyncQueue\(mergeQueueWrite\(loadSyncQueue\(\), previousQueue, nextQueue, ownedQueueIdsRef\.current\)\);/, "frisch lesen, zusammenfuehren");
+  assert.match(store, /if \(missingOwned\.length\) saveSyncQueue\(\[\.\.\.stored, \.\.\.missingOwned\]\);/);
+  assert.match(store, /useEffect\(\(\) => \{\s*queueRef\.current = syncQueue;\s*\}, \[syncQueue\]\);/, "kein Zurueckschreiben der ganzen Queue (auch nicht beim Start)");
+  assert.equal((store.match(/canSendQueueNow\(isBrowserOnline\(\)\)/g) || []).length, 4, "Senden/Nachsenden: Retry, Flush, Queue-Effekt, Hintergrund-Refresh");
+  assert.match(store, /if \(isDocumentHidden\(\) && canSendQueueNow\(isBrowserOnline\(\)\) && queueRef\.current\.some\(\(item\) => !isGameViewOnly\(item\.gameId\)\)\) \{\s*\/\/[^\n]*\n\s*await flushSyncQueue\(\);/);
   assert.match(store, /saveCachedGames\(liveGameId \? mergeLiveGameIntoCache\(loadCachedGames\(\), nextGames, liveGameId\) : nextGames\);/);
   const live = store.slice(store.indexOf("const loadLiveGame = useCallback"), store.indexOf("const resumeLiveView"));
   assert.ok(!/saveCachedGames\(/.test(live), "Live-Laden schreibt nicht mehr die ganze Liste in den Cache");

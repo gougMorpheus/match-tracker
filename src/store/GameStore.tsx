@@ -39,7 +39,7 @@ import {
   mapSupabaseGameToAppGame,
   type UpdateSupabaseEventPayload
 } from "../services/gamesRepository";
-import { RemoteGameCache, canRefreshNow, dropSettledForeignQueueItems, getResumeSyncDelayMs, mergeLiveGameIntoCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
+import { RemoteGameCache, canRefreshNow, canSendQueueNow, getResumeSyncDelayMs, mergeQueueWrite, reconcileQueueWithStorage, mergeLiveGameIntoCache, getLiveViewPause, getPollIntervalMs, getRealtimeGameId, liveViewBlocksLoad, shouldFullPullOnResume, shouldLiveViewFollowRealtime } from "../utils/deltaPull";
 import type {
   CommandPointType,
   CreateGameInput,
@@ -371,12 +371,11 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     syncRememberedPlayerNames(games);
   }, [games]);
 
-  // Aus localStorage uebernommene Queue (anderer Tab) nicht wieder zurueckschreiben (#45).
-  const queueFromStorageRef = useRef<SyncQueueItem[] | null>(null);
+  // Gemeinsame Queue (#46): nur die eigene Aenderung schreiben (mergeQueueWrite), nie die ganze Liste. In diesem Tab
+  // angelegte, noch ungesendete Eintraege merken (bleiben, bis dieser Tab sie gesendet hat).
+  const ownedQueueIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     queueRef.current = syncQueue;
-    if (queueFromStorageRef.current === syncQueue) return;
-    saveSyncQueue(syncQueue);
   }, [syncQueue]);
 
   const getGameAccessModeForId = useCallback(
@@ -508,9 +507,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
     if (nextQueue === queueRef.current) {
       return;
     }
+    const previousQueue = queueRef.current;
+    nextQueue.forEach((item) => { if (!existingIds.has(item.id)) ownedQueueIdsRef.current.add(item.id); });
+    previousQueue.forEach((item) => { if (!nextQueue.some((next) => next.id === item.id)) ownedQueueIdsRef.current.delete(item.id); });
     queueRef.current = nextQueue;
     setSyncQueue(nextQueue);
-    saveSyncQueue(nextQueue);
+    saveSyncQueue(mergeQueueWrite(loadSyncQueue(), previousQueue, nextQueue, ownedQueueIdsRef.current));
     if (import.meta.env.DEV) {
       console.debug("[sync-queue]", {
         length: nextQueue.length
@@ -805,7 +807,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const scheduleSyncRetry = useCallback(() => {
-    if (!queueRef.current.length || !canAttemptRemoteSync()) {
+    if (!queueRef.current.length || !canSendQueueNow(isBrowserOnline())) {
       return;
     }
 
@@ -878,7 +880,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   pullPendingRef.current = pullRemoteGames;
 
   const flushSyncQueue = useCallback(async (): Promise<boolean> => {
-    if (!canAttemptRemoteSync()) {
+    if (!canSendQueueNow(isBrowserOnline())) {
       setSyncStatus("offline");
       return false;
     }
@@ -1048,6 +1050,14 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       if (droppedConflicts) {
         setSyncNotice(formatConflictNotice(droppedConflicts));
       }
+      if (isDocumentHidden() && !queueRef.current.some((item) => !isGameViewOnly(item.gameId))) {
+        // Hintergrund (#46): alles gesendet. Kein Abgleich (Egress); der folgt beim Sichtbarwerden.
+        retryAttemptRef.current = 0;
+        clearRetryTimer();
+        setLastSyncAt(getNowIso());
+        setSyncStatus(queueRef.current.length ? "pending" : "success");
+        return true;
+      }
       const pulled = await pullRemoteGames();
       if (pulled) {
         retryAttemptRef.current = 0;
@@ -1125,6 +1135,12 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const refreshGames = useCallback(async () => {
+    if (isDocumentHidden() && canSendQueueNow(isBrowserOnline()) && queueRef.current.some((item) => !isGameViewOnly(item.gameId))) {
+      // Hintergrund (#46): eigene Aenderungen trotzdem senden (z. B. nach Offline-Moment), ohne Abgleich (Egress).
+      await flushSyncQueue();
+      setIsLoading(false);
+      return;
+    }
     if (!canRefreshNow({ hidden: isDocumentHidden(), online: isBrowserOnline(), liveGameId: getLiveGameId(), queueLength: queueRef.current.length })) {
       setIsLoading(false);
       return;
@@ -1155,7 +1171,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       await pullRemoteGames();
     }
     setIsLoading(false);
-  }, [flushSyncQueue, getLiveGameId, loadLiveGame, pullRemoteGames]);
+  }, [flushSyncQueue, getLiveGameId, isGameViewOnly, loadLiveGame, pullRemoteGames]);
 
   refreshGamesRef.current = refreshGames;
 
@@ -1185,7 +1201,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
       return;
     }
 
-    if (!canAttemptRemoteSync()) {
+    if (!canSendQueueNow(isBrowserOnline())) {
       setSyncStatus("offline");
       return;
     }
@@ -1242,14 +1258,15 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   }, [refreshGames]);
 
   useEffect(() => {
-    // Queue eines anderen Tabs geaendert (#45): dort inzwischen gesendete Eintraege gesperrter Spiele hier entfernen,
-    // dann die Live-Ansicht nachladen (Realtime-Meldungen davor wurden wegen des wartenden Eintrags verworfen).
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== SYNC_QUEUE_KEY) return;
-      const next = dropSettledForeignQueueItems(queueRef.current, loadSyncQueue(), isGameViewOnly);
+    // Queue eines anderen Tabs geaendert (#45/#46): uebernommene Eintraege, die dort inzwischen gesendet wurden, hier
+    // entfernen, dann die Live-Ansicht nachladen (Realtime-Meldungen davor wurden wegen des wartenden Eintrags verworfen).
+    // Eigene ungesendete Eintraege bleiben immer und werden, falls sie in localStorage fehlen, wieder ergaenzt.
+    const reconcile = () => {
+      const stored = loadSyncQueue();
+      const { queue: next, missingOwned } = reconcileQueueWithStorage(queueRef.current, stored, ownedQueueIdsRef.current);
+      if (missingOwned.length) saveSyncQueue([...stored, ...missingOwned]);
       if (next === queueRef.current) return;
       queueRef.current = next;
-      queueFromStorageRef.current = next;
       setSyncQueue(next);
       const liveGameId = getLiveGameId();
       if (liveGameId) {
@@ -1257,9 +1274,13 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
         scheduleRemoteRefresh();
       }
     };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SYNC_QUEUE_KEY) reconcile();
+    };
     window.addEventListener("storage", onStorage);
+    reconcile(); // zwischen Start-Lesen und Anmelden des Listeners gesendete Eintraege
     return () => window.removeEventListener("storage", onStorage);
-  }, [getLiveGameId, isGameViewOnly, scheduleRemoteRefresh]);
+  }, [getLiveGameId, scheduleRemoteRefresh]);
 
   useEffect(() => {
     const configError = getSupabaseConfigError();

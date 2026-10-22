@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mergeLiveGameIntoCache = exports.dropSettledForeignQueueItems = exports.getResumeSyncDelayMs = exports.canRefreshNow = exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
+exports.mergeLiveGameIntoCache = exports.canSendQueueNow = exports.reconcileQueueWithStorage = exports.mergeQueueWrite = exports.getResumeSyncDelayMs = exports.canRefreshNow = exports.getLiveViewPause = exports.liveViewBlocksLoad = exports.shouldLiveViewFollowRealtime = exports.LIVE_VIEW_IDLE_MS = exports.getPollIntervalMs = exports.getRealtimeGameId = exports.RemoteGameCache = exports.getLastActivityMs = exports.shouldFullPullOnResume = exports.RESUME_FULL_AFTER_HIDDEN_MS = exports.FULL_EVENTS_WINDOW_MS = exports.ACTIVE_WINDOW_MS = exports.FULL_PULL_INTERVAL_MS = void 0;
 const supabaseGameMapping_1 = require("./supabaseGameMapping");
 // Delta-Abgleich (#679, Egress): Statt bei jedem Abgleich alle Spiele mit allen Events zu laden, wird eine schlanke
 // Liste (id, version, flow_version; geloeschte schon serverseitig gefiltert) geholt. Volle Zeilen bzw. Events nur fuer
@@ -169,17 +169,38 @@ exports.canRefreshNow = canRefreshNow;
 // Rueckkehr in den Tab: Live-Ansicht sofort laden, sonst kurz warten (Netz nach dem Aufwachen).
 const getResumeSyncDelayMs = (liveView, defaultDelayMs) => (liveView ? 0 : defaultDelayMs);
 exports.getResumeSyncDelayMs = getResumeSyncDelayMs;
-// Queue anderer Tabs (Pepper 22.10., #45): Alle Tabs teilen die Queue in localStorage, ein Tab liest sie aber nur beim Start.
-// Ein TV-Tab, der geoeffnet wird, waehrend der Editor-Tab noch eine Aenderung sendet, behielt diesen Eintrag fuer immer: im
-// TV (View only) darf er nicht gesendet werden, wurde nie entfernt und blockierte dann das Nachladen im Hintergrund und
-// verwarf jedes Live-Laden (Spiel mit wartender Aenderung). Meldet localStorage eine neue Queue, fallen hier die Eintraege
-// gesperrter (View only) Spiele weg, die der andere Tab inzwischen gesendet hat. Eigene sendbare Eintraege bleiben.
-const dropSettledForeignQueueItems = (own, shared, isViewOnly) => {
-    const sharedIds = new Set(shared.map((item) => item.id));
-    const next = own.filter((item) => !isViewOnly(item.gameId) || sharedIds.has(item.id));
-    return next.length === own.length ? own : next;
+// Gemeinsame Queue mehrerer Tabs (#45/#46): Alle Tabs eines Browsers teilen die Queue in localStorage. Bis #46 schrieb
+// jeder Tab bei jeder Aenderung (und beim Start) seine GANZE Queue zurueck. Ein Tab mit aelterem Stand (z. B. ein gerade neu
+// geladener TV-Tab) konnte so ungesendete Eintraege eines anderen Tabs aus localStorage entfernen. Nicht aus dessen
+// Speicher, aber nach Schliessen/Neuladen jenes Tabs waeren sie verloren.
+// Neu: localStorage ist die gemeinsame Wahrheit, geschrieben wird nur die eigene Aenderung (frisch lesen, zusammenfuehren).
+// - entfernt wird nur, was dieser Tab selbst entfernt (gesendet bzw. als Konflikt verworfen),
+// - neu angelegte Eintraege kommen dazu, geaenderte (Rebase) werden ersetzt,
+// - eigene, noch ungesendete Eintraege (in diesem Tab angelegt) werden wieder ergaenzt, falls sie fehlen.
+const mergeQueueWrite = (stored, previous, next, ownedIds) => {
+    const nextById = new Map(next.map((item) => [item.id, item]));
+    const previousIds = new Set(previous.map((item) => item.id));
+    const removed = new Set(previous.filter((item) => !nextById.has(item.id)).map((item) => item.id));
+    const base = stored.filter((item) => !removed.has(item.id)).map((item) => nextById.get(item.id) ?? item);
+    const present = new Set(base.map((item) => item.id));
+    const added = next.filter((item) => !present.has(item.id) && (!previousIds.has(item.id) || ownedIds.has(item.id)));
+    return added.length ? [...base, ...added] : base;
 };
-exports.dropSettledForeignQueueItems = dropSettledForeignQueueItems;
+exports.mergeQueueWrite = mergeQueueWrite;
+// Queue eines anderen Tabs geaendert: Eintraege, die dieser Tab nur uebernommen hat (beim Start gelesen) und die in
+// localStorage fehlen, hat ein anderer Tab gesendet -> hier entfernen (sonst blockierten sie z. B. die TV-Ansicht, #45).
+// In diesem Tab angelegte Eintraege bleiben immer, bis er sie selbst gesendet hat; fehlende werden zurueckgeschrieben.
+const reconcileQueueWithStorage = (own, stored, ownedIds) => {
+    const storedIds = new Set(stored.map((item) => item.id));
+    const queue = own.filter((item) => ownedIds.has(item.id) || storedIds.has(item.id));
+    const missingOwned = own.filter((item) => ownedIds.has(item.id) && !storedIds.has(item.id));
+    return { queue: queue.length === own.length ? own : queue, missingOwned };
+};
+exports.reconcileQueueWithStorage = reconcileQueueWithStorage;
+// Eigene Aenderungen senden ist kein Polling: auch im Hintergrund-Tab, nur nicht offline (#46). Vorher blieb eine Aenderung
+// in einem verdeckten Tab ("Offline") liegen, bis der Tab wieder sichtbar wurde.
+const canSendQueueNow = (online) => online;
+exports.canSendQueueNow = canSendQueueNow;
 // Live-Ansicht (TV) und gemeinsamer Spiele-Cache (#45): Die Live-Ansicht laedt nur ihr Spiel, ihre uebrige Spieleliste ist der
 // Stand beim Oeffnen. Schrieb sie die ganze Liste zurueck, kamen inzwischen (weich) geloeschte Spiele wieder in den Cache der
 // anderen Tabs und standen nach dem Neuladen wieder als aktiv in der Liste. Jetzt nur das eigene Spiel ersetzen bzw. entfernen.

@@ -9,3 +9,4 @@ vite.config.d.ts
 .test-e2e-dist/
 .test-e2e-dist-zt/
 .test-e2e-dist-tvh/
+.test-e2e-dist-queue/
