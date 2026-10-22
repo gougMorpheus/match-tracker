@@ -853,6 +853,12 @@ export const getLatestTurn = (game: Game): Turn | undefined =>
 // Aktiver Zug (Tim 22.10.: genau EIN Zug zaehlt): der laufende Zug; ist der Timer gestoppt, der zuletzt pausierte offene
 // Zug (dort wurde gestoppt); sonst der neueste Zug. Nach dem Neuladen und fuer Zuschauer/TV ist das der Zug, in dem die Zeit zaehlt.
 // Ereignisse, die einen Zug anwaehlen (turn-end schliesst nur und zaehlt nicht).
+// Wer ist "Am Zug"/"Aktiv"? In der Aufstellung kein Zug: der Startspieler (beginnt Zug 1), ohne Startspieler der Defender
+// (Pepper 22.10.: nach Zurueck in die Aufstellung zeigten TV und Haupt-App den Spieler des neuesten Zugs). Sonst der Spieler
+// des angezeigten bzw. aktiven Zugs.
+export const getShownActivePlayerId = (game: Game, turn: Turn | undefined, setupPhase: boolean): PlayerId =>
+  setupPhase ? game.startingPlayerId || game.defenderPlayerId || game.currentPlayerId : turn?.playerId ?? game.currentPlayerId;
+
 const TURN_SELECT_ACTIONS = new Set(["turn-start", "turn-resume", "turn-pause"]);
 
 export const getActiveTurn = (game: Game): Turn | undefined => {

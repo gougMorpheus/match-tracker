@@ -27,6 +27,8 @@ const makeGame = (id, kind) => {
   const events = [{ action: "game-start", playerId: p1, createdAt: at(-12) }];
   if (kind.startsWith("aufstellung")) {
     events.push({ action: "setup-start", createdAt: at(-12) });
+    if (kind === "aufstellung-nach-z2") events.push({ action: "setup-end", createdAt: at(-10) }, { action: "round-start", playerId: p1, roundNumber: 1, createdAt: at(-10) },
+      ev("turn-start", p1, 1, 1, -10), ev("turn-end", p1, 1, 1, -6), ev("turn-start", p2, 1, 2, -6), ev("turn-pause", p2, 1, 2, -4), { action: "setup-pause", createdAt: at(-3) });
     if (kind === "aufstellung-r1z1") events.push({ action: "setup-end", createdAt: at(-5) }, { action: "round-start", playerId: p1, roundNumber: 1, createdAt: at(-5) }, ev("turn-start", p1, 1, 1, -5));
     if (kind.endsWith("gestoppt")) events.push({ action: "setup-pause", createdAt: at(-6) });
   } else {
@@ -44,7 +46,7 @@ const run = async () => {
   const web = await serveDir(path.join(ROOT, OUT), PORT, "127.0.0.1");
   const browser = await chromium.launch(); const results = [];
   const step = async (name, fn) => { await fn(); results.push(name); console.log(`  ok  ${name}`); };
-  const kinds = ["laufend", "beendet", "aufstellung-r1z1", "aufstellung-laeuft", "aufstellung-gestoppt", "aufstellung-ohnestart-laeuft", "aufstellung-ohnestart-gestoppt"];
+  const kinds = ["laufend", "beendet", "aufstellung-r1z1", "aufstellung-laeuft", "aufstellung-gestoppt", "aufstellung-ohnestart-laeuft", "aufstellung-ohnestart-gestoppt", "aufstellung-nach-z2"];
   const games = kinds.map((k) => makeGame(randomUUID(), k)); // IDs muessen UUIDs sein (mapPersistedGame)
   const newContext = async (opts = {}) => {
     const ctx = await browser.newContext({ serviceWorkers: "block", ...opts });
@@ -156,8 +158,9 @@ const run = async () => {
     await step("Neuladen: Auswahl = aktiver Zug; Anzeige = Statistik (App-Logik auf den gespeicherten Events)", async () => {
       await open(games[0].id); assert.match(await turnHeader(), /^Zug 2 /); assert.equal(await pill(), "Timer: Läuft");
       const g = await cached(); const turns = g.rounds.flatMap((r) => r.turns);
-      g.players.forEach((p) => assert.equal(calc.getPlayerTurnDurationTotalMs(g, p.id),
-        turns.filter((t) => t.playerId === p.id).reduce((s, t) => s + calc.getTurnDurationMs(t, g), 0)));
+      // laufendes Spiel: beide Werte zu leicht verschiedenen Zeitpunkten berechnet -> wenige ms Toleranz
+      g.players.forEach((p) => assert.ok(Math.abs(calc.getPlayerTurnDurationTotalMs(g, p.id) -
+        turns.filter((t) => t.playerId === p.id).reduce((s, t) => s + calc.getTurnDurationMs(t, g), 0)) <= 50));
       assert.ok(calc.getTurnDurationMs(turns[0], g) > 10 * 60000, "R1Z1 hat die nachgetragene Zeit (alt: genau 10 min)");
     });
 
@@ -236,6 +239,13 @@ const run = async () => {
       await click("Weiter"); await noModal();
       const a = await added(); assert.ok(a.includes("turn-start R1Z1") && a.includes("turn-pause R1Z1"), a.join(","));
       assert.equal(await pill(), "Timer: Gestoppt");
+    });
+    await step('Aufstellung nach Zurueck (R1Z2 = ZZ-B existiert): TV "Am Zug" = Startspieler ZZ-A (nicht Spieler des neuesten Zugs)', async () => {
+      await open(games[7].id); assert.match(await header(), /^Aufstellung /);
+      // Haupt-App zeigt in der Aufstellung nur die Aufstellungs-Karte (kein Spieler "Aktiv")
+      assert.deepEqual(await page.locator("article.scoreboard h2").allInnerTexts(), ["Aufstellung"]);
+      assert.equal(await tvPhaseOf(games[7].id), "Aufstellung");
+      assert.match(await tvPage.locator(".tv-player--active").innerText(), /ZZ-A/, "TV: Startspieler am Zug");
     });
     await step("Abschluss = gestoppter Timer; Wiedereroeffnen und Timer an zaehlt im aktiven Zug", async () => {
       await page.goto(`${APP}/#/game/${games[1].id}`); gameId = games[1].id; await page.waitForTimeout(800);

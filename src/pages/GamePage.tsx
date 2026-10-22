@@ -42,6 +42,7 @@ import {
   getSetupDurationMs,
   getTurnDurationMs,
   isSetupActive,
+  getShownActivePlayerId,
   isSetupPaused,
   isSetupRunning,
   isTimeoutActive,
@@ -686,7 +687,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       : game.players[1].id === game.startingPlayerId
         ? [game.players[1], game.players[0]]
         : game.players;
-  const activePlayerId = selectedTurn?.playerId ?? game.currentPlayerId;
+  const activePlayerId = getShownActivePlayerId(game, selectedTurn, isSetupSelected);
   const isClosed = isGameCompletedForDisplay(game);
   const isReadOnly = viewOnlyActive;
   const writeDisabled = isMutating || isReadOnly;

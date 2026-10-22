@@ -161,7 +161,7 @@ const runZurueckTimerTests = () => {
 
   // #42 (Pepper 22.10.): TV-Kopfzeile, "Am Zug" und Uebersicht folgen dem AKTIVEN Zug, nicht dem neuesten
   assert.match(tv, /turn \? `Runde \$\{turn\.roundNumber\} · Zug \$\{turn\.turnNumber\}`/, "TV-Kopfzeile aus dem aktiven Zug");
-  assert.match(tv, /const activePlayerId = turn\?\.playerId \?\? game\.currentPlayerId;/);
+  assert.match(tv, /const activePlayerId = getShownActivePlayerId\(game, turn, /);
   assert.match(tv, /active = !completed && activePlayerId === p\.id;/, "TV: Am Zug = Spieler des aktiven Zugs");
   assert.match(read("src/components/GameOverview.tsx"), /const currentTurn = getActiveTurn\(game\);/, "Uebersicht: aktueller Zug = aktiver Zug");
   {
@@ -270,5 +270,38 @@ const runGestoppteNavigationTests = () => {
   assert.equal((store.match(/isSetupPaused\(game\) && isSetupSegmentOpen\(game\)/g) || []).length, 2, "Timer an: setup-resume nur im offenen Abschnitt");
 };
 
-module.exports = { runZurueckTimerTests, runGestoppteNavigationTests };
+// #44 (Pepper 22.10.): TV-Tab im Hintergrund und "Am Zug" in der Aufstellung
+const runTvHintergrundTests = () => {
+  const { canRefreshNow, getResumeSyncDelayMs } = require("../.test-dist/utils/deltaPull.js");
+  const base = { hidden: false, online: true, liveGameId: null, queueLength: 0 };
+  assert.equal(canRefreshNow(base), true);
+  assert.equal(canRefreshNow({ ...base, hidden: true }), false, "normaler Tab im Hintergrund: kein Laden (Egress)");
+  assert.equal(canRefreshNow({ ...base, hidden: true, liveGameId: "g" }), true, "Live-Ansicht im Hintergrund: Laden auf Anlass");
+  assert.equal(canRefreshNow({ ...base, hidden: true, liveGameId: "g", queueLength: 1 }), false, "mit ausstehenden Aenderungen nicht (sonst Vollabzug)");
+  assert.equal(canRefreshNow({ ...base, online: false, liveGameId: "g" }), false);
+  assert.equal(getResumeSyncDelayMs(true, 1200), 0, "Live-Ansicht laedt beim Sichtbarwerden sofort");
+  assert.equal(getResumeSyncDelayMs(false, 1200), 1200);
+  const store = read("src/store/GameStore.tsx");
+  assert.equal((store.match(/if \(!canRefreshNow\(\{ hidden: isDocumentHidden\(\), online: isBrowserOnline\(\), liveGameId: getLiveGameId\(\), queueLength: queueRef\.current\.length \}\)\)/g) || []).length, 2,
+    "refreshGames und scheduleRemoteRefresh");
+  assert.match(store, /if \(!canAttemptRemoteSync\(\)\) return;\s*const liveGameId = getLiveGameId\(\);\s*if \(liveGameId && liveViewRef/, "Takt (Polling) bleibt im Hintergrund aus");
+  assert.match(store, /getResumeSyncDelayMs\(Boolean\(getLiveGameId\(\)\), RESUME_SYNC_DELAY_MS\)/);
+
+  // "Am Zug" in der Aufstellung: Startspieler, ohne Startspieler der Defender; sonst Spieler des Zugs
+  const g0 = createBaseGame({ id: "zz-amzug" }); const [a1, b1] = g0.players.map((p) => p.id);
+  const g = appendLocalTimeEvents(g0, [
+    { action: "game-start", playerId: a1, createdAt: at(0) }, { action: "setup-start", createdAt: at(0) }, { action: "setup-end", createdAt: at(2) },
+    { action: "round-start", playerId: a1, roundNumber: 1, createdAt: at(2) }, ev("turn-start", a1, 1, 1, 2), ev("turn-end", a1, 1, 1, 4),
+    ev("turn-start", b1, 1, 2, 4), ev("turn-pause", b1, 1, 2, 5), { action: "setup-pause", createdAt: at(6) }
+  ]);
+  assert.ok(calc.isSetupActive(g)); assert.equal(g.currentPlayerId, b1, "Ausgangslage: currentPlayerId = Spieler des neuesten Zugs (ZZ-B)");
+  assert.equal(calc.getShownActivePlayerId(g, undefined, true), a1, "Aufstellung: Startspieler");
+  assert.equal(calc.getShownActivePlayerId({ ...g, startingPlayerId: "" }, undefined, true), g.defenderPlayerId, "ohne Startspieler: Defender");
+  assert.equal(calc.getShownActivePlayerId(g, turn(g, 1, 2), false), b1, "im Zug: Spieler des Zugs");
+  assert.match(read("src/components/TvGameView.tsx"), /const activePlayerId = getShownActivePlayerId\(game, turn, setupPhaseActive \|\| \(!turn && !completed\)\);/);
+  assert.match(read("src/pages/GamePage.tsx"), /const activePlayerId = getShownActivePlayerId\(game, selectedTurn, isSetupSelected\);/);
+};
+
+module.exports = { runZurueckTimerTests, runGestoppteNavigationTests, runTvHintergrundTests };
+
 

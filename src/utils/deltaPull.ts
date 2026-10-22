@@ -152,3 +152,13 @@ export const getLiveViewPause = (entry: RemoteGameEntry | null, liveSinceMs: num
   for (const event of entry.events) last = Math.max(last, toMs(event.created_at), toMs(event.occurred_at));
   return now - last >= LIVE_VIEW_IDLE_MS ? "idle" : null;
 };
+
+// Darf jetzt vom Server geladen werden? Normal nur sichtbar und online (Egress). Ausnahme Live-Ansicht (TV/Zuschauer) eines
+// Spiels ohne eigene ausstehende Aenderungen: auch im Hintergrund-Tab, aber nur auf Anlass (Start, Realtime-Meldung zum
+// eigenen Spiel, Rueckkehr) - der Takt (Polling) bleibt im Hintergrund aus. Sonst zeigte ein im Hintergrund geoeffneter
+// TV-Tab dauerhaft den lokalen Stand des anderen Tabs ("Noch kein Sync") und zog erst nach dem Umschalten nach (Pepper 22.10.).
+export const canRefreshNow = (input: { hidden: boolean; online: boolean; liveGameId: string | null; queueLength: number }): boolean =>
+  input.online && (!input.hidden || (Boolean(input.liveGameId) && input.queueLength === 0));
+
+// Rueckkehr in den Tab: Live-Ansicht sofort laden, sonst kurz warten (Netz nach dem Aufwachen).
+export const getResumeSyncDelayMs = (liveView: boolean, defaultDelayMs: number): number => (liveView ? 0 : defaultDelayMs);
