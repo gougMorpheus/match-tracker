@@ -47,6 +47,7 @@ import {
 import {
   getDisplayedRoundTurns,
   getTimerFocusTurn,
+  getTimerControlTurn,
   shouldRunTimerRenderTicker
 } from "../utils/timerFocus";
 import { isGameAdminPassword } from "../utils/gameSecurity";
@@ -682,10 +683,19 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const writeDisabled = isMutating || isReadOnly;
   const canNavigateTurns = !isMutating;
   const showOverview = isClosed || isReadOnly;
-  const isPaused = isTurnPaused(selectedTurn);
-  const hasActiveTurn = Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt);
+  // Timer-Bedienung wirkt bei angesehenem beendetem Vorzug auf den neuesten Zug (Zurück-Fix, kein Fortsetzen beendeter Züge).
+  const timerControlTurn = isSetupSelected ? undefined : getTimerControlTurn(selectedTurn, latestTurn);
+  const timerControlRef = timerControlTurn
+    ? { roundNumber: timerControlTurn.roundNumber, turnNumber: timerControlTurn.turnNumber }
+    : undefined;
+  const isPaused = isTurnPaused(timerControlTurn);
+  const hasActiveTurn = Boolean(timerControlTurn?.timing.startedAt && !timerControlTurn.timing.endedAt);
   const isSetupScreen = !showOverview && (isSetupSelected || !latestRound);
   const isTimerRunning = !isClosed && !timeoutActive && ((hasActiveTurn && !isPaused) || setupRunning);
+  // Läuft der ANGESEHENE Zug selbst? (für "Weiter" auf einen vorhandenen Folgezug, wie bisher)
+  const isSelectedTurnTimerRunning =
+    !isClosed && !timeoutActive &&
+    ((Boolean(selectedTurn?.timing.startedAt && !selectedTurn.timing.endedAt) && !isTurnPaused(selectedTurn)) || setupRunning);
   const timerStatusLabel = timeoutActive ? "Time-out" : isTimerRunning ? "Läuft" : "Gestoppt";
   const timerStateKey = isClosed ? "closed" : timeoutActive ? "timeout" : isTimerRunning ? "running" : "stopped";
 
@@ -755,7 +765,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
     : undefined;
 
   const renderFocusTurn = getTimerFocusTurn(timerFocusTurn, latestTurn, viewOnlyActive);
-  useServerSecondTick(!isClosed && (setupActive || shouldRunTimerRenderTicker(renderFocusTurn, timeoutActive, isClosed)));
+  useServerSecondTick(!isClosed && (setupActive || shouldRunTimerRenderTicker(renderFocusTurn, timeoutActive, isClosed) ||
+    shouldRunTimerRenderTicker(timerControlTurn, timeoutActive, isClosed)));
 
   const updateGameField = <K extends keyof CreateGameInput,>(
     key: K,
@@ -1143,14 +1154,11 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   };
 
   const handleStartTimeout = async () => {
-    if (isReadOnly || !selectedTurn || !isTimerRunning) {
+    if (isReadOnly || !timerControlRef || !isTimerRunning) {
       return;
     }
 
-    await startTimeout(game.id, {
-      roundNumber: selectedTurn.roundNumber,
-      turnNumber: selectedTurn.turnNumber
-    });
+    await startTimeout(game.id, timerControlRef);
   };
 
   const handleStartTimeoutFromHold = async () => {
@@ -1159,14 +1167,11 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   };
 
   const handleEndTimeout = async () => {
-    if (isReadOnly || !selectedTurn || !timeoutActive) {
+    if (isReadOnly || !timerControlRef || !timeoutActive) {
       return;
     }
 
-    await endTimeout(game.id, {
-      roundNumber: selectedTurn.roundNumber,
-      turnNumber: selectedTurn.turnNumber
-    });
+    await endTimeout(game.id, timerControlRef);
   };
 
   const continueFromSetup = async (startingSlot?: CreateGameInput["startingSlot"]) => {
@@ -1210,7 +1215,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       if (canGoForwardToExistingTurn) {
         const nextTurn = allTurns[selectedTurnIndex + 1];
         if (nextTurn) {
-          if (!isReadOnly && isTimerRunning) {
+          if (!isReadOnly && isSelectedTurnTimerRunning) {
             await advanceGame(
               game.id,
               selectedTurn
@@ -1254,18 +1259,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
 
     const previousTurn = allTurns[selectedTurnIndex - 1];
     if (previousTurn) {
-      if (!isReadOnly && isTimerRunning) {
-        await rewindLastTurn(
-          game.id,
-          selectedTurn
-            ? {
-                roundNumber: selectedTurn.roundNumber,
-                turnNumber: selectedTurn.turnNumber
-              }
-            : undefined,
-          true
-        );
-      }
+      // Zurück-Fix (dd87ec49): nur Ansicht, keine Timer-Events. Frueher pausierte das den laufenden Zug und setzte den
+      // beendeten Vorzug fort (rewindLastTurn mit keepTimerRunning); die Auswertung ignoriert das -> Zeit ging verloren.
       setSelectedTurnKey(previousTurn.key);
       return;
     }
@@ -1404,6 +1399,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
         <TvGameView
           game={game}
           fullscreenDocument
+          onShareLink={() => { void handleShareLink(); }}
           menu={
             <FloatingMenu
               fixed
@@ -2494,24 +2490,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   setTimeoutHoldOpen(false);
                   void (
                     isTimerRunning
-                      ? pauseActiveTimer(
-                          game.id,
-                          selectedTurn
-                            ? {
-                                roundNumber: selectedTurn.roundNumber,
-                                turnNumber: selectedTurn.turnNumber
-                              }
-                            : undefined
-                        )
-                      : startGameTimer(
-                          game.id,
-                          selectedTurn
-                            ? {
-                                roundNumber: selectedTurn.roundNumber,
-                                turnNumber: selectedTurn.turnNumber
-                              }
-                            : undefined
-                        )
+                      ? pauseActiveTimer(game.id, timerControlRef)
+                      : startGameTimer(game.id, timerControlRef)
                   );
                 }}
                 disabled={writeDisabled}

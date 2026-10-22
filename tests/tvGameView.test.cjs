@@ -37,6 +37,12 @@ const runTvGameViewTests = () => {
     let tree = render(TvGameView,base);
     assert.equal(nodes(tree).filter(n => n.props?.className === 'tv-highlight').length,0, 'Initial load shows no historical highlights');
     assert.deepEqual(nodes(tree).filter(n => n.type === 'button').map(n => n.props.children),['Full screen']);
+    { // TV-Knopf "Link teilen" (nur mit onShareLink), ruft den vorhandenen Teilen-Handler der Spielseite
+      let shared = 0; cursor = 0; const t2 = TvGameView({ game: base, onExit: () => {}, onShareLink: () => { shared += 1; } }); while (pending.length) pending.shift()();
+      const share = nodes(t2).filter(n => n.type === 'button' && n.props.children === 'Link teilen');
+      assert.equal(share.length, 1, 'TV zeigt Knopf Link teilen'); share[0].props.onClick(); assert.equal(shared, 1);
+      cursor = 0; tree = render(TvGameView, base);
+    }
     const samePhase = structuredClone(base);
     samePhase.scoreEvents.push({...samePhase.scoreEvents[0],id:'s2',playerId:base.players[1].id,value:12,createdAt:'2026-10-01T10:01:00Z'});
     render(TvGameView,samePhase); tree = render(TvGameView,samePhase);

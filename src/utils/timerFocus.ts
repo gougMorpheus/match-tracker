@@ -4,6 +4,15 @@ import { isTurnPaused } from "./gameCalculations";
 export const getTimerFocusTurn = (selectedTurn?: Turn, latestTurn?: Turn, viewOnly = false): Turn | undefined =>
   viewOnly ? latestTurn : selectedTurn ?? latestTurn;
 
+// Ziel der Timer-Bedienung (Status, "Timer an/aus", Time-out): Sieht man einen bereits BEENDETEN älteren Zug an
+// (Zurück-Navigation), wirkt der Timer auf den neuesten Zug. Ein beendeter Zug wird nie fortgesetzt; die Auswertung
+// ignoriert turn-resume nach turn-end ohnehin (gameState.buildRoundsFromTimeEvents), die Zeit ginge sonst verloren.
+export const getTimerControlTurn = (selectedTurn?: Turn, latestTurn?: Turn): Turn | undefined => {
+  if (!selectedTurn || !latestTurn) return selectedTurn ?? latestTurn;
+  const sameTurn = selectedTurn.roundNumber === latestTurn.roundNumber && selectedTurn.turnNumber === latestTurn.turnNumber;
+  return !sameTurn && selectedTurn.timing.endedAt ? latestTurn : selectedTurn;
+};
+
 export const shouldRunTimerTicker = (
   turn?: Turn,
   timeoutActive = false,
