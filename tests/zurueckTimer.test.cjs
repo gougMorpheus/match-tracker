@@ -10,6 +10,7 @@ const { appendLocalTimeEvents } = require("../.test-dist/utils/gameState.js");
 const calc = require("../.test-dist/utils/gameCalculations.js");
 const { getTurnDurationMs, getPlayerTurnDurationTotalMs, getGameDurationMs, getSetupDurationMs, isSetupActive, getActiveTurn } = calc;
 const { createBaseGame } = require("./helpers/gameFixtures.cjs");
+const { buildRoundsFromTimeEvents: buildRoundsFromDb } = require("../.test-dist/utils/supabaseGameMapping.js");
 
 const read = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
 const at = (min) => new Date(Date.parse("2026-10-16T16:00:00.000Z") + min * 60000).toISOString();
@@ -18,7 +19,13 @@ const MIN = 60000;
 const ev = (action, playerId, r, t, min) => ({ action, playerId, roundNumber: r, turnNumber: t, createdAt: at(min) });
 
 // Anzeige = Statistik: Summe der Zugzeiten je Spieler = Spielerstatistik, Aufstellung + alle Zuege = Spieldauer
+// Lokale Auswertung (gameState) und DB-Abbildung (supabaseGameMapping, beim Laden/auf anderen Geraeten) muessen gleich sein.
+const assertSameAsDb = (game, label) => {
+  const timing = (rounds) => rounds.flatMap((r) => r.turns.map((t) => `R${r.roundNumber}Z${t.turnNumber} ${t.timing.startedAt}|${t.timing.endedAt}|${t.timing.pauses.map((x) => `${x.startedAt}-${x.endedAt}`).join(",")}`));
+  assert.deepEqual(timing(buildRoundsFromDb(game.id, game.timeEvents, game.endedAt)), timing(game.rounds), `${label}: DB-Abbildung = lokale Auswertung`);
+};
 const assertConsistent = (game, label) => {
+  assertSameAsDb(game, label);
   const turns = game.rounds.flatMap((r) => r.turns);
   game.players.forEach((p) => {
     const sum = turns.filter((t) => t.playerId === p.id).reduce((s, t) => s + getTurnDurationMs(t, game), 0);
