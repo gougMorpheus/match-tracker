@@ -911,8 +911,10 @@ const runGameCalculationsTests = () => {
 
     const turn = game.rounds[0]?.turns[0];
     assert.ok(turn);
-    assert.equal(turn.timing.endedAt, "2026-04-20T18:10:00.000Z");
-    assert.equal(turn.timing.pauses.length, 0);
+    // Regel Tim 22.10.: turn-resume nach turn-end oeffnet den Zug wieder (Luecke = Pause). Resume genau bei Spielende
+    // -> keine zusaetzliche Zeit, Zugzeit bleibt 10 min.
+    assert.equal(turn.timing.endedAt, "2026-04-20T18:20:00.000Z");
+    assert.equal(turn.timing.pauses.length, 1);
     assert.equal(getTurnDurationMs(turn, game), 10 * 60 * 1000);
   }
 

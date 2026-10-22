@@ -1,17 +1,9 @@
 import type { Round, Turn } from "../types/game";
 import { isTurnPaused } from "./gameCalculations";
 
-export const getTimerFocusTurn = (selectedTurn?: Turn, latestTurn?: Turn, viewOnly = false): Turn | undefined =>
-  viewOnly ? latestTurn : selectedTurn ?? latestTurn;
-
-// Ziel der Timer-Bedienung (Status, "Timer an/aus", Time-out): Sieht man einen bereits BEENDETEN älteren Zug an
-// (Zurück-Navigation), wirkt der Timer auf den neuesten Zug. Ein beendeter Zug wird nie fortgesetzt; die Auswertung
-// ignoriert turn-resume nach turn-end ohnehin (gameState.buildRoundsFromTimeEvents), die Zeit ginge sonst verloren.
-export const getTimerControlTurn = (selectedTurn?: Turn, latestTurn?: Turn): Turn | undefined => {
-  if (!selectedTurn || !latestTurn) return selectedTurn ?? latestTurn;
-  const sameTurn = selectedTurn.roundNumber === latestTurn.roundNumber && selectedTurn.turnNumber === latestTurn.turnNumber;
-  return !sameTurn && selectedTurn.timing.endedAt ? latestTurn : selectedTurn;
-};
+// Anzeige-Zug: Zuschauer (view-only) folgen dem aktiven Zug, sonst der angewaehlte Zug.
+export const getTimerFocusTurn = (selectedTurn?: Turn, activeTurn?: Turn, viewOnly = false): Turn | undefined =>
+  viewOnly ? activeTurn : selectedTurn ?? activeTurn;
 
 export const shouldRunTimerTicker = (
   turn?: Turn,
@@ -27,15 +19,6 @@ export const shouldRunTimerRenderTicker = (
   isClosed = false
 ): boolean => !isClosed && (timeoutActive || shouldRunTimerTicker(turn, false, false));
 
-export const getDisplayedRoundTurns = (
-  round: Round,
-  selectedTurn?: Turn,
-  timerRunning = false,
-  timeoutActive = false
-): Turn[] => {
-  if (timerRunning || timeoutActive || !selectedTurn) {
-    return round.turns;
-  }
-
-  return round.turns.filter((turn) => turn.turnNumber <= selectedTurn.turnNumber);
-};
+// Rundenzeit = Summe ALLER Zuege der Runde, unabhaengig vom Timer-Zustand (frueher bei gestopptem Timer nur bis zum
+// angewaehlten Zug -> Anzeige sprang bei Timer aus/an, Pepper 22.10.). Gleiches Modell wie die Statistik.
+export const getDisplayedRoundTurns = (round: Round): Turn[] => round.turns;
