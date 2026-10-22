@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-22 – TV und Übersicht zeigen den aktiven Zug; Verlaufs-Label, Rückgängig von Timer an/aus, Startspieler nach Neuladen
+- Fehlerbild (Pepper-Retest von 6ada487d): Nach Zurück bzw. Rückgängig war R1Z1 mit ZZ-B aktiv und die Zeiten stimmten. Die TV-Ansicht zeigte aber „Runde 1 · Zug 2“ und ZZ-A „Am Zug“. Ursache: Kopfzeile und „Am Zug“ (TV) sowie „aktueller Zug“ (Übersicht) kamen aus dem neuesten Zug (`getCurrentRoundNumber`/`getCurrentTurnNumber`/`currentPlayerId`), die Zeiten aus `getActiveTurn`. Lösung: alles aus `getActiveTurn`.
+- Rückgängig von „Timer aus“/„Timer an“/Time-out nach einem Zugwechsel bei gestopptem Timer: Der Timer lief danach wieder im alten Zug, die Anzeige blieb aber auf dem angewählten Zug, also verdeckt. Jetzt wird der laufende Zug bzw. die Aufstellung angewählt. Das Label „Timer aus“ bleibt nach einer Navigation bei gestopptem Timer korrekt stehen: Die Navigation schreibt nichts und ist kein Verlaufseintrag.
+- Verlaufs-Label: Weiter aus der Aufstellung hieß „Weiter R1 Z1“ (Ziel), sonst nennt das Label den verlassenen Zug. Jetzt heißt es „Weiter Aufstellung“.
+- Startspieler-Dialog: Beim Laden aus dem lokalen Cache (offline/ausstehend) wurde ein noch leerer Startspieler still auf Spieler 1 gesetzt, sodass der Dialog nicht mehr kam. Jetzt bleibt er leer, wie beim DB-Laden. Altdaten ohne das Feld fallen weiter auf Spieler 1 zurück.
+- Tests: E2E 23 Schritte (neu: TV nach Zurück, Undo „Timer aus“ nach Zugwechsel, Label, Startspieler-Dialog aus laufender und gestoppter Aufstellung), Unit-/Statiktests in `tests/zurueckTimer.test.cjs`. Der TV-Schritt schlägt gegen den alten Code an („Runde 1 · Zug 2“). Keine Änderung an Zeit- oder Statistikberechnung.
+
 ## 2026-10-22 – Nachtrag zu #40: gleiche Zug-Zeitlogik auch für aus der DB geladene Spiele
 - Fehlerbild: Nach #40 zählte die neue Timer-Regel nur in der lokalen Auswertung (`gameState.buildRoundsFromTimeEvents`). Spiele aus der DB (Laden, Neuladen, andere Geräte, Zuschauer/TV, Statistik) liefen über die zweite Auswertung `supabaseGameMapping.buildRoundsFromTimeEvents` mit der alten Logik (`turn-resume` nach `turn-end` ignoriert) → je nach Weg unterschiedliche Zeiten.
 - Lösung: Zug-Zeitlogik (Wiederöffnen, nie zwei laufende Züge, Aufstellung als zählende Phase) in `utils/turnTiming.ts`, beide Auswertungen nutzen sie.

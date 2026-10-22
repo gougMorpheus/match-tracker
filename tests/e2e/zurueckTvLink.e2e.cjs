@@ -16,18 +16,19 @@ const { GAME_ADMIN_PASSWORD } = require("../../.test-dist/utils/gameSecurity.js"
 const calc = require("../../.test-dist/utils/gameCalculations.js");
 
 // kind: "laufend" (R1Z1 beendet, R1Z2 laeuft), "beendet", "aufstellung-r1z1" (Aufstellung -12..-5, R1Z1 laeuft),
-// "aufstellung-laeuft" / "aufstellung-gestoppt" (noch kein Zug)
+// "aufstellung-laeuft" / "aufstellung-gestoppt" (noch kein Zug), "aufstellung-ohnestart-laeuft/-gestoppt" (ohne Startspieler -> Dialog)
 const makeGame = (id, kind) => {
   const now = Date.now(); const at = (min) => new Date(now + min * 60000).toISOString();
   const base = createBaseGame({ id, createdAt: at(-15), updatedAt: at(-15), scheduledDate: undefined, scheduledTime: undefined });
   base.players[0].name = "ZZ-A"; base.players[1].name = "ZZ-B";
   const [p1, p2] = base.players.map((p) => p.id);
+  if (kind.includes("ohnestart")) base.startingPlayerId = ""; // wie neues Spiel ohne Startspieler
   const ev = (action, playerId, r, t, min) => ({ action, playerId, roundNumber: r, turnNumber: t, createdAt: at(min) });
   const events = [{ action: "game-start", playerId: p1, createdAt: at(-12) }];
   if (kind.startsWith("aufstellung")) {
     events.push({ action: "setup-start", createdAt: at(-12) });
     if (kind === "aufstellung-r1z1") events.push({ action: "setup-end", createdAt: at(-5) }, { action: "round-start", playerId: p1, roundNumber: 1, createdAt: at(-5) }, ev("turn-start", p1, 1, 1, -5));
-    if (kind === "aufstellung-gestoppt") events.push({ action: "setup-pause", createdAt: at(-6) });
+    if (kind.endsWith("gestoppt")) events.push({ action: "setup-pause", createdAt: at(-6) });
   } else {
     events.push({ action: "round-start", playerId: p1, roundNumber: 1, createdAt: at(-12) }, ev("turn-start", p1, 1, 1, -12), ev("turn-end", p1, 1, 1, -2), ev("turn-start", p2, 1, 2, -2));
   }
@@ -43,7 +44,7 @@ const run = async () => {
   const web = await serveDir(path.join(ROOT, OUT), PORT, "127.0.0.1");
   const browser = await chromium.launch(); const results = [];
   const step = async (name, fn) => { await fn(); results.push(name); console.log(`  ok  ${name}`); };
-  const kinds = ["laufend", "beendet", "aufstellung-r1z1", "aufstellung-laeuft", "aufstellung-gestoppt"];
+  const kinds = ["laufend", "beendet", "aufstellung-r1z1", "aufstellung-laeuft", "aufstellung-gestoppt", "aufstellung-ohnestart-laeuft", "aufstellung-ohnestart-gestoppt"];
   const games = kinds.map((k) => makeGame(randomUUID(), k)); // IDs muessen UUIDs sein (mapPersistedGame)
   const newContext = async (opts = {}) => {
     const ctx = await browser.newContext({ serviceWorkers: "block", ...opts });
@@ -99,6 +100,17 @@ const run = async () => {
       assert.match(await turnHeader(), /^Zug 2 /); await still(turnHeader, "Zug 2");
       await click("Zurück"); await noModal(); assert.deepEqual(await added(), []); assert.equal(await pill(), "Timer: Gestoppt");
     });
+    await step('Undo-Label nach gestopptem Zugwechsel bleibt "Timer aus"; Rueckgaengig waehlt den wieder laufenden Zug an', async () => {
+      await click("Weiter"); await noModal(); assert.deepEqual(await added(), []); assert.match(await turnHeader(), /^Zug 2 /);
+      const undo = page.locator(".game-bottom-dock__undo");
+      assert.match(await undo.innerText(), /Undo: Timer aus/, "Navigation ohne Timer ist keine Aktion");
+      await undo.click(); await page.waitForTimeout(700);
+      await dismiss("Timer läuft"); // Undo aendert den Timer-Zustand -> Hinweis wie beim Timer-Knopf
+      const ev = await events(); assert.equal(ev[ev.length - 1], "turn-resume R1Z1", "turn-pause R1Z1 zurueckgenommen"); mark = ev.length;
+      assert.equal(await pill(), "Timer: Läuft");
+      assert.match(await turnHeader(), /^Zug 1 /, "Anzeige springt auf den laufenden Zug (nichts verdeckt)"); await counts(turnHeader, "Zug 1 nach Undo");
+      await timerBtn("Timer gestoppt"); assert.deepEqual(await added(), ["turn-pause R1Z1"]);
+    });
     await step("Timer an im angewaehlten Vorzug: zaehlt dort", async () => {
       await timerBtn("Timer läuft");
       assert.deepEqual(await added(), ["turn-resume R1Z1"]); await counts(turnHeader, "Zug 1");
@@ -143,6 +155,13 @@ const run = async () => {
       assert.deepEqual(await added(), ["timeout-end R1Z1", "turn-resume R1Z1"]);
       assert.match(await turnHeader(), /^Zug 1 /); await counts(turnHeader, "Zug 1 nach Time-out");
     });
+    await step('TV nach Zurueck: Kopfzeile "Runde 1 · Zug 1" und ZZ-A "Am Zug" (aktiver, nicht neuester Zug)', async () => {
+      await page.goto(`${APP}/#/game/${games[0].id}?tv=1`);
+      await page.locator(".tv-phase__title").waitFor();
+      assert.equal(await page.locator(".tv-phase__title").innerText(), "Runde 1 · Zug 1");
+      const active = page.locator(".tv-player--active"); assert.equal(await active.count(), 1);
+      assert.match(await active.innerText(), /ZZ-A/); assert.match(await active.innerText(), /Am Zug/);
+    });
     await step("Aufstellung: Zurueck bei laufendem Timer -> Aufstellung zaehlt, R1Z1 pausiert; Weiter -> R1Z1 zaehlt", async () => {
       await open(games[2].id); assert.equal(await pill(), "Timer: Läuft");
       await click("Zurück"); await noModal();
@@ -163,6 +182,26 @@ const run = async () => {
       await click("Weiter"); await noModal();
       const a = await added(); assert.ok(a.includes("turn-start R1Z1") && a.includes("setup-end") && !a.includes("turn-pause R1Z1"), a.join(","));
       assert.equal(await pill(), "Timer: Läuft"); await counts(turnHeader, "Zug 1");
+      assert.match(await page.locator(".game-bottom-dock__undo").innerText(), /Undo: Weiter Aufstellung/, "Label nennt den verlassenen Abschnitt");
+    });
+    const viaDialog = async () => {
+      await page.getByRole("button", { name: "Weiter", exact: true }).click();
+      await page.getByRole("heading", { name: "Startspieler auswählen" }).waitFor();
+      await page.locator(".modal-card select").selectOption("player2");
+      await page.getByRole("button", { name: "Weiter zu Zug 1", exact: true }).click(); await page.waitForTimeout(900);
+      assert.equal((await cached()).startingPlayerId, (await cached()).players[1].id, "Startspieler ZZ-B gespeichert");
+    };
+    await step("Startspieler-Dialog aus laufender Aufstellung: R1Z1 (ZZ-B) laeuft", async () => {
+      await open(games[5].id); assert.equal(await pill(), "Timer: Läuft");
+      await viaDialog();
+      const a = await added(); assert.ok(a.includes("turn-start R1Z1") && a.includes("setup-end") && !a.includes("turn-pause R1Z1"), a.join(","));
+      assert.equal(await pill(), "Timer: Läuft"); assert.match(await turnHeader(), /^Zug 1 /); await counts(turnHeader, "Zug 1 nach Dialog");
+    });
+    await step("Startspieler-Dialog aus gestoppter Aufstellung: R1Z1 bleibt gestoppt", async () => {
+      await open(games[6].id); assert.equal(await pill(), "Timer: Gestoppt");
+      await viaDialog();
+      const a = await added(); assert.ok(a.includes("turn-start R1Z1") && a.includes("turn-pause R1Z1"), a.join(","));
+      assert.equal(await pill(), "Timer: Gestoppt"); await still(turnHeader, "Zug 1 nach Dialog");
     });
     await step("Weiter aus gestoppter Aufstellung: R1Z1 entsteht gestoppt", async () => {
       await open(games[4].id); assert.equal(await pill(), "Timer: Gestoppt");

@@ -638,7 +638,9 @@ const mapPersistedGame = (value) => {
         statsEligibilityMode: normalizeStatsEligibilityMode(rawGame.statsEligibilityMode),
         statsEligibilityOverrides: normalizeStatsEligibilityOverrides(rawGame.statsEligibilityOverrides),
         defenderPlayerId: mapPlayerId(rawGame.defenderPlayerId) ?? playerOneId,
-        startingPlayerId: mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
+        // Explizit leerer Startspieler (noch nicht gewaehlt) bleibt leer -> Startspieler-Dialog vor Zug 1 (wie beim DB-Laden).
+        // Nur Altdaten ohne Feld fallen auf Spieler 1 zurueck.
+        startingPlayerId: rawGame.startingPlayerId === "" ? "" : mapPlayerId(rawGame.startingPlayerId) ?? playerOneId,
         currentPlayerId: mapPlayerId(rawGame.currentPlayerId) ?? playerOneId,
         players: [
             {
