@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapSupabaseGameToAppGame = exports.toIsoTimestamp = exports.mapEventRows = exports.getCurrentPlayerId = exports.getUpdatedAt = exports.getDerivedEndedAt = exports.getDerivedStartedAt = exports.buildRoundsFromTimeEvents = exports.ensureTurn = exports.ensureRound = exports.sortEventRecordsByCreation = exports.sortEventRecords = exports.serializeGameNotes = exports.serializeSoftDeletedNotes = exports.isSupabaseGameDeleted = exports.getRowDeletedAt = exports.parseDeletedMeta = exports.parseOptionsMeta = exports.parseFinishMeta = exports.parseScenarioMeta = exports.parsePlayerMeta = exports.parseScoreMeta = exports.parseTimerCorrectionsFromNotes = exports.parseTimerCorrections = exports.createPlayerDetachmentsFromInput = exports.parseJsonObject = exports.createDefaultFinishMeta = exports.createDefaultScenarioMeta = exports.createDefaultPlayerDetachments = exports.serializeStatsEligibilityOverrides = exports.parseStatsEligibilityOverrides = exports.statsEligibilityTurnAreas = exports.statsEligibilityAreas = exports.serializeStatsEligibilityMode = exports.parseStatsEligibilityMode = exports.createDefaultScoreMeta = exports.serializeTimerCorrections = exports.normalizeTimerCorrections = exports.createEmptyTimerCorrections = exports.getNumericValue = exports.getScheduledDateParts = exports.normalizeRequiredTimestamp = exports.normalizeOptionalTimestamp = exports.combineScheduledDateTime = exports.getPlayerIdFromSlot = exports.getPlayerSlotFromId = exports.createPlayerId = exports.timeActions = exports.cpTypeByEventType = exports.scoreTypeByEventType = void 0;
 const id_1 = require("./id");
 const timeEventOrder_1 = require("./timeEventOrder");
+const turnTiming_1 = require("./turnTiming");
 const time_1 = require("./time");
 exports.scoreTypeByEventType = {
     "score-primary": "primary",
@@ -418,6 +419,7 @@ const ensureTurn = (round, turnNumber, playerId) => {
 exports.ensureTurn = ensureTurn;
 const buildRoundsFromTimeEvents = (gameId, timeEvents, fallbackEndedAt) => {
     const roundsByNumber = new Map();
+    const timing = (0, turnTiming_1.createTurnTimingTracker)(); // gleiche Zug-Zeitlogik wie gameState (Timer-Regel Tim 22.10.)
     const gameEndAt = timeEvents
         .filter((event) => event.action === "game-end")
         .map((event) => event.createdAt)
@@ -437,6 +439,10 @@ const buildRoundsFromTimeEvents = (gameId, timeEvents, fallbackEndedAt) => {
         occurred_at: event.createdAt
     }))
         .forEach((event) => {
+        if (event.event_type === "setup-start" || event.event_type === "setup-resume") {
+            timing.setupActivated(event.occurred_at);
+            return;
+        }
         if (!event.round_number) {
             return;
         }
@@ -454,56 +460,12 @@ const buildRoundsFromTimeEvents = (gameId, timeEvents, fallbackEndedAt) => {
         }
         const playerId = (0, exports.getPlayerIdFromSlot)(gameId, event.player_slot);
         const turn = (0, exports.ensureTurn)(round, event.turn_number, playerId);
-        if (event.event_type === "turn-start") {
+        if (event.event_type === "turn-start" ||
+            event.event_type === "turn-resume" ||
+            event.event_type === "turn-pause" ||
+            event.event_type === "turn-end") {
             turn.playerId = playerId;
-            if (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt) {
-                return;
-            }
-            if (!turn.timing.startedAt) {
-                turn.timing.startedAt = event.occurred_at;
-            }
-            else {
-                const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-                if (latestPause && !latestPause.endedAt) {
-                    latestPause.endedAt = event.occurred_at;
-                }
-            }
-            return;
-        }
-        if (event.event_type === "turn-resume") {
-            turn.playerId = playerId;
-            if (!turn.timing.startedAt || (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt)) {
-                return;
-            }
-            const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-            if (latestPause && !latestPause.endedAt && event.occurred_at >= latestPause.startedAt) {
-                latestPause.endedAt = event.occurred_at;
-            }
-            return;
-        }
-        if (event.event_type === "turn-pause") {
-            turn.playerId = playerId;
-            if (!turn.timing.startedAt || (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt)) {
-                return;
-            }
-            const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-            if (!latestPause || latestPause.endedAt) {
-                turn.timing.pauses.push({
-                    startedAt: event.occurred_at
-                });
-            }
-            return;
-        }
-        if (event.event_type === "turn-end") {
-            turn.playerId = playerId;
-            if (turn.timing.endedAt && event.occurred_at >= turn.timing.endedAt) {
-                return;
-            }
-            const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-            if (latestPause && !latestPause.endedAt) {
-                latestPause.endedAt = event.occurred_at;
-            }
-            turn.timing.endedAt = event.occurred_at;
+            timing.apply(event.event_type, turn, event.occurred_at);
         }
     });
     if (gameEndAt) {

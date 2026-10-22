@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-10-22 – Nachtrag zu #40: gleiche Zug-Zeitlogik auch für aus der DB geladene Spiele
+- Fehlerbild: Nach #40 zählte die neue Timer-Regel nur in der lokalen Auswertung (`gameState.buildRoundsFromTimeEvents`). Spiele aus der DB (Laden, Neuladen, andere Geräte, Zuschauer/TV, Statistik) liefen über die zweite Auswertung `supabaseGameMapping.buildRoundsFromTimeEvents` mit der alten Logik (`turn-resume` nach `turn-end` ignoriert) → je nach Weg unterschiedliche Zeiten.
+- Lösung: Zug-Zeitlogik (Wiederöffnen, nie zwei laufende Züge, Aufstellung als zählende Phase) in `utils/turnTiming.ts`, beide Auswertungen nutzen sie.
+- Alte Spiele (offline, Backup nach-loeschen-zz-1a1a73cf, 44 Spiele ohne deleted_at): 21 mit geänderten Zeitwerten. Abgeschlossene Spiele bekommen die Zeit nach „Zurück“ im damals angewählten Zug (z. B. dd87ec49 R3Z1 +8,6 min). Offene Altspiele vom Mai, in denen ein beendeter Zug fortgesetzt und nie gestoppt wurde, zählen jetzt bis heute (laufender Zug). Statistik: 47 Werte ändern sich (Dauer, Zugzeiten und, weil Züge unter 10 s nicht in die Statistik eingehen, einige Ø-CP-Werte); Siege/Niederlagen unverändert. Keine Datenänderung.
+- Test: `tests/zurueckTimer.test.cjs` prüft für alle Szenarien DB-Abbildung = lokale Auswertung (schlägt gegen #40 an).
+
 ## 2026-10-22 – Timer: genau ein aktiver Zug, Navigation nimmt den Timer mit (Regel Tim 22.10., ersetzt #39 und die Regel vom 15.10.)
 - Regel: Es zählt immer genau der angewählte Zug bzw. die Aufstellung. Weiter/Zurück/Rückgängig (auch Aufstellung ↔ R1Z1) stoppen und starten den Timer nie: läuft er, läuft er im neuen Zug weiter; ist er gestoppt, bleibt er gestoppt. Gestoppt wird nur per Timer-Knopf, Time-out oder Abschluss. Kein Zug läuft verdeckt weiter.
 - Fehlerbilder: (1) #39: Nach „Zurück“ lief R1Z2 verdeckt weiter (Pepper). (2) Rundenzeit sprang auf dem Vorzug bei „Timer aus“ von 1m 54s auf 3s (Anzeige summierte bei gestopptem Timer nur Züge bis zum angewählten). (3) Ursache dd87ec49: `turn-resume` auf einen beendeten Zug wurde in `buildRoundsFromTimeEvents` ignoriert → Zeit zählte nirgends; ein zweiter Aufstellungs-Abschnitt (Zurück in die Aufstellung) wurde in `getSetupBaseDurationMs` ignoriert. (4) Rückgängig von „Weiter“ setzte den Vorzug auch bei gestopptem Timer fort und sprang zur Anzeige auf den neuesten Zug. (5) „Weiter“ über den Startspieler-Dialog aus gestoppter Aufstellung ließ R1Z1 laufend starten.

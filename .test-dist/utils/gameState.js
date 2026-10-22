@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapPersistedGame = exports.upsertLocalEventFromSource = exports.overlayLocalGameMetadata = exports.updateLocalEvent = exports.removeLocalEvent = exports.appendLocalTimeEvents = exports.appendLocalNoteEvent = exports.appendLocalCommandPointEvent = exports.appendLocalScoreEvent = exports.updateLocalGameDetails = exports.createLocalGame = exports.syncDerivedGameState = exports.getMissingGameStartCreatedAt = void 0;
 const id_1 = require("./id");
 const time_1 = require("./time");
+const turnTiming_1 = require("./turnTiming");
 const timeEventOrder_1 = require("./timeEventOrder");
 const sortByCreatedAt = (items) => [...items].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 const ensureRound = (roundsByNumber, roundNumber) => {
@@ -134,49 +135,17 @@ const getMissingGameStartCreatedAt = (game, fallbackCreatedAt) => {
     return fallbackCreatedAt;
 };
 exports.getMissingGameStartCreatedAt = getMissingGameStartCreatedAt;
-// Timer-Regel (Tim 22.10.): Es zaehlt genau EIN Zug bzw. die Aufstellung, der/die gerade angewaehlt ist.
-// - turn-resume auf einen schon beendeten Zug (Zurueck/Rueckgaengig, Timer an nach Wiedereroeffnen) oeffnet ihn wieder:
-//   die Luecke seit dem Ende gilt als Pause, ab dem Resume zaehlt die Zeit in diesem Zug (frueher ignoriert -> Zeit verloren).
-// - Startet/laeuft ein anderer Zug weiter (turn-start/turn-resume) oder die Aufstellung (setup-start/setup-resume), wird ein
-//   laufender anderer Zug implizit pausiert und ein wieder geoeffneter Zug wieder beendet. Nie laufen zwei Zuege gleichzeitig.
-// - Explizites turn-pause (Timer-Knopf, Time-out) laesst einen wieder geoeffneten Zug offen (pausiert), damit Timer an bzw.
-//   Time-out-Ende dort weiterlaufen.
-const isTurnTimingRunning = (turn) => {
-    const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-    return Boolean(turn.timing.startedAt && !turn.timing.endedAt && (!latestPause || latestPause.endedAt));
-};
+// Zug-Zeitlogik (Timer-Regel Tim 22.10.) gemeinsam mit der DB-Abbildung: siehe utils/turnTiming.ts.
 const buildRoundsFromTimeEvents = (timeEvents, fallbackEndedAt) => {
     const roundsByNumber = new Map();
     const gameEndAt = getFirstGameEndAt(timeEvents) ?? fallbackEndedAt;
-    const turnsByKey = new Map();
-    const reopened = new Set();
-    const keyOf = (roundNumber, turnNumber) => `${roundNumber}:${turnNumber}`;
-    const stopOtherTurns = (at, exceptKey) => {
-        turnsByKey.forEach((other, key) => {
-            if (key === exceptKey)
-                return;
-            if (reopened.has(key)) {
-                reopened.delete(key);
-                const latestPause = other.timing.pauses[other.timing.pauses.length - 1];
-                if (latestPause && !latestPause.endedAt) {
-                    other.timing.pauses.pop();
-                    other.timing.endedAt = latestPause.startedAt;
-                }
-                else {
-                    other.timing.endedAt = at;
-                }
-                return;
-            }
-            if (isTurnTimingRunning(other))
-                other.timing.pauses.push({ startedAt: at });
-        });
-    };
+    const timing = (0, turnTiming_1.createTurnTimingTracker)();
     (0, timeEventOrder_1.orderTimeEventsForEvaluation)(timeEvents).forEach((event) => {
         if (gameEndAt && event.createdAt > gameEndAt && event.action !== "game-end") {
             return;
         }
         if (event.action === "setup-start" || event.action === "setup-resume") {
-            stopOtherTurns(event.createdAt, null);
+            timing.setupActivated(event.createdAt);
             return;
         }
         if (!event.roundNumber) {
@@ -195,69 +164,12 @@ const buildRoundsFromTimeEvents = (timeEvents, fallbackEndedAt) => {
             return;
         }
         const turn = ensureTurn(round, event.turnNumber, event.playerId);
-        const turnKey = keyOf(event.roundNumber, event.turnNumber);
-        turnsByKey.set(turnKey, turn);
-        if (event.action === "turn-start") {
+        if (event.action === "turn-start" ||
+            event.action === "turn-resume" ||
+            event.action === "turn-pause" ||
+            event.action === "turn-end") {
             turn.playerId = event.playerId;
-            if (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt) {
-                return;
-            }
-            if (!turn.timing.startedAt) {
-                turn.timing.startedAt = event.createdAt;
-            }
-            else {
-                const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-                if (latestPause && !latestPause.endedAt) {
-                    latestPause.endedAt = event.createdAt;
-                }
-            }
-            stopOtherTurns(event.createdAt, turnKey);
-            return;
-        }
-        if (event.action === "turn-resume") {
-            turn.playerId = event.playerId;
-            if (!turn.timing.startedAt) {
-                return;
-            }
-            if (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt) {
-                // Wieder angewaehlter, schon beendeter Zug: ab jetzt zaehlt die Zeit wieder hier.
-                turn.timing.pauses.push({ startedAt: turn.timing.endedAt, endedAt: event.createdAt });
-                turn.timing.endedAt = undefined;
-                reopened.add(turnKey);
-            }
-            else {
-                const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-                if (latestPause && !latestPause.endedAt && event.createdAt >= latestPause.startedAt) {
-                    latestPause.endedAt = event.createdAt;
-                }
-            }
-            stopOtherTurns(event.createdAt, turnKey);
-            return;
-        }
-        if (event.action === "turn-pause") {
-            turn.playerId = event.playerId;
-            if (!turn.timing.startedAt || (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt)) {
-                return;
-            }
-            const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-            if (!latestPause || latestPause.endedAt) {
-                turn.timing.pauses.push({
-                    startedAt: event.createdAt
-                });
-            }
-            return;
-        }
-        if (event.action === "turn-end") {
-            turn.playerId = event.playerId;
-            if (turn.timing.endedAt && event.createdAt >= turn.timing.endedAt) {
-                return;
-            }
-            const latestPause = turn.timing.pauses[turn.timing.pauses.length - 1];
-            if (latestPause && !latestPause.endedAt) {
-                latestPause.endedAt = event.createdAt;
-            }
-            turn.timing.endedAt = event.createdAt;
-            reopened.delete(turnKey);
+            timing.apply(event.action, turn, event.createdAt);
         }
     });
     if (gameEndAt) {
