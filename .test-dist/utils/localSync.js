@@ -1,11 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decideAfterGameSave = exports.MAX_GAME_RESENDS = exports.saveHeldGames = exports.loadHeldGames = exports.recordSyncConflict = exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = void 0;
+exports.decideAfterGameSave = exports.MAX_GAME_RESENDS = exports.saveHeldGames = exports.loadHeldGames = exports.recordSyncConflict = exports.isTransientSyncError = exports.getSyncErrorMessage = exports.createEventSyncQueueItem = exports.createReopenGameSyncQueueItem = exports.createGameSyncQueueItem = exports.removeSyncQueueItem = exports.enqueueSyncQueueItem = exports.saveSyncQueue = exports.loadSyncQueue = exports.saveCachedGames = exports.loadCachedGames = exports.SYNC_QUEUE_KEY = void 0;
 const id_1 = require("./id");
 const gameState_1 = require("./gameState");
 const supabaseErrors_1 = require("./supabaseErrors");
 const GAMES_CACHE_KEY = "match-tracker.local-games.v1";
-const SYNC_QUEUE_KEY = "match-tracker.sync-queue.v2";
+exports.SYNC_QUEUE_KEY = "match-tracker.sync-queue.v2";
 const isBrowser = typeof window !== "undefined";
 const parseJson = (value, fallback) => {
     if (!value) {
@@ -67,7 +67,7 @@ const loadSyncQueue = () => {
     if (!isBrowser) {
         return [];
     }
-    const rawItems = parseJson(window.localStorage.getItem(SYNC_QUEUE_KEY), []);
+    const rawItems = parseJson(window.localStorage.getItem(exports.SYNC_QUEUE_KEY), []);
     return Array.isArray(rawItems) ? rawItems.filter(isSyncQueueItem) : [];
 };
 exports.loadSyncQueue = loadSyncQueue;
@@ -75,7 +75,7 @@ const saveSyncQueue = (queue) => {
     if (!isBrowser) {
         return;
     }
-    window.localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+    window.localStorage.setItem(exports.SYNC_QUEUE_KEY, JSON.stringify(queue));
 };
 exports.saveSyncQueue = saveSyncQueue;
 const enqueueSyncQueueItem = (queue, item) => {

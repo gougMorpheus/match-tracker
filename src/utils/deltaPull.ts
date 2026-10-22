@@ -162,3 +162,25 @@ export const canRefreshNow = (input: { hidden: boolean; online: boolean; liveGam
 
 // Rueckkehr in den Tab: Live-Ansicht sofort laden, sonst kurz warten (Netz nach dem Aufwachen).
 export const getResumeSyncDelayMs = (liveView: boolean, defaultDelayMs: number): number => (liveView ? 0 : defaultDelayMs);
+
+// Queue anderer Tabs (Pepper 22.10., #45): Alle Tabs teilen die Queue in localStorage, ein Tab liest sie aber nur beim Start.
+// Ein TV-Tab, der geoeffnet wird, waehrend der Editor-Tab noch eine Aenderung sendet, behielt diesen Eintrag fuer immer: im
+// TV (View only) darf er nicht gesendet werden, wurde nie entfernt und blockierte dann das Nachladen im Hintergrund und
+// verwarf jedes Live-Laden (Spiel mit wartender Aenderung). Meldet localStorage eine neue Queue, fallen hier die Eintraege
+// gesperrter (View only) Spiele weg, die der andere Tab inzwischen gesendet hat. Eigene sendbare Eintraege bleiben.
+export const dropSettledForeignQueueItems = <T extends { id: string; gameId: string }>(
+  own: T[], shared: T[], isViewOnly: (gameId: string) => boolean
+): T[] => {
+  const sharedIds = new Set(shared.map((item) => item.id));
+  const next = own.filter((item) => !isViewOnly(item.gameId) || sharedIds.has(item.id));
+  return next.length === own.length ? own : next;
+};
+
+// Live-Ansicht (TV) und gemeinsamer Spiele-Cache (#45): Die Live-Ansicht laedt nur ihr Spiel, ihre uebrige Spieleliste ist der
+// Stand beim Oeffnen. Schrieb sie die ganze Liste zurueck, kamen inzwischen (weich) geloeschte Spiele wieder in den Cache der
+// anderen Tabs und standen nach dem Neuladen wieder als aktiv in der Liste. Jetzt nur das eigene Spiel ersetzen bzw. entfernen.
+export const mergeLiveGameIntoCache = <T extends { id: string }>(cached: T[], memory: T[], liveGameId: string): T[] => {
+  const live = memory.find((game) => game.id === liveGameId);
+  const rest = cached.filter((game) => game.id !== liveGameId);
+  return live ? [live, ...rest] : rest;
+};

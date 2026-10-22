@@ -1,8 +1,10 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { useGameStore } from "../store/GameStore";
+import { APP_TIME_ZONE } from "../utils/time";
 
 const formatSyncStamp = (iso: string): string =>
   new Intl.DateTimeFormat("de-DE", {
+    timeZone: APP_TIME_ZONE,
     year: "2-digit",
     month: "2-digit",
     day: "2-digit",

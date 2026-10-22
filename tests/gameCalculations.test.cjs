@@ -1177,7 +1177,7 @@ const runGameCalculationsTests = () => {
 
     assert.equal(
       getMissingGameStartCreatedAt(game, "2026-04-20T19:00:00.000Z"),
-      new Date("2026-04-20T18:30:00").toISOString()
+      "2026-04-20T16:30:00.000Z" // 18:30 Berliner Zeit (#45: unabhaengig von der Browser-Zeitzone)
     );
   }
 
