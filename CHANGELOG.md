@@ -9,6 +9,7 @@ Bei Bugfixes immer Fehlerbild und Ursache nennen.
 - Nach der Anmeldung einmal je Sitzung nur lesen: `dashboard.my_app_role` (Slug `match-tracker`, Argument `p_app_slug`). Kein Polling, kein Schreiben von Freischaltungen oder Rollen.
 - Gelesen und auf die bestehenden Modi gelegt: kein Eintrag → Hinweis und Link zur Projektübersicht, die App bleibt zu; ansehen → heutiges View only; bearbeiten und admin → heutige Eingabe (Edit/View only und Passwort zum Wiedereröffnen unverändert).
 - Die Zeile in `dashboard.apps` wurde ohne Sitzung nicht gelesen („permission denied“) und nicht angelegt.
+- Tests gegen einen Mock der Rollen-RPC, ohne echte Konten: nicht angemeldet, kein Zugang, View only, Edit.
 
 ## 2026-10-22 – Gemeinsame Queue: kein Tab entfernt mehr ungesendete Einträge eines anderen; verdeckter Tab sendet sofort
 - Fehlerbild (Pepper-Nachtest von #45, Variante 2): Editor Weiter R1Z2, TV-Tab sofort neu geladen, im Editor noch einmal Weiter R2Z1. Der Editor zeigte „Offline“, der TV blieb 55 s auf R1Z2, die Sync-Zeit im Editor stand still. In der DB fehlte R2Z1 (letztes Ereignis 21:27:26 MESZ).

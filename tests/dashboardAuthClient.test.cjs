@@ -74,6 +74,11 @@ const runDashboardAuthClientTests = async () => {
   const access = require("../.test-dist/utils/dashboardAccess.js");
   try {
     const client = clientModule.createDashboardClient(`http://127.0.0.1:${port}`, "sb_publishable_test", memory());
+    const { data: { session: signedOut } } = await client.auth.getSession();
+    assert.equal(signedOut, null);
+    assert.equal(access.accessScreenForRole(false, null), "login", "nicht angemeldet");
+    assert.equal(requests.filter((entry) => entry.path === "/rest/v1/rpc/my_app_role").length, 0);
+
     const bad = await client.auth.signInWithPassword({ email: "a@example.com", password: "wrong" });
     assert.ok(bad.error, "falsches Passwort");
     assert.equal(bad.error.code, "invalid_credentials");
@@ -98,11 +103,26 @@ const runDashboardAuthClientTests = async () => {
     assert.ok(requests.every((entry) => entry.path === "/auth/v1/token" || entry.path === "/rest/v1/rpc/my_app_role" || entry.method === "GET" || entry.method === "HEAD"));
     assert.ok(!requests.some((entry) => /app_access|admin_/.test(entry.path)));
 
-    const empty = memory();
-    role = null;
-    assert.equal(await access.loadDashboardRoleOnce("other-user", empty, () => clientModule.fetchMyAppRole(client)), null);
-    assert.equal(access.accessScreenForRole(true, null), "no-access");
-    assert.equal(access.accessScreenForRole(true, "bearbeiten"), "edit");
+    const states = [
+      ["user-null", null, "no-access"],
+      ["user-ansehen", "ansehen", "view"],
+      ["user-bearbeiten", "bearbeiten", "edit"],
+      ["user-admin", "admin", "edit"]
+    ];
+    for (const [userId, nextRole, screen] of states) {
+      role = nextRole;
+      const store = memory();
+      const before = requests.filter((entry) => entry.path === "/rest/v1/rpc/my_app_role").length;
+      const loaded = await access.loadDashboardRoleOnce(userId, store, () => clientModule.fetchMyAppRole(client));
+      assert.equal(loaded, nextRole);
+      assert.equal(access.accessScreenForRole(true, loaded), screen, String(nextRole));
+      const after = requests.filter((entry) => entry.path === "/rest/v1/rpc/my_app_role").length;
+      assert.equal(after, before + 1, "genau ein Rollenabruf");
+      assert.equal(await access.loadDashboardRoleOnce(userId, store, () => clientModule.fetchMyAppRole(client)), nextRole);
+      assert.equal(requests.filter((entry) => entry.path === "/rest/v1/rpc/my_app_role").length, after, "kein zweiter Abruf");
+      assert.deepEqual(JSON.parse(requests.at(-1).body), { p_app_slug: "match-tracker" });
+    }
+    assert.ok(!requests.some((entry) => /app_access|admin_/.test(entry.path)));
   } finally {
     access.clearDashboardRoleMemory();
     access.setSessionWriteGate("legacy");
