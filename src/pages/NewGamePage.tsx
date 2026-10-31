@@ -2,7 +2,6 @@ import { useMemo, useState, type FormEvent } from "react";
 import { GameMetaFields } from "../components/GameMetaFields";
 import { GamePlayerFields } from "../components/GamePlayerFields";
 import type { CreateGameInput } from "../types/game";
-import { useDashboardAuth } from "../components/DashboardAuthGate";
 import { Layout } from "../components/Layout";
 import { useGameStore } from "../store/GameStore";
 import { buildGameFormOptions, getPlayerArmyComboKey } from "../utils/gameFormOptions";
@@ -32,7 +31,6 @@ const createDefaultFormState = (): CreateGameInput => ({
 
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
   const { createGame, games, isMutating, errorMessage, clearError } = useGameStore();
-  const { canEdit } = useDashboardAuth();
   const [formState, setFormState] = useState<CreateGameInput>(() => createDefaultFormState());
   const [formError, setFormError] = useState("");
   const {
@@ -107,17 +105,6 @@ export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
       return;
     }
   };
-
-  if (!canEdit) {
-    return (
-      <Layout title="Neues Spiel" onBack={onBack}>
-        <article className="empty-state">
-          <h2>View only</h2>
-          <p>Neue Matches können mit diesem Konto nicht angelegt werden.</p>
-        </article>
-      </Layout>
-    );
-  }
 
   return (
     <Layout

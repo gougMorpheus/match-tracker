@@ -3818,25 +3818,3 @@ body:has(.tv-game) .modal-backdrop { z-index: 1100; }
 .share-notice { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 3000; max-width: calc(100vw - 32px);
   padding: .6em 1.1em; border-radius: 999px; background: var(--bg-raised); color: var(--text); border: 1px solid var(--accent);
   box-shadow: var(--shadow); font-size: 1rem; overflow-wrap: anywhere; pointer-events: none; }
-
-.auth-gate {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem 1rem 3rem;
-}
-
-.auth-gate__card {
-  width: min(100%, 440px);
-}
-
-.auth-gate h1 {
-  margin: 0;
-  font-size: 1.6rem;
-}
-
-.auth-gate .primary-button,
-.auth-gate__link {
-  text-align: center;
-  text-decoration: none;
-}
