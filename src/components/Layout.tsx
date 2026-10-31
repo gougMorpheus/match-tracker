@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
+import { useDashboardAuth } from "./DashboardAuthGate";
 import { useGameStore } from "../store/GameStore";
 import { APP_TIME_ZONE } from "../utils/time";
 
@@ -34,6 +35,7 @@ export const Layout = ({
   children
 }: LayoutProps) => {
   const { syncStatus, lastSyncAt, pendingSyncCount, retrySync } = useGameStore();
+  const dashboardAuth = useDashboardAuth();
   const syncLabel = (() => {
     if (syncStatus === "syncing") {
       return "Sync läuft";
@@ -69,6 +71,11 @@ export const Layout = ({
             >
               {syncLabel}
             </button>
+            {dashboardAuth.enabled ? (
+              <button type="button" className="ghost-button compact-button" onClick={() => void dashboardAuth.signOut()}>
+                Abmelden
+              </button>
+            ) : null}
           </div>
           <div className="header-title-row">
             <h1>{title}</h1>
