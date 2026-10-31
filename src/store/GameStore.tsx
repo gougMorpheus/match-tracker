@@ -97,6 +97,7 @@ import {
 } from "../utils/localSync";
 import { syncRememberedPlayerNames } from "../utils/presets";
 import { rememberAccessMode } from "../utils/accessModeMemory";
+import { isSessionWriteBlocked } from "../utils/dashboardAccess";
 import { createId } from "../utils/id";
 import { getNowIso } from "../utils/time";
 import {
@@ -384,7 +385,7 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   );
 
   const isGameViewOnly = useCallback(
-    (gameId: string) => isGameWriteBlocked(gameAccessModesRef.current, gameId,
+    (gameId: string) => isSessionWriteBlocked() || isGameWriteBlocked(gameAccessModesRef.current, gameId,
       getGameRouteAccess(window.location.hash, window.location.search)),
     []
   );
@@ -1518,6 +1519,9 @@ export const GameStoreProvider = ({ children }: PropsWithChildren) => {
   const createGame = useCallback(
     async (input: CreateGameInput): Promise<Game> =>
       runMutation(async () => {
+        if (isSessionWriteBlocked()) {
+          throw new Error("Kein Schreibzugriff.");
+        }
         const createdGame = createLocalGame(input);
         setGameAccessMode(createdGame.id, "edit");
         // Wer das Spiel anlegt, bearbeitet es: Wahl für dieses Gerät merken (kein Dialog nach Neuladen).

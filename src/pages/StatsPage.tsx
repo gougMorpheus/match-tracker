@@ -3,6 +3,7 @@ import { getBattleCalMenuItems } from "../utils/battleCalFeature";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { FloatingMenu } from "../components/FloatingMenu";
 import { openNotificationsOverview } from "../pwa/pushFollowStore";
+import { useDashboardAuth } from "../components/DashboardAuthGate";
 import { Layout } from "../components/Layout";
 import { StatCard } from "../components/StatCard";
 import { useGameStore } from "../store/GameStore";
@@ -1003,6 +1004,7 @@ const createScenarioSummaries = (
 
 export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
   const { games: allGames, isLoading, errorMessage, clearError, refreshGames } = useGameStore();
+  const { canEdit } = useDashboardAuth();
   // „Nicht zählen“-Spiele existieren für die Statistik nicht (auch nicht in Filtern, „vs …“, Datumsauswahl).
   const games = useMemo(() => removeExcludedStatsGames(allGames), [allGames]);
   const [filters, setFilters] = useState(createInitialGameFilters);
@@ -1343,7 +1345,7 @@ export const StatsPage = ({ onBack, onCreateGame }: StatsPageProps) => {
                 label: "Navigation",
                 items: [
                   { label: "Main", onClick: onBack },
-                  { label: "Neues Spiel", onClick: onCreateGame },
+                  { label: "Neues Spiel", onClick: onCreateGame, disabled: !canEdit },
                   { label: "Statistik", onClick: () => window.location.hash = "/stats" },
                   ...getBattleCalMenuItems()
                 ]

@@ -3,6 +3,7 @@ import { getBattleCalMenuItems } from "../utils/battleCalFeature";
 import { FloatingMenu } from "../components/FloatingMenu";
 import { openNotificationsOverview } from "../pwa/pushFollowStore";
 import { GameCard } from "../components/GameCard";
+import { useDashboardAuth } from "../components/DashboardAuthGate";
 import { Layout } from "../components/Layout";
 import { seedGames } from "../data/seedGames";
 import { useGameStore } from "../store/GameStore";
@@ -19,6 +20,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { games, importGames, isLoading, isMutating, errorMessage, clearError, refreshGames } =
     useGameStore();
+  const { canEdit } = useDashboardAuth();
   const [filters, setFilters] = useState(createInitialGameFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterOptions = useMemo(() => getFilterOptions(games), [games]);
@@ -71,7 +73,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
                 label: "Navigation",
                 items: [
                   { label: "Main", onClick: () => (window.location.hash = "/games") },
-                  { label: "Neues Spiel", onClick: onCreateGame },
+                  { label: "Neues Spiel", onClick: onCreateGame, disabled: !canEdit },
                   { label: "Statistik", onClick: onOpenStats },
                   ...getBattleCalMenuItems()
                 ]
@@ -79,7 +81,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
               {
                 label: "Optionen",
                 items: [
-                  { label: "Import", onClick: () => fileInputRef.current?.click(), disabled: isMutating },
+                  { label: "Import", onClick: () => fileInputRef.current?.click(), disabled: isMutating || !canEdit },
                   {
                     label: "Export",
                     onClick: () => exportGamesAsJson(games),
@@ -228,7 +230,7 @@ export const GamesPage = ({ onOpenGame, onCreateGame, onOpenStats }: GamesPagePr
               type="button"
               className="secondary-button"
               onClick={() => void importGames(seedGames)}
-              disabled={isMutating}
+              disabled={isMutating || !canEdit}
             >
               Demo laden
             </button>

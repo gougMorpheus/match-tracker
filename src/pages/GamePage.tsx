@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useDashboardAuth } from "../components/DashboardAuthGate";
 import { loadRememberedAccessMode, rememberAccessMode } from "../utils/accessModeMemory";
 import { sortEventsNewestFirst } from "../utils/eventOrder";
 import { resolveSelectedTurnKey, SETUP_TURN_KEY } from "../utils/turnSelection";
@@ -250,6 +251,8 @@ const exitTvToGames = () => {
 
 export const GamePage = (props: GamePageProps) => {
   const { getGame, isLoading, errorMessage, getGameAccessMode, setGameAccessMode } = useGameStore();
+  const dashboardAuth = useDashboardAuth();
+  const spectator = dashboardAuth.enabled && !dashboardAuth.canEdit;
   const game = getGame(props.gameId);
   useEffect(() => () => setGameAccessMode(props.gameId, null), [props.gameId, setGameAccessMode]);
   useEffect(() => {
@@ -261,7 +264,9 @@ export const GamePage = (props: GamePageProps) => {
   const [restoredFor, setRestoredFor] = useState<string | null>(null);
   useLayoutEffect(() => {
     if (!hasGame || restoredFor === props.gameId) return;
-    if (!props.forceTv && !isGameCompletedForDisplay(game) && !getGameAccessMode(props.gameId)) {
+    if (spectator) {
+      setGameAccessMode(props.gameId, "view");
+    } else if (!props.forceTv && !isGameCompletedForDisplay(game) && !getGameAccessMode(props.gameId)) {
       const remembered = loadRememberedAccessMode(props.gameId);
       if (remembered) {
         setGameAccessMode(props.gameId, remembered);
@@ -269,7 +274,7 @@ export const GamePage = (props: GamePageProps) => {
       }
     }
     setRestoredFor(props.gameId);
-  }, [hasGame, props.gameId, props.forceTv, restoredFor, game, getGameAccessMode, setGameAccessMode]);
+  }, [hasGame, props.gameId, props.forceTv, restoredFor, game, getGameAccessMode, setGameAccessMode, spectator]);
   if (game && restoredFor !== props.gameId) return null;
   if (!game) return <Layout title={isLoading ? "Tracker" : "Spiel nicht gefunden"}
     subtitle={isLoading ? "Spiel wird geladen" : errorMessage ?? "Das Match ist nicht verfügbar."} />;
@@ -349,16 +354,18 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
   const timeoutHoldTimerRef = useRef<number | null>(null);
   const timeoutHoldTriggeredRef = useRef(false);
   const advanceInFlightRef = useRef(false);
+  const dashboardAuth = useDashboardAuth();
+  const spectator = dashboardAuth.enabled && !dashboardAuth.canEdit;
   const accessMode = getGameAccessMode(gameId);
   const viewOnlyActive = isGameCompletedForDisplay(game) || isGameViewOnly(game.id);
-  const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode) && !forceTv;
+  const shouldShowAccessModeDialog = shouldAskGameAccessMode(game, accessMode) && !forceTv && !spectator;
   // View only (= TV-Ansicht) fuer abgeschlossene Spiele und laufende Spiele mit Wahl "View only" bzw. ?tv=1.
-  const viewOnlyTv = shouldShowViewOnly(game, accessMode, forceTv);
+  const viewOnlyTv = shouldShowViewOnly(game, accessMode, forceTv || spectator);
   // Abgeschlossenes Spiel in View only: Menue bietet "Entsperren" (Passwort).
   const closedTv = shouldShowClosedGameTv(game, accessMode);
   // Folgen (Push Stufe a): nur lokal pro Geraet, nach dem Einschalten Hinweis zur Verfuegbarkeit.
   // "Match öffnen …": für jedes laufende Spiel erreichbar (Edit und View only), um die gemerkte Wahl zu ändern.
-  const accessChoiceMenuItems = isGameCompletedForDisplay(game) ? [] : [{ label: "Match öffnen …", onClick: () => { reopenAccessChoice(); } }];
+  const accessChoiceMenuItems = !dashboardAuth.canEdit || isGameCompletedForDisplay(game) ? [] : [{ label: "Match öffnen …", onClick: () => { reopenAccessChoice(); } }];
   const reopenAccessChoice = () => {
     rememberAccessMode(game.id, null);
     setGameAccessMode(game.id, null);
@@ -1368,7 +1375,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                 label: "Navigation",
                 items: [
                   { label: "Main", onClick: onBack },
-                  { label: "Neues Spiel", onClick: () => (window.location.hash = "/new") },
+                  { label: "Neues Spiel", onClick: () => (window.location.hash = "/new"), disabled: !dashboardAuth.canEdit },
                   { label: "Statistik", onClick: () => (window.location.hash = "/stats") }
                 ]
               },
@@ -1420,7 +1427,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   label: "Navigation",
                   items: [
                     { label: "Main", onClick: () => { exitTvToGames(); } },
-                    { label: "Neues Spiel", onClick: () => { window.location.hash = "/new"; } },
+                    { label: "Neues Spiel", onClick: () => { window.location.hash = "/new"; }, disabled: !dashboardAuth.canEdit },
                     { label: "Statistik", onClick: () => { window.location.hash = "/stats"; } }
                   ]
                 },
@@ -1433,7 +1440,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     ...followMenuItems,
                     ...accessChoiceMenuItems,
                     // Nur bei abgeschlossenem Spiel; laufende Spiele in View only: kein Entsperren/Edit (nur ueber Main).
-                    ...(closedTv ? [{ label: "Entsperren", onClick: () => { handleRequestReopenGame(); }, disabled: isMutating }] : [])
+                    ...(closedTv ? [{ label: "Entsperren", onClick: () => { if (!dashboardAuth.canEdit) return; handleRequestReopenGame(); }, disabled: isMutating || !dashboardAuth.canEdit }] : [])
                   ]
                 }
               ]}
