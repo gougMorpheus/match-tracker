@@ -19,11 +19,9 @@ Lege lokal eine `.env.local` an:
 ```bash
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
-VITE_DASHBOARD_SUPABASE_URL=
-VITE_DASHBOARD_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-`VITE_SUPABASE_*` bleibt das Spiel-Projekt (privat). `VITE_DASHBOARD_*` ist die Anmeldung an der Projektübersicht (geschäftlich, nur lesen). Beide Dashboard-Variablen leer lassen heißt: kein Login, Edit und View only wie bisher. Für Netlify dieselben Namen unter Environment variables setzen. Der Dashboard-Schlüssel ist der öffentliche Publishable-Key, kein Secret.
+Fuer Netlify spaeter dieselben Variablen im Site-Settings-Bereich unter `Environment variables` setzen.
 
 ## Supabase Setup
 

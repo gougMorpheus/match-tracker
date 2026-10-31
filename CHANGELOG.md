@@ -3,14 +3,6 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
-## 2026-10-30 – Projektübersicht schaltet frei, Match-Tracker behält Edit und View only
-- Geteilt: Die Projektübersicht (Supabase geschäftlich) steuert nur Freischaltung und Sichtbarkeit. Die Modi im Match-Tracker bleiben Edit und View only, nicht die Dashboard-Begriffe Ansehen/Bearbeiten/Admin.
-- Anmeldung mit denselben Konten wie die Projektübersicht. Spiel-Daten bleiben auf dem bestehenden Projekt. Ohne die beiden Dashboard-Umgebungsvariablen bleibt das bisherige Verhalten (kein Login).
-- Nach der Anmeldung einmal je Sitzung nur lesen: `dashboard.my_app_role` (Slug `match-tracker`, Argument `p_app_slug`). Kein Polling, kein Schreiben von Freischaltungen oder Rollen.
-- Gelesen und auf die bestehenden Modi gelegt: kein Eintrag → Hinweis und Link zur Projektübersicht, die App bleibt zu; ansehen → heutiges View only; bearbeiten und admin → heutige Eingabe (Edit/View only und Passwort zum Wiedereröffnen unverändert).
-- Die Zeile in `dashboard.apps` wurde ohne Sitzung nicht gelesen („permission denied“) und nicht angelegt.
-- Tests gegen einen Mock der Rollen-RPC, ohne echte Konten: nicht angemeldet, kein Zugang, View only, Edit.
-
 ## 2026-10-22 – Gemeinsame Queue: kein Tab entfernt mehr ungesendete Einträge eines anderen; verdeckter Tab sendet sofort
 - Fehlerbild (Pepper-Nachtest von #45, Variante 2): Editor Weiter R1Z2, TV-Tab sofort neu geladen, im Editor noch einmal Weiter R2Z1. Der Editor zeigte „Offline“, der TV blieb 55 s auf R1Z2, die Sync-Zeit im Editor stand still. In der DB fehlte R2Z1 (letztes Ereignis 21:27:26 MESZ).
 - Ursache 1 (seit 01.05.2026, `canAttemptRemoteSync`): Ein verdeckter Tab sendet seine eigenen Änderungen nicht. Eine Änderung im verdeckten Editor blieb als „Offline“ in der Queue (Speicher und localStorage), bis der Tab wieder sichtbar wurde. Auch nach einem Offline-Moment wurde im Hintergrund nicht nachgesendet. Live nachgestellt (echter Chrome, ZZ-Spiel): Editor verdeckt → „Offline“, 6 Einträge warten 20 s, TV bleibt stehen; Editor wieder vorne → sofort gesendet. #45 war nicht die Ursache.
