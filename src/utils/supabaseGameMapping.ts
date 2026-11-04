@@ -877,6 +877,7 @@ export const mapSupabaseGameToAppGame = (
     ),
     autoCommandPointOn: optionsMeta.autoCommandPointOn,
     autoCommandPointAwards: optionsMeta.autoCommandPointAwards,
+    isOnline: (row as SupabaseGameRecord & { is_online?: boolean | null }).is_online === true,
     legacyScoreTotals: scoreMeta.legacyScoreTotals
   };
 };

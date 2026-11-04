@@ -165,7 +165,8 @@ const getComparableGamePayload = (
   stats_eligibility_mode: payload.stats_eligibility_mode ?? null,
   stats_eligibility_overrides: payload.stats_eligibility_overrides ?? null,
   timer_corrections: parseTimerCorrections(payload.timer_corrections, payload.notes),
-  notes: normalizeJsonString(payload.notes)
+  notes: normalizeJsonString(payload.notes),
+  is_online: payload.is_online === true
 });
 
 const getComparableEventPayload = (
@@ -254,6 +255,7 @@ const mapGameInputToInsert = (payload: CreateGameInput): CreateSupabaseGamePaylo
   started_at: getNowIso(),
   ended_at: null,
   winner_player: null,
+  is_online: payload.isOnline === true,
   stats_eligibility_mode: serializeStatsEligibilityMode(payload.statsEligibilityMode),
   stats_eligibility_overrides: null,
   notes: serializeGameNotes(
@@ -281,6 +283,7 @@ export const createGameUpdatePayload = (payload: CreateGameInput): UpdateSupabas
   primary_mission: payload.primaryMission.trim() || null,
   defender_player: payload.defenderSlot === "player1" ? 1 : payload.defenderSlot === "player2" ? 2 : null,
   starting_player: payload.startingSlot === "player1" ? 1 : payload.startingSlot === "player2" ? 2 : null,
+  is_online: payload.isOnline === true,
   stats_eligibility_mode: serializeStatsEligibilityMode(payload.statsEligibilityMode)
 });
 
@@ -330,6 +333,7 @@ export const createImportedGamePayload = (game: Game): CreateSupabaseGamePayload
     defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
     starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
     winner_player: endedAt ? getWinnerPlayerSlot(game) : null,
+    is_online: game.isOnline === true,
     stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
     stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
     timer_corrections: serializeTimerCorrections(game.timerCorrections),
@@ -445,6 +449,7 @@ export const createSyncedGamePayload = (game: Game): CreateSupabaseGamePayload =
     defender_player: game.defenderPlayerId === game.players[0].id ? 1 : game.defenderPlayerId === game.players[1].id ? 2 : null,
     starting_player: game.startingPlayerId === game.players[0].id ? 1 : game.startingPlayerId === game.players[1].id ? 2 : null,
     winner_player: endedAt ? getWinnerPlayerSlot(game) : null,
+    is_online: game.isOnline === true,
     stats_eligibility_mode: serializeStatsEligibilityMode(game.statsEligibilityMode),
     stats_eligibility_overrides: serializeStatsEligibilityOverrides(game.statsEligibilityOverrides),
     timer_corrections: serializeTimerCorrections(game.timerCorrections),

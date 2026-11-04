@@ -1,7 +1,9 @@
 import type { SyncQueueItem } from "./localSync";
 
-// Schema-Stand, den diese App-Version voraussetzt (siehe supabase/migrations/20261012_*).
-export const APP_SCHEMA_VERSION = 2;
+// Schema-Stand dieser App. 3 = games.is_online + lesende HUD-RPC mt_match_hud.
+// mt_schema_info().min_app_schema bleibt 2, solange die live App noch Schema 2 ist.
+// Diese Soft-App darf neuer sein; ein Server mit min 2 lässt sie durch (min <= APP).
+export const APP_SCHEMA_VERSION = 3;
 // Vor der Migration gespeicherte Spiele/Queue-Eintraege haben keine Version: Basis = Migrationsstand.
 export const LEGACY_BASE_VERSION = 1;
 

@@ -693,6 +693,7 @@ const mapSupabaseGameToAppGame = (rawRow, rawEvents) => {
         timerCorrections: (0, exports.parseTimerCorrections)(row.timer_corrections, row.notes),
         autoCommandPointOn: optionsMeta.autoCommandPointOn,
         autoCommandPointAwards: optionsMeta.autoCommandPointAwards,
+        isOnline: row.is_online === true,
         legacyScoreTotals: scoreMeta.legacyScoreTotals
     };
 };

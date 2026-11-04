@@ -151,6 +151,8 @@ export interface Game {
   timerCorrections: TimerCorrections;
   autoCommandPointOn: boolean;
   autoCommandPointAwards: Record<string, boolean>;
+  // true: Gelände darf den HUD-Stand dieses Spiels über match_id = id lesen.
+  isOnline: boolean;
   legacyScoreTotals: Record<string, number>;
 }
 
@@ -192,6 +194,7 @@ export interface CreateGameInput {
   statsEligibilityMode: StatsEligibilityMode;
   defenderSlot: "" | "player1" | "player2";
   startingSlot: "" | "player1" | "player2";
+  isOnline: boolean;
 }
 
 export interface GameImportPayload {

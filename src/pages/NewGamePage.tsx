@@ -26,7 +26,8 @@ const createDefaultFormState = (): CreateGameInput => ({
   primaryMission: "",
   statsEligibilityMode: "auto",
   defenderSlot: "",
-  startingSlot: ""
+  startingSlot: "",
+  isOnline: false
 });
 
 export const NewGamePage = ({ onCreated, onBack }: NewGamePageProps) => {
