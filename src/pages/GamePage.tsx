@@ -11,6 +11,7 @@ import { FloatingMenu } from "../components/FloatingMenu";
 import { openNotificationsOverview, updatePushFollowSettings, usePushFollowSettings } from "../pwa/pushFollowStore";
 import { isFollowingGame, setGameFollowed } from "../utils/pushFollow";
 import { GameMetaFields } from "../components/GameMetaFields";
+import { OnlineMatchPanel } from "../components/OnlineMatchPanel";
 import { GameOverview } from "../components/GameOverview";
 import { GamePlayerFields } from "../components/GamePlayerFields";
 import { Layout } from "../components/Layout";
@@ -164,7 +165,8 @@ const createGameFormState = (game: Game): CreateGameInput => ({
   primaryMission: game.primaryMission,
   statsEligibilityMode: game.statsEligibilityMode,
   defenderSlot: game.defenderPlayerId === game.players[0].id ? "player1" : game.defenderPlayerId === game.players[1].id ? "player2" : "",
-  startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : game.startingPlayerId === game.players[1].id ? "player2" : ""
+  startingSlot: game.startingPlayerId === game.players[0].id ? "player1" : game.startingPlayerId === game.players[1].id ? "player2" : "",
+  isOnline: game.isOnline === true
 });
 
 const getRoundSurfaceClassName = (roundNumber?: number) =>
@@ -1358,6 +1360,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                 </span>
               ) : null}
               {isReadOnly ? <span className="status-pill status-pill--view-only">View only</span> : null}
+              {game.isOnline ? <span className="status-pill status-pill--active">Online</span> : null}
             </div>
           </div>
           <FloatingMenu
@@ -1405,6 +1408,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
         </>
       }
     >
+      {!viewOnlyTv && !detailsOpen && game.isOnline ? <OnlineMatchPanel matchId={game.id} /> : null}
       {viewOnlyTv ? (
         <TvGameView
           game={game}
@@ -1921,6 +1925,9 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                       void setAutoCommandPointEnabled(game.id, nextValue)
                     }
                   />
+                  {gameForm.isOnline ? (
+                    <OnlineMatchPanel matchId={game.id} pending={gameForm.isOnline !== game.isOnline} />
+                  ) : null}
                   {statsEligibilityReport ? (
                     <section className="card stack stats-eligibility-card">
                       <div className="list-row">
@@ -1984,6 +1991,8 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                   </div>
                 </form>
               ) : (
+                <div className="stack">
+                {game.isOnline ? <OnlineMatchPanel matchId={game.id} /> : null}
                 <div className="scoreboard__grid scoreboard__grid--details">
                   <div>
                     <span>Datum</span>
@@ -2045,6 +2054,7 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
                     <span>Match-Zeit</span>
                     <strong>{formatDuration(getGameDurationMs(game))}</strong>
                   </div>
+                </div>
                 </div>
               )}
             </div>

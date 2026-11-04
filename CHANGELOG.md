@@ -3,6 +3,12 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-11-04 – Online-Spiele und lesender HUD-Stand für Gelände (Soft, nicht live)
+- Spiele haben `is_online` (ja/nein, Default false) beim Anlegen und Bearbeiten. Nur Online-Spiele sind als HUD-Quelle für die Gelände-Ansicht gedacht. `match_id` ist `games.id`. In der App: Kennzeichnung in Liste und Spielkopf, bei Online die UUID plus Kopieren und die Query `?match=<id>` (Gelände-Host wird nicht festgelegt).
+- Lesen: `mt_match_hud(p_match_id uuid)` leitet Runde, aktiven Zug (Slot 1|2, Runde/Zug, ob der Timer läuft), Spielstand und CP aus `games` + `events` ab, gleich der App (`buildMatchHud`). Kein Schreiben aus Gelände. Zurückgenommene Ereignisse zählen nicht.
+- `mt_save_game` liest `is_online` nur, wenn der Schlüssel im JSON steht. Alte Clients lassen die Spalte unverändert (neu: false). `APP_SCHEMA_VERSION` ist 3, `min_app_schema` bleibt 2.
+- Kein Login, kein Rollen-Gate. Passwort für Löschen/Wiederöffnen und die Timer-Regel unverändert.
+
 ## 2026-10-22 – Gemeinsame Queue: kein Tab entfernt mehr ungesendete Einträge eines anderen; verdeckter Tab sendet sofort
 - Fehlerbild (Pepper-Nachtest von #45, Variante 2): Editor Weiter R1Z2, TV-Tab sofort neu geladen, im Editor noch einmal Weiter R2Z1. Der Editor zeigte „Offline“, der TV blieb 55 s auf R1Z2, die Sync-Zeit im Editor stand still. In der DB fehlte R2Z1 (letztes Ereignis 21:27:26 MESZ).
 - Ursache 1 (seit 01.05.2026, `canAttemptRemoteSync`): Ein verdeckter Tab sendet seine eigenen Änderungen nicht. Eine Änderung im verdeckten Editor blieb als „Offline“ in der Queue (Speicher und localStorage), bis der Tab wieder sichtbar wurde. Auch nach einem Offline-Moment wurde im Hintergrund nicht nachgesendet. Live nachgestellt (echter Chrome, ZZ-Spiel): Editor verdeckt → „Offline“, 6 Einträge warten 20 s, TV bleibt stehen; Editor wieder vorne → sofort gesendet. #45 war nicht die Ursache.

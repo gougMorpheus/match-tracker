@@ -81,6 +81,22 @@ export const GameMetaFields = ({
       onChange={(nextValue) => onChange("primaryMission", nextValue)}
     />
 
+    <div className="field">
+      <span>Online</span>
+      <button
+        type="button"
+        className={`toggle-button ${value.isOnline ? "is-active" : ""}`}
+        aria-pressed={value.isOnline}
+        disabled={disabled}
+        onClick={() => onChange("isOnline", !value.isOnline)}
+      >
+        {value.isOnline ? "Ja" : "Nein"}
+      </button>
+      <p className="muted-copy">
+        Ja: Gelände kann Runde, Zug, Spielstand und CP zu diesem Spiel lesen.
+      </p>
+    </div>
+
     {typeof autoCommandPointOn === "boolean" && onToggleAutoCommandPoint ? (
       <div className="field">
         <span>Auto CP</span>

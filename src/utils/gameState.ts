@@ -424,7 +424,8 @@ export const syncDerivedGameState = (game: Game): Game => {
     commandPointEvents: sortByCreatedAt(game.commandPointEvents),
     noteEvents: sortByCreatedAt(game.noteEvents),
     timerCorrections: game.timerCorrections ?? createEmptyTimerCorrections(),
-    legacyScoreTotals: game.legacyScoreTotals ?? {}
+    legacyScoreTotals: game.legacyScoreTotals ?? {},
+    isOnline: game.isOnline === true
   };
 };
 
@@ -481,6 +482,7 @@ export const createLocalGame = (input: CreateGameInput): Game => {
     timerCorrections: createEmptyTimerCorrections(),
     autoCommandPointOn: true,
     autoCommandPointAwards: {},
+    isOnline: input.isOnline === true,
     legacyScoreTotals: {},
     timeEvents: [
       {
@@ -510,6 +512,7 @@ export const updateLocalGameDetails = (game: Game, input: CreateGameInput): Game
     primaryMission: input.primaryMission.trim(),
     defenderPlayerId: input.defenderSlot === "player1" ? game.players[0].id : input.defenderSlot === "player2" ? game.players[1].id : "",
     startingPlayerId: input.startingSlot === "player1" ? game.players[0].id : input.startingSlot === "player2" ? game.players[1].id : "",
+    isOnline: input.isOnline === true,
     players: [
       {
         ...game.players[0],
@@ -722,6 +725,7 @@ export const overlayLocalGameMetadata = (baseGame: Game, localGame: Game): Game 
     ...baseGame,
     autoCommandPointOn: localGame.autoCommandPointOn,
     autoCommandPointAwards: localGame.autoCommandPointAwards,
+    isOnline: localGame.isOnline === true,
     statsEligibilityMode: localGame.statsEligibilityMode,
     statsEligibilityOverrides: localGame.statsEligibilityOverrides,
     gamePoints: localGame.gamePoints,
@@ -818,6 +822,7 @@ export const mapPersistedGame = (value: unknown): Game | null => {
     ...rawGame,
     id: gameId,
     autoCommandPointOn: rawGame.autoCommandPointOn ?? true,
+    isOnline: rawGame.isOnline === true,
     autoCommandPointAwards: rawGame.autoCommandPointAwards ?? {},
     statsEligibilityMode: normalizeStatsEligibilityMode(rawGame.statsEligibilityMode),
     statsEligibilityOverrides: normalizeStatsEligibilityOverrides(rawGame.statsEligibilityOverrides),

@@ -1,4 +1,5 @@
--- SQL-Tests Sync-Absicherung (Phase 1 + 2). Laufen als Rolle anon, alles in einer Transaktion mit
+-- SQL-Tests Sync-Absicherung (Phase 1 + 2) plus Online-Migration 20261104 (schema_version 3, min_app_schema 2).
+-- Laufen als Rolle anon, alles in einer Transaktion mit
 -- abschliessendem ROLLBACK: hinterlaesst keine Daten. Aufruf: psql -v ON_ERROR_STOP=1 -f ...
 begin;
 set local role anon;
@@ -116,7 +117,8 @@ begin
   begin perform public.mt_save_game(game || '{"deployment":"D9"}', (r->>'version')::bigint); ok := false;
   exception when sqlstate 'PT409' then ok := true; end;
   assert ok, '9: Aenderung an geloeschtem Spiel -> 409';
-  assert (public.mt_schema_info()->>'schema_version')::int = 2, '9: schema_info';
+  assert (public.mt_schema_info()->>'schema_version')::int = 3, '9: schema_info version';
+  assert (public.mt_schema_info()->>'min_app_schema')::int = 2, '9: min_app_schema bleibt 2';
   raise notice 'SQL-TESTS OK';
 end $$;
 rollback;

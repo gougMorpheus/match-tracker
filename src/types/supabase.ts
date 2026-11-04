@@ -34,6 +34,7 @@ export interface Database {
           notes: string | null;
           version?: number;
           flow_version?: number;
+          is_online?: boolean | null;
         };
         Insert: {
           id?: string;
@@ -57,6 +58,7 @@ export interface Database {
           stats_eligibility_overrides?: Json | null;
           timer_corrections?: Json | null;
           notes?: string | null;
+          is_online?: boolean | null;
         };
         Update: {
           id?: string;
@@ -80,6 +82,7 @@ export interface Database {
           stats_eligibility_overrides?: Json | null;
           timer_corrections?: Json | null;
           notes?: string | null;
+          is_online?: boolean | null;
         };
         Relationships: [];
       };

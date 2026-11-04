@@ -44,8 +44,9 @@ const runSyncVersioningTests = async () => {
 
   // Update-Entscheidungen
   assert.equal(sv.decideSchemaUpdate(2, false), 'ok');
-  assert.equal(sv.decideSchemaUpdate(3, false), 'reload');
-  assert.equal(sv.decideSchemaUpdate(3, true), 'notice');
+  assert.equal(sv.decideSchemaUpdate(3, false), 'ok', 'diese App ist Schema 3, min 2 oder 3 bleibt kompatibel');
+  assert.equal(sv.decideSchemaUpdate(4, false), 'reload');
+  assert.equal(sv.decideSchemaUpdate(4, true), 'notice');
   assert.equal(sv.decideSchemaUpdate(null, false), 'ok');
   assert.equal(sv.decideBuildUpdate('a', 'a', 0), 'ok');
   assert.equal(sv.decideBuildUpdate('a', 'b', 0), 'reload');

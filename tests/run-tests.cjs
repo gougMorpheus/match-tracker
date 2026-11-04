@@ -37,6 +37,7 @@ const { runSpielzeileNachsendenTests } = require("./spielzeileNachsenden.test.cj
 const { runDeltaAbgleichTests } = require("./deltaAbgleich.test.cjs");
 const { runSwNavigationTests } = require("./swNavigation.test.cjs");
 const { runBattleCalTests } = require("./battleCal.test.cjs");
+const { runOnlineMatchTests } = require("./onlineMatch.test.cjs");
 
 const suites = [
   ["pushAbo", runPushAboTests],
@@ -81,7 +82,8 @@ const suites = [
   ["spielzeileNachsenden", runSpielzeileNachsendenTests],
   ["deltaAbgleich", runDeltaAbgleichTests],
   ["swNavigation", runSwNavigationTests],
-  ["battleCal", runBattleCalTests]
+  ["battleCal", runBattleCalTests],
+  ["onlineMatch", runOnlineMatchTests]
 ];
 
 const main = async () => {

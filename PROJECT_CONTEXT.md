@@ -115,7 +115,8 @@ Datenzugriff liegt in `src/services/gamesRepository.ts`. Supabase speichert Spie
 - Schreiben nur ueber RPCs (`src/services/gamesRepository.ts` → `syncRepository`); direkte Insert/Update/Delete sind per RLS/Grants gesperrt.
 - `games.version` schuetzt die Spielzeile, `games.flow_version` die Ablauf-Ereignisse (Start/Ende/Pause/Weiter, Timeout). Punkte, CP und Notizen sind kommutativ und werden nicht versioniert.
 - Konflikt = HTTP 409 (`PT409`); App verwirft die Aktionsgruppe, laedt neu, zeigt `SyncNotices`.
-- `APP_SCHEMA_VERSION` (`src/utils/syncVersioning.ts`) muss zu `mt_schema_info().min_app_schema` passen; bei Schemaaenderung beide erhoehen.
+- `APP_SCHEMA_VERSION` (`src/utils/syncVersioning.ts`) ist 3 (Online-Flag + `mt_match_hud`). `mt_schema_info().min_app_schema` bleibt 2, bis diese App live ist: die laufende Prod-App ist Schema 2 und darf nicht zum Neuladen gezwungen werden. Erst beim Live-Gang min auf 3 setzen.
+- Online (ab 2026-11-04, Soft): `games.is_online` default false. `match_id` = `games.id`. Gelände liest `mt_match_hud(p_match_id)` (Runde, aktiver Zug Slot 1|2, Spielstand, CP). Deep-Link nur als Query `?match=<id>`, Host nicht in der App. Kein Schreiben aus Gelände, kein Login.
 - Migrationen in `supabase/migrations/` (immer mit `.rollback.sql`); Reihenfolge Rollback: 02, App, 01. `supabase/schema.sql` ist der Stand vor diesen Migrationen.
 
 

@@ -1,8 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.keepLocallyCreatedGames = exports.isPullOutdated = exports.resolveOwnRetryResult = exports.FLOW_EVENT_TYPES = exports.keepNewerLocalGames = exports.isStaleRemoteGame = exports.isSameSyncBatch = exports.LEGACY_BATCH_WINDOW_MS = exports.decideBuildUpdate = exports.decideSchemaUpdate = exports.formatConflictNotice = exports.parseSyncConflict = exports.rebaseSyncQueue = exports.getItemBaseFlowVersion = exports.getItemBaseVersion = exports.getQueuedMs = exports.LEGACY_BASE_VERSION = exports.APP_SCHEMA_VERSION = void 0;
-// Schema-Stand, den diese App-Version voraussetzt (siehe supabase/migrations/20261012_*).
-exports.APP_SCHEMA_VERSION = 2;
+// Schema-Stand dieser App. 3 = games.is_online + lesende HUD-RPC mt_match_hud.
+// mt_schema_info().min_app_schema bleibt 2, solange die live App noch Schema 2 ist.
+// Diese Soft-App darf neuer sein; ein Server mit min 2 lässt sie durch (min <= APP).
+exports.APP_SCHEMA_VERSION = 3;
 // Vor der Migration gespeicherte Spiele/Queue-Eintraege haben keine Version: Basis = Migrationsstand.
 exports.LEGACY_BASE_VERSION = 1;
 const getQueuedMs = (createdAt, now) => {

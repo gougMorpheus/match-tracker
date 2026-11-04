@@ -14,7 +14,10 @@ export const GameCard = ({ game, onOpen }: GameCardProps) => {
   return (
     <button type="button" className="game-card" onClick={onOpen}>
       <div className="game-card__head">
-        <span className={`status-pill status-pill--${game.status}`}>{game.status}</span>
+        <span className="game-card__pills">
+          <span className={`status-pill status-pill--${game.status}`}>{game.status}</span>
+          {game.isOnline ? <span className="meta-chip">Online</span> : null}
+        </span>
         <span>{formatDateLabel(game.scheduledDate, game.scheduledTime)}</span>
       </div>
       <div className="game-card__body">

@@ -252,6 +252,44 @@ body:has(iframe.battle-cal-frame) .app-header .header-title-row h1 {
   padding: 1rem;
 }
 
+.game-card__pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.toggle-button {
+  width: auto;
+  min-width: 4.5rem;
+  min-height: 38px;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(30, 41, 59, 0.95);
+  color: var(--text);
+}
+
+.toggle-button.is-active {
+  background: var(--accent-soft);
+  border-color: rgba(56, 189, 248, 0.32);
+  color: #d8f3ff;
+}
+
+.toggle-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.match-online__id {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  word-break: break-all;
+  color: var(--text);
+}
+
 .game-card__head,
 .game-card__player,
 .game-card__foot,
