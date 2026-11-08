@@ -63,8 +63,9 @@ const run = async () => {
     const cached = () => page.evaluate(([key, id]) => JSON.parse(localStorage.getItem(key) || "[]").find((g) => g.id === id), [CACHE_KEY, gameId]);
     const events = async () => ((await cached())?.timeEvents || []).map((e) => `${e.action}${e.roundNumber && e.turnNumber ? ` R${e.roundNumber}Z${e.turnNumber}` : ""}`);
     const pill = () => page.locator(".game-status-strip .status-pill", { hasText: "Timer:" }).innerText();
-    const header = () => page.locator(".game-header-stats span").nth(0).innerText();
-    const turnHeader = () => page.locator(".game-header-stats span").nth(1).innerText();
+    // Kopfzeile steht auf Zug, Runde, Gesamt. Die Slots bleiben die bisherigen Anzeigen.
+    const header = () => page.locator(".game-header-stats span[data-header-slot='round']").innerText();
+    const turnHeader = () => page.locator(".game-header-stats span[data-header-slot='turn']").innerText();
     const dismiss = async (title) => { const m = page.locator(".timer-state-modal"); await m.waitFor();
       if (title) assert.equal(await m.locator("h2").innerText(), title); await m.locator("button").click(); await m.waitFor({ state: "detached" }); };
     const noModal = async () => assert.equal(await page.locator(".timer-state-modal").count(), 0, "Navigation aendert den Timer-Zustand nicht (kein Hinweis)");

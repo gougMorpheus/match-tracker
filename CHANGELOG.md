@@ -3,6 +3,13 @@
 Kurz, chronologisch absteigend. Jede Code- oder Projektbearbeitung bekommt einen Eintrag.
 Bei Bugfixes immer Fehlerbild und Ursache nennen.
 
+## 2026-11-08 – Spielerkarte: Gesamt hervorheben, CP und Zeit kennzeichnen, Kopfzeile Zug / Runde / Gesamt
+- Nur die Spielerkarte der laufenden Spielseite (`PlayerScoreboard`) und die Kopfzeile direkt darüber (`.game-header-stats`). Timer, Berechnungen, Navigation, Zugang und Passwort bleiben unverändert.
+- Gesamt steht als eigene Summe: Beschriftung „Gesamt“, größere Zahl, obere Leiste. Prim, Sek und Chal bleiben die kleinen Kategorien.
+- CP ist als Konto gekennzeichnet (umrahmtes Kürzel „CP“, Wort „Konto“, gestrichelter Rand). Die Werte +/− und Rd +/− sind dieselben.
+- Zeit zeigt in der ersten Zeile „Σ Zeit“ mit der bisherigen Spieler-Gesamtzeit und in der zweiten Zeile „Zug“ mit der Dauer des aktiven Zugs dieses Spielers (sonst 0). „Gesamt aktiv“ entfällt. Die Aufstellungskarte bleibt wie bisher.
+- Kopfzeile der Spielseite: zuerst Zug (`Zug N (…)`; in der Aufstellung weiterhin „Runde 0“ bzw. „Phase pausiert“), dann Runde (`Runde N (…)` bzw. „Aufstellung (…)“), dann Gesamt. TV-Kopf und Statistik sind andere Ansichten und bleiben.
+
 ## 2026-10-22 – Gemeinsame Queue: kein Tab entfernt mehr ungesendete Einträge eines anderen; verdeckter Tab sendet sofort
 - Fehlerbild (Pepper-Nachtest von #45, Variante 2): Editor Weiter R1Z2, TV-Tab sofort neu geladen, im Editor noch einmal Weiter R2Z1. Der Editor zeigte „Offline“, der TV blieb 55 s auf R1Z2, die Sync-Zeit im Editor stand still. In der DB fehlte R2Z1 (letztes Ereignis 21:27:26 MESZ).
 - Ursache 1 (seit 01.05.2026, `canAttemptRemoteSync`): Ein verdeckter Tab sendet seine eigenen Änderungen nicht. Eine Änderung im verdeckten Editor blieb als „Offline“ in der Queue (Speicher und localStorage), bis der Tab wieder sichtbar wurde. Auch nach einem Offline-Moment wurde im Hintergrund nicht nachgesendet. Live nachgestellt (echter Chrome, ZZ-Spiel): Editor verdeckt → „Offline“, 6 Einträge warten 20 s, TV bleibt stehen; Editor wieder vorne → sofort gesendet. #45 war nicht die Ursache.

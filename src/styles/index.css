@@ -840,6 +840,118 @@ body:has(iframe.battle-cal-frame) .app-header .header-title-row h1 {
   font-size: 0.52rem;
 }
 
+.game-page .scoreboard__grid--player .scoreboard-stat__kind {
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--total {
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+  border: 1px solid rgba(186, 230, 253, 0.72);
+  box-shadow: inset 0 3px 0 #7dd3fc;
+  background: linear-gradient(180deg, rgba(125, 211, 252, 0.28), rgba(14, 165, 233, 0.08) 46%, rgba(15, 23, 42, 0.92));
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--total .scoreboard-stat__kind {
+  color: #e0f2fe;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--total .scoreboard-stat__figure {
+  display: block;
+  margin: 0.02rem 0 0;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--total .scoreboard-stat__meta {
+  color: #e0f2fe;
+  font-weight: 600;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--cp,
+.game-page .scoreboard__grid--player .scoreboard-stat--time {
+  align-content: start;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--cp {
+  border: 1px dashed rgba(226, 232, 240, 0.62);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.18)),
+    var(--bg-soft);
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--cp .scoreboard-stat__identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--cp .scoreboard-stat__kind {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--cp .scoreboard-stat__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.2rem;
+  border: 1px solid rgba(248, 250, 252, 0.72);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat--time {
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-left: 3px solid rgba(167, 243, 208, 0.9);
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat__line + .scoreboard-stat__line {
+  margin-top: 0.08rem;
+  padding-top: 0.16rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.45);
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat__line span,
+.game-page .scoreboard__grid--player .scoreboard-stat__line strong {
+  white-space: nowrap;
+}
+
+.game-page .scoreboard__grid--player .scoreboard-stat__line strong {
+  display: inline;
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .game-page--round-odd .scoreboard {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.88));
 }

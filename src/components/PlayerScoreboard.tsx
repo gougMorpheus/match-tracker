@@ -1,6 +1,7 @@
 import type { Game, Player } from "../types/game";
 import type { ReactNode } from "react";
 import {
+  getActiveTurn,
   getPlayerCommandPoints,
   getPlayerCommandPointsGained,
   getPlayerChallengeTotal,
@@ -14,7 +15,8 @@ import {
   getPlayerPrimaryTotal,
   getPlayerSecondaryTotal,
   getPlayerTurnDurationTotalMs,
-  getPlayerTotalScore
+  getPlayerTotalScore,
+  getTurnDurationMs
 } from "../utils/gameCalculations";
 import { formatDuration } from "../utils/time";
 
@@ -51,6 +53,10 @@ export const PlayerScoreboard = ({
   const cpGained = getPlayerCommandPointsGained(game, player.id);
   const cpSpent = getPlayerCommandPointsSpent(game, player.id);
   const activeDuration = getPlayerTurnDurationTotalMs(game, player.id);
+  // Anzeige der schon berechneten Dauer des einen aktiven Zugs. Kein eigener Timer.
+  const activeTurn = getActiveTurn(game);
+  const currentTurnDurationMs =
+    activeTurn?.playerId === player.id ? getTurnDurationMs(activeTurn, game) : 0;
 
   return (
     <article className={`scoreboard ${emphasized ? "is-emphasized" : ""}`}>
@@ -88,15 +94,16 @@ export const PlayerScoreboard = ({
           <span className="scoreboard-stat__meta">Runde +{currentRoundChallenge}</span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--accent scoreboard-stat--total">
-          <div className="scoreboard-stat__top">
-            <span>Ges</span>
-            <strong>{total}</strong>
-          </div>
+          <span className="scoreboard-stat__kind">Gesamt</span>
+          <strong className="scoreboard-stat__figure">{total}</strong>
           <span className="scoreboard-stat__meta">Runde +{currentRoundTotal}</span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--cp">
           <div className="scoreboard-stat__top">
-            <span>CP</span>
+            <span className="scoreboard-stat__identity">
+              <span className="scoreboard-stat__badge">CP</span>
+              <span className="scoreboard-stat__kind">Konto</span>
+            </span>
             <strong>{cp}</strong>
           </div>
           <span className="scoreboard-stat__meta">+{cpGained} / -{cpSpent}</span>
@@ -105,11 +112,14 @@ export const PlayerScoreboard = ({
           </span>
         </div>
         <div className="scoreboard-stat scoreboard-stat--time">
-          <div className="scoreboard-stat__top">
-            <span>Zeit</span>
+          <div className="scoreboard-stat__line">
+            <span>Σ Zeit</span>
             <strong>{formatDuration(activeDuration)}</strong>
           </div>
-          <span className="scoreboard-stat__meta">Gesamt aktiv</span>
+          <div className="scoreboard-stat__line">
+            <span>Zug</span>
+            <strong>{formatDuration(currentTurnDurationMs)}</strong>
+          </div>
         </div>
       </div>
       {controls ? <div className="scoreboard__controls">{controls}</div> : null}
