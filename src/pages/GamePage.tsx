@@ -1325,19 +1325,19 @@ const LoadedGamePage = ({ gameId, onBack, forceTv = false, game }: GamePageProps
       subtitle={
         showOverview ? undefined : (
           <div className="game-header-stats">
-            <span>
-              {isSetupScreen
-                ? `Aufstellung (${formatDuration(setupDurationMs)})`
-                : `Runde ${displayRound?.roundNumber ?? 0} (${formatDuration(selectedRoundDurationMs)})`}
-            </span>
-            <span>
+            <span data-header-slot="turn">
               {isSetupScreen
                 ? setupPaused
                   ? "Phase pausiert"
                   : "Runde 0"
                 : `Zug ${displayTurn?.turnNumber ?? 0} (${formatDuration(displayTurn ? getTurnDurationMs(displayTurn, game) : 0)})`}
             </span>
-            <span>Gesamt {formatDuration(getGameDurationMs(game))}</span>
+            <span data-header-slot="round">
+              {isSetupScreen
+                ? `Aufstellung (${formatDuration(setupDurationMs)})`
+                : `Runde ${displayRound?.roundNumber ?? 0} (${formatDuration(selectedRoundDurationMs)})`}
+            </span>
+            <span data-header-slot="total">Gesamt {formatDuration(getGameDurationMs(game))}</span>
           </div>
         )
       }
